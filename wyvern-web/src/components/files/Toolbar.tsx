@@ -11,7 +11,7 @@ export function Toolbar({ viewMode, setViewMode }: ToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
 
-  const { uploadFiles } = useFileStore()
+  const { uploadFiles, uploadFolder } = useFileStore()
 
   const handleUploadFile = () => {
     fileInputRef.current?.click()
@@ -61,7 +61,13 @@ export function Toolbar({ viewMode, setViewMode }: ToolbarProps) {
           // @ts-expect-error webkitdirectory is non-standard but widely supported
           webkitdirectory=""
           style={{ display: 'none' }}
-          onChange={(e) => console.log('Folder:', e.target.files)}
+          onChange={(e) => {
+            if (e.target.files && e.target.files.length > 0) {
+              // Cast to FileList (TS might complain about webkitdirectory files)
+              uploadFolder(e.target.files)
+            }
+            if (folderInputRef.current) folderInputRef.current.value = ''
+          }}
         />
       </div>
 

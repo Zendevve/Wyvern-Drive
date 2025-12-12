@@ -53,7 +53,9 @@ export interface DownloadOptions {
 export interface ChunkInfo {
   index: number
   messageId: string
+  url: string
   size: number
+  iv?: number[] // Array needed for JSON serialization of Uint8Array
 }
 
 export interface EncryptedChunk {

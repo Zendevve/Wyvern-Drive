@@ -3,15 +3,14 @@
  * Handles CORS bypass for Discord attachment downloads
  */
 
-// Listen for messages from the web app
-chrome.runtime.onMessageExternal.addListener(
+// Listen for messages from content scripts
+chrome.runtime.onMessage.addListener(
   (request, sender, sendResponse) => {
-    if (!request.message || !request.message.url) {
-      sendResponse({ error: 'Invalid request' })
-      return true
+    if (request.type !== 'DOWNLOAD' || !request.url) {
+      return false // Ignore unknown messages
     }
 
-    const url = request.message.url
+    const url = request.url
 
     // Validate URL is from Discord
     if (!url.includes('discord.com') && !url.includes('discordapp.com')) {

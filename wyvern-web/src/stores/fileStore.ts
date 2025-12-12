@@ -28,10 +28,23 @@ interface FileStore {
   initializeManager: () => Promise<void>
   loadFiles: () => Promise<void>
   uploadFiles: (files: FileList) => Promise<void>
+  uploadFolder: (files: FileList) => Promise<void>
+  downloadFile: (fileId: string) => Promise<void>
+  downloadFolder: (folderId: string) => Promise<void>
+  deleteFile: (fileId: string) => Promise<void>
   logout: () => void
   setCurrentPath: (path: string) => void
   toggleSelection: (id: string) => void
   clearSelection: () => void
+
+  // Modal State
+  activeModal: 'rename' | 'move' | null
+  activeFileId: string | null
+  setActiveModal: (modal: 'rename' | 'move' | null, fileId?: string | null) => void
+
+  // File Operations
+  renameFile: (fileId: string, newName: string) => Promise<void>
+  moveFile: (fileId: string, parentId: number | null) => Promise<void>
 }
 
 export const useFileStore = create<FileStore>()(
@@ -48,6 +61,8 @@ export const useFileStore = create<FileStore>()(
       selectedIds: new Set(),
       isLoading: false,
       uploadProgress: new Map(),
+      activeModal: null,
+      activeFileId: null,
 
       // Actions
       setWebhookUrl: (url) => set({
@@ -139,6 +154,143 @@ export const useFileStore = create<FileStore>()(
         get().loadFiles()
       },
 
+      uploadFolder: async (files) => {
+        const { fileManager, isAuthenticated, encryptionPassword } = get()
+        if (!fileManager || !isAuthenticated) return
+
+        // Finding current folder ID would go here, MVP defaulting to root/null
+        const parentId = null
+
+        if (encryptionPassword) {
+          await fileManager.setPassword(encryptionPassword)
+        }
+
+        set({ isLoading: true })
+
+        // Use a consistent ID for the folder upload progress
+        const tempId = `up-folder-${Date.now()}`
+
+        set((state) => {
+          const newProgress = new Map(state.uploadProgress)
+          newProgress.set(tempId, 0)
+          return { uploadProgress: newProgress }
+        })
+
+        try {
+          await fileManager.uploadFolder(files, parentId, {
+            encrypt: !!encryptionPassword,
+            onProgress: (loaded, total) => {
+              set((state) => {
+                const newProgress = new Map(state.uploadProgress)
+                newProgress.set(tempId, (loaded / total) * 100)
+                return { uploadProgress: newProgress }
+              })
+            }
+          })
+        } catch (error) {
+          console.error('Folder upload failed:', error)
+          alert('Folder upload failed')
+        } finally {
+          set((state) => {
+            const newProgress = new Map(state.uploadProgress)
+            newProgress.delete(tempId)
+            return { isLoading: false, uploadProgress: newProgress }
+          })
+          get().loadFiles()
+        }
+      },
+
+      downloadFile: async (fileId) => {
+        const { fileManager, files } = get()
+        if (!fileManager) return
+
+        const file = Object.values(files).find(f => String(f.id) === String(fileId))
+        if (!file || file.type !== 'file') {
+          console.error('File not found', fileId)
+          return
+        }
+
+        const tempId = `dl-${file.id}`
+        set((state) => {
+          const newProgress = new Map(state.uploadProgress)
+          newProgress.set(tempId, 0)
+          return { uploadProgress: newProgress }
+        })
+
+        try {
+          await fileManager.downloadFile(file as WyvernFile, {
+            onProgress: (loaded, total) => {
+              set((state) => {
+                const newProgress = new Map(state.uploadProgress)
+                newProgress.set(tempId, (loaded / total) * 100)
+                return { uploadProgress: newProgress }
+              })
+            }
+          })
+        } catch (error) {
+          console.error(`Failed to download ${file.name}:`, error)
+          alert(`Failed to download ${file.name}: ${(error as Error).message}`)
+        }
+
+        set((state) => {
+          const newProgress = new Map(state.uploadProgress)
+          newProgress.delete(tempId)
+          return { uploadProgress: newProgress }
+        })
+      },
+
+      downloadFolder: async (folderId) => {
+        const { fileManager, files } = get()
+        if (!fileManager) return
+
+        const folder = Object.values(files).find(f => String(f.id) === String(folderId))
+        if (!folder || folder.type !== 'directory') {
+          console.error('Folder not found')
+          return
+        }
+
+        const tempId = `dl-zip-${folderId}`
+        set((state) => {
+          const newProgress = new Map(state.uploadProgress)
+          newProgress.set(tempId, 0)
+          return { uploadProgress: newProgress }
+        })
+
+        try {
+          await fileManager.downloadFolder(Number(folderId), folder.name, {
+            onProgress: (loaded, total) => {
+              set((state) => {
+                const newProgress = new Map(state.uploadProgress)
+                newProgress.set(tempId, (loaded / total) * 100)
+                return { uploadProgress: newProgress }
+              })
+            }
+          })
+        } catch (error) {
+          console.error('Folder download failed:', error)
+          alert(`Folder download failed: ${(error as Error).message}`)
+        }
+
+        set((state) => {
+          const newProgress = new Map(state.uploadProgress)
+          newProgress.delete(tempId)
+          return { uploadProgress: newProgress }
+        })
+      },
+
+      deleteFile: async (fileId) => {
+        const { fileManager } = get()
+        if (!fileManager) return
+
+        try {
+          await fileManager.deleteFile(Number(fileId))
+          get().loadFiles()
+        } catch (error) {
+          console.error('Failed to delete file:', error)
+          alert('Failed to delete file')
+        }
+      },
+
       logout: () => set({
         webhookUrl: null,
         userId: null,
@@ -163,6 +315,32 @@ export const useFileStore = create<FileStore>()(
       }),
 
       clearSelection: () => set({ selectedIds: new Set() }),
+
+      setActiveModal: (modal, fileId) => set({ activeModal: modal, activeFileId: fileId }),
+
+      renameFile: async (fileId, newName) => {
+        const { fileManager } = get()
+        if (!fileManager) return
+        try {
+          await fileManager.renameFile(Number(fileId), newName)
+          get().loadFiles()
+        } catch (error) {
+          console.error('Rename failed:', error)
+          alert('Rename failed')
+        }
+      },
+
+      moveFile: async (fileId, parentId) => {
+        const { fileManager } = get()
+        if (!fileManager) return
+        try {
+          await fileManager.moveFile(Number(fileId), parentId)
+          get().loadFiles()
+        } catch (error) {
+          console.error('Move failed:', error)
+          alert('Move failed')
+        }
+      },
     }),
     {
       name: 'wyvern-drive-storage',

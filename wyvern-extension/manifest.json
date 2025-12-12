@@ -15,12 +15,18 @@
     "*://*.discordapp.com/*",
     "*://*.discord.com/*"
   ],
-  "externally_connectable": {
-    "matches": [
-      "*://localhost/*",
-      "*://wyverndrive.app/*",
-      "*://wyvern-drive.netlify.app/*"
-    ]
-  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://localhost/*",
+        "*://wyverndrive.app/*",
+        "*://wyvern-drive.netlify.app/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
   "permissions": []
 }

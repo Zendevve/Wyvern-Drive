@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { WyvernFile, WyvernFolder } from '../../lib/types'
+import { useFileStore } from '../../stores/fileStore'
 import './ContextMenu.css'
 
 interface ContextMenuProps {
@@ -12,6 +13,8 @@ interface ContextMenuProps {
 export function ContextMenu({ x, y, file, onClose }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const isFolder = file.type === 'directory'
+
+  const { downloadFile, downloadFolder, deleteFile, setActiveModal } = useFileStore()
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -34,7 +37,21 @@ export function ContextMenu({ x, y, file, onClose }: ContextMenuProps) {
   }, [onClose])
 
   const handleAction = (action: string) => {
-    console.log(`${action}:`, file.name)
+    if (action === 'download' && !isFolder) {
+      downloadFile(String(file.id))
+    } else if (action === 'download-zip' && isFolder) {
+      downloadFolder(String(file.id))
+    } else if (action === 'delete') {
+      if (confirm(`Are you sure you want to delete ${file.name}?`)) {
+        deleteFile(String(file.id))
+      }
+    } else if (action === 'rename') {
+      setActiveModal('rename', String(file.id))
+    } else if (action === 'move') {
+      setActiveModal('move', String(file.id))
+    } else {
+      console.log(`${action}:`, file.name)
+    }
     onClose()
   }
 
