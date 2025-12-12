@@ -1,0 +1,63 @@
+/* FileItem Styles */
+
+.file-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.file-item:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Grid view */
+.file-item.grid {
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.file-item.grid .file-icon {
+  font-size: 40px;
+}
+
+.file-item.grid .file-name {
+  font-size: 13px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* List view */
+.file-item.list {
+  gap: 12px;
+}
+
+.file-item.list .file-icon {
+  font-size: 24px;
+}
+
+.file-item.list .file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-item.list .file-size,
+.file-item.list .file-date {
+  color: var(--text-muted);
+  font-size: 13px;
+  min-width: 80px;
+  text-align: right;
+}

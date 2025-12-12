@@ -1,0 +1,15 @@
+/* FileGrid Styles */
+
+.file-grid {
+  display: grid;
+  gap: 12px;
+  padding: 4px;
+}
+
+.file-grid.grid {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.file-grid.list {
+  grid-template-columns: 1fr;
+}
