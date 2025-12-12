@@ -36,6 +36,9 @@ interface FileStore {
   setCurrentPath: (path: string) => void
   toggleSelection: (id: string) => void
   clearSelection: () => void
+  selectAll: () => void
+  deleteSelected: () => Promise<void>
+  moveSelected: (parentId: number | null) => Promise<void>
 
   // Modal State
   activeModal: 'rename' | 'move' | 'versions' | null
@@ -341,6 +344,59 @@ export const useFileStore = create<FileStore>()(
       }),
 
       clearSelection: () => set({ selectedIds: new Set() }),
+
+      selectAll: () => set((state) => {
+        const allIds = new Set(Object.values(state.files).map(f => String(f.id)))
+        return { selectedIds: allIds }
+      }),
+
+      deleteSelected: async () => {
+        const { fileManager, selectedIds } = get()
+        if (!fileManager || selectedIds.size === 0) return
+
+        const idsArray = Array.from(selectedIds)
+        let failed = 0
+
+        for (const id of idsArray) {
+          try {
+            await fileManager.deleteFile(Number(id))
+          } catch (error) {
+            console.error(`Failed to delete ${id}:`, error)
+            failed++
+          }
+        }
+
+        get().clearSelection()
+        get().loadFiles()
+
+        if (failed > 0) {
+          alert(`Failed to delete ${failed} of ${idsArray.length} items`)
+        }
+      },
+
+      moveSelected: async (parentId) => {
+        const { fileManager, selectedIds } = get()
+        if (!fileManager || selectedIds.size === 0) return
+
+        const idsArray = Array.from(selectedIds)
+        let failed = 0
+
+        for (const id of idsArray) {
+          try {
+            await fileManager.moveFile(Number(id), parentId)
+          } catch (error) {
+            console.error(`Failed to move ${id}:`, error)
+            failed++
+          }
+        }
+
+        get().clearSelection()
+        get().loadFiles()
+
+        if (failed > 0) {
+          alert(`Failed to move ${failed} of ${idsArray.length} items`)
+        }
+      },
 
       setActiveModal: (modal, fileId) => set({ activeModal: modal, activeFileId: fileId }),
 
