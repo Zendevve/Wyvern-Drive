@@ -1,15 +1,44 @@
-import { useRef, useCallback, useState } from 'react'
+import { useRef, useCallback, useState, useMemo } from 'react'
 import { useFileStore } from '../stores/fileStore'
 import { FileDropZone } from './files/FileDropZone'
 import { FileGrid } from './files/FileGrid'
 import { Breadcrumb } from './files/Breadcrumb'
+import { PreviewModal } from './files/PreviewModal'
 import { LayoutGrid, List as ListIcon, Filter, FolderPlus, UploadCloud } from 'lucide-react'
+import { isPreviewable } from '../lib/thumbnails'
+import type { WyvernFile } from '../lib/types'
 import './FileManager.css'
 
 export function FileManager() {
-  const { currentPath, files, isLoading, uploadFiles, uploadFolder } = useFileStore()
+  const { currentPath, files, isLoading, uploadFiles, uploadFolder, previewFileId, setPreviewFile } = useFileStore()
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Get list of previewable files for navigation
+  const previewableFiles = useMemo(() => {
+    return Object.values(files)
+      .filter(f => f.type === 'file' && isPreviewable(f.name))
+      .map(f => f as WyvernFile)
+  }, [files])
+
+  // Find current preview file and its index
+  const previewFile = previewFileId
+    ? Object.values(files).find(f => String(f.id) === previewFileId) as WyvernFile | undefined
+    : null
+
+  const currentPreviewIndex = previewFile
+    ? previewableFiles.findIndex(f => f.id === previewFile.id)
+    : -1
+
+  const handleNavigate = (direction: 'prev' | 'next') => {
+    if (currentPreviewIndex === -1) return
+    const newIndex = direction === 'prev'
+      ? currentPreviewIndex - 1
+      : currentPreviewIndex + 1
+    if (newIndex >= 0 && newIndex < previewableFiles.length) {
+      setPreviewFile(String(previewableFiles[newIndex].id))
+    }
+  }
 
   const handleDrop = useCallback(async (droppedFiles: FileList) => {
     // Check if any file has '/' in webkitRelativePath indicating folder structure
@@ -98,6 +127,15 @@ export function FileManager() {
           </div>
         )}
       </FileDropZone>
+
+      {/* Preview Modal */}
+      <PreviewModal
+        file={previewFile || null}
+        onClose={() => setPreviewFile(null)}
+        onNavigate={handleNavigate}
+        hasPrev={currentPreviewIndex > 0}
+        hasNext={currentPreviewIndex < previewableFiles.length - 1}
+      />
     </div>
   )
 }

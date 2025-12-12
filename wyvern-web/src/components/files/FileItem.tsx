@@ -3,6 +3,7 @@ import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import { useFileStore } from '../../stores/fileStore'
 import { ContextMenu } from './ContextMenu'
 import { getFileIcon, formatSize, formatDate } from '../../lib/utils'
+import { isPreviewable } from '../../lib/thumbnails'
 import './FileItem.css'
 
 interface FileItemProps {
@@ -28,7 +29,11 @@ export function FileItem({ file, viewMode }: FileItemProps) {
   const handleDoubleClick = () => {
     if (isFolder) {
       console.log('Navigate to:', file.path)
+    } else if (isPreviewable(file.name)) {
+      // Open preview modal for media files
+      useFileStore.getState().setPreviewFile(String(file.id))
     } else {
+      // Download non-previewable files
       useFileStore.getState().downloadFile(String(file.id))
     }
   }

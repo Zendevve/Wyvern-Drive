@@ -42,6 +42,10 @@ interface FileStore {
   activeFileId: string | null
   setActiveModal: (modal: 'rename' | 'move' | 'versions' | null, fileId?: string | null) => void
 
+  // Preview State
+  previewFileId: string | null
+  setPreviewFile: (fileId: string | null) => void
+
   // File Operations
   renameFile: (fileId: string, newName: string) => Promise<void>
   moveFile: (fileId: string, parentId: number | null) => Promise<void>
@@ -68,6 +72,7 @@ export const useFileStore = create<FileStore>()(
       uploadProgress: new Map(),
       activeModal: null,
       activeFileId: null,
+      previewFileId: null,
 
       // Actions
       setWebhookUrl: (url) => set({
@@ -338,6 +343,8 @@ export const useFileStore = create<FileStore>()(
       clearSelection: () => set({ selectedIds: new Set() }),
 
       setActiveModal: (modal, fileId) => set({ activeModal: modal, activeFileId: fileId }),
+
+      setPreviewFile: (fileId) => set({ previewFileId: fileId }),
 
       renameFile: async (fileId, newName) => {
         const { fileManager } = get()
