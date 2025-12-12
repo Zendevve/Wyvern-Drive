@@ -32,11 +32,9 @@ export interface WyvernFolder {
 
 export interface FileVersion {
   id: number
-  fileId: number
-  versionNumber: number
-  content: string
+  version_number: number
   size: number
-  createdAt: string
+  created_at: string
 }
 
 export interface UploadOptions {

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { WyvernFile, WyvernFolder } from '../lib/types'
+import type { WyvernFile, WyvernFolder, FileVersion } from '../lib/types'
 import { WyvernFileManager } from '../lib/wyvern-file-manager'
 
 interface FileStore {
@@ -38,13 +38,18 @@ interface FileStore {
   clearSelection: () => void
 
   // Modal State
-  activeModal: 'rename' | 'move' | null
+  activeModal: 'rename' | 'move' | 'versions' | null
   activeFileId: string | null
-  setActiveModal: (modal: 'rename' | 'move' | null, fileId?: string | null) => void
+  setActiveModal: (modal: 'rename' | 'move' | 'versions' | null, fileId?: string | null) => void
 
   // File Operations
   renameFile: (fileId: string, newName: string) => Promise<void>
   moveFile: (fileId: string, parentId: number | null) => Promise<void>
+
+  // Versions
+  getVersions: (fileId: string) => Promise<FileVersion[]>
+  restoreVersion: (versionId: string) => Promise<void>
+  deleteVersion: (versionId: string) => Promise<void>
 }
 
 export const useFileStore = create<FileStore>()(
@@ -341,6 +346,41 @@ export const useFileStore = create<FileStore>()(
           alert('Move failed')
         }
       },
+
+      getVersions: async (fileId) => {
+        const { fileManager } = get()
+        if (!fileManager) return []
+        try {
+          return await fileManager.getVersions(Number(fileId))
+        } catch (error) {
+          console.error('Get versions failed', error)
+          return []
+        }
+      },
+
+      restoreVersion: async (versionId) => {
+        const { fileManager } = get()
+        if (!fileManager) return
+        try {
+          await fileManager.restoreVersion(Number(versionId))
+          get().loadFiles()
+        } catch (error) {
+          console.error('Restore version failed', error)
+          alert('Restore version failed')
+        }
+      },
+
+      deleteVersion: async (versionId) => {
+        const { fileManager } = get()
+        if (!fileManager) return
+        try {
+          await fileManager.deleteVersion(Number(versionId))
+        } catch (error) {
+          console.error('Delete version failed', error)
+          alert('Delete version failed')
+        }
+      }
+
     }),
     {
       name: 'wyvern-drive-storage',

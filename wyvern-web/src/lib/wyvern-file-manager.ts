@@ -5,6 +5,7 @@ import {
   type UploadOptions,
   type DownloadOptions,
   type ChunkInfo,
+  type FileVersion,
   FILE_DELIMITER
 } from './types'
 import {
@@ -115,6 +116,26 @@ export class WyvernFileManager {
       body: JSON.stringify({ parent_id: parentId })
     })
     if (!res.ok) throw new Error('Failed to move file')
+  }
+
+  async getVersions(fileId: number): Promise<FileVersion[]> {
+    const res = await fetch(`${API_URL}/files/versions/${this.userId}/${fileId}`)
+    if (!res.ok) throw new Error('Failed to fetch versions')
+    return await res.json()
+  }
+
+  async restoreVersion(versionId: number): Promise<void> {
+    const res = await fetch(`${API_URL}/files/restore/${this.userId}/${versionId}`, {
+      method: 'POST'
+    })
+    if (!res.ok) throw new Error('Failed to restore version')
+  }
+
+  async deleteVersion(versionId: number): Promise<void> {
+    const res = await fetch(`${API_URL}/files/versions/${this.userId}/${versionId}`, {
+      method: 'DELETE'
+    })
+    if (!res.ok) throw new Error('Failed to delete version')
   }
 
   // --- Discord Interaction ---

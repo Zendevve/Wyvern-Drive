@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import { useFileStore } from '../../stores/fileStore'
 import { ContextMenu } from './ContextMenu'
+import { getFileIcon, formatSize, formatDate } from '../../lib/utils'
 import './FileItem.css'
 
 interface FileItemProps {
@@ -107,27 +108,4 @@ export function FileItem({ file, viewMode }: FileItemProps) {
   )
 }
 
-function getFileIcon(filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase() || ''
-  const icons: Record<string, string> = {
-    pdf: '📕', doc: '📄', docx: '📄', txt: '📝',
-    jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', webp: '🖼️',
-    mp3: '🎵', wav: '🎵', flac: '🎵', ogg: '🎵',
-    mp4: '🎬', mkv: '🎬', avi: '🎬', mov: '🎬',
-    zip: '📦', rar: '📦', '7z': '📦', tar: '📦',
-    js: '📜', ts: '📜', py: '🐍', rs: '🦀',
-    exe: '⚙️', msi: '⚙️',
-  }
-  return icons[ext] || '📄'
-}
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-}
-
-function formatDate(isoDate: string): string {
-  return new Date(isoDate).toLocaleDateString()
-}

@@ -4,6 +4,7 @@ import { Sidebar } from './components/layout/Sidebar'
 import { SetupScreen } from './components/SetupScreen'
 import { RenameModal } from './components/files/RenameModal'
 import { MoveModal } from './components/files/MoveModal'
+import { VersionHistoryModal } from './components/files/VersionHistoryModal'
 import { ProgressToasts } from './components/ui/ProgressToasts'
 import { useFileStore } from './stores/fileStore'
 import './styles/App.css'
@@ -31,6 +32,7 @@ function App() {
       </main>
       <RenameModal />
       <MoveModal />
+      <VersionHistoryModal />
       <ProgressToasts />
     </div>
   )

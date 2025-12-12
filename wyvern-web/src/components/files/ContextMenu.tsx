@@ -49,6 +49,8 @@ export function ContextMenu({ x, y, file, onClose }: ContextMenuProps) {
       setActiveModal('rename', String(file.id))
     } else if (action === 'move') {
       setActiveModal('move', String(file.id))
+    } else if (action === 'versions') {
+      setActiveModal('versions', String(file.id))
     } else {
       console.log(`${action}:`, file.name)
     }
@@ -77,11 +79,6 @@ export function ContextMenu({ x, y, file, onClose }: ContextMenuProps) {
       <button onClick={() => handleAction('move')}>
         <span>📂</span> Move to...
       </button>
-      {!isFolder && (
-        <button onClick={() => handleAction('share')}>
-          <span>🔗</span> Share
-        </button>
-      )}
       {!isFolder && (
         <button onClick={() => handleAction('versions')}>
           <span>🕒</span> Version History
