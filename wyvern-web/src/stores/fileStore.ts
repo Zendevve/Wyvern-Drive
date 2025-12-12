@@ -88,6 +88,7 @@ export const useFileStore = create<FileStore>()(
         const { webhookUrl, encryptionPassword } = get()
         if (!webhookUrl) return
 
+        console.log('[FileStore] Initializing manager. PW present:', !!encryptionPassword)
         const manager = new WyvernFileManager(webhookUrl)
         if (encryptionPassword) {
           await manager.setPassword(encryptionPassword)
@@ -170,8 +171,6 @@ export const useFileStore = create<FileStore>()(
           await fileManager.setPassword(encryptionPassword)
         }
 
-        set({ isLoading: true })
-
         // Use a consistent ID for the folder upload progress
         const tempId = `up-folder-${Date.now()}`
 
@@ -199,15 +198,32 @@ export const useFileStore = create<FileStore>()(
           set((state) => {
             const newProgress = new Map(state.uploadProgress)
             newProgress.delete(tempId)
-            return { isLoading: false, uploadProgress: newProgress }
+            return { uploadProgress: newProgress }
           })
           get().loadFiles()
         }
       },
 
       downloadFile: async (fileId) => {
-        const { fileManager, files } = get()
-        if (!fileManager) return
+        const { fileManager, files, encryptionPassword } = get()
+
+        console.log('[FileStore] downloadFile called')
+        console.log('[FileStore] encryptionPassword present:', !!encryptionPassword, 'value:', encryptionPassword ? '[HIDDEN]' : 'null')
+        console.log('[FileStore] fileManager present:', !!fileManager)
+
+        if (!fileManager) {
+          console.error('[FileStore] No fileManager!')
+          return
+        }
+
+        // Ensure password is set if available (reactivity fix)
+        if (encryptionPassword) {
+          console.log('[FileStore] Re-applying password to manager...')
+          await fileManager.setPassword(encryptionPassword)
+          console.log('[FileStore] Password applied successfully')
+        } else {
+          console.warn('[FileStore] No encryptionPassword in store! User may need to re-enter password.')
+        }
 
         const file = Object.values(files).find(f => String(f.id) === String(fileId))
         if (!file || file.type !== 'file') {

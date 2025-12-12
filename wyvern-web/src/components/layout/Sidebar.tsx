@@ -1,4 +1,4 @@
-
+import { useRef, useState } from 'react'
 import {
   Home,
   Cloud,
@@ -6,13 +6,36 @@ import {
   Star,
   Trash2,
   Plus,
-  LogOut
+  LogOut,
+  FileUp,
+  FolderUp
 } from 'lucide-react'
 import { useFileStore } from '../../stores/fileStore'
 import './Sidebar.css'
 
 export function Sidebar() {
-  const { logout } = useFileStore()
+  const { logout, uploadFiles, uploadFolder } = useFileStore()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      await uploadFiles(e.target.files)
+      // Reset input
+      e.target.value = ''
+    }
+    setIsMenuOpen(false)
+  }
+
+  const handleFolderSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      await uploadFolder(e.target.files)
+      e.target.value = ''
+    }
+    setIsMenuOpen(false)
+  }
 
   return (
     <aside className="sidebar">
@@ -25,12 +48,49 @@ export function Sidebar() {
       <div className="sidebar-content">
         {/* 2. Primary Action Button */}
         <div className="action-section">
-          {/* TODO: Connect this to upload trigger globally? */}
-          <button className="new-button">
-            <Plus size={18} strokeWidth={2.5} />
-            <span>New</span>
-          </button>
+          <div className="new-button-wrapper">
+            <button
+              className={`new-button ${isMenuOpen ? 'active' : ''}`}
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+            >
+              <Plus size={18} strokeWidth={2.5} />
+              <span>New</span>
+            </button>
+
+            {isMenuOpen && (
+              <div className="new-menu-dropdown">
+                <button className="menu-item" onClick={() => fileInputRef.current?.click()}>
+                  <FileUp size={16} />
+                  <span>File upload</span>
+                </button>
+                <button className="menu-item" onClick={() => folderInputRef.current?.click()}>
+                  <FolderUp size={16} />
+                  <span>Folder upload</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Hidden Inputs */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          multiple
+          hidden
+          onChange={handleFileSelect}
+        />
+        <input
+          type="file"
+          ref={folderInputRef}
+          multiple
+          hidden
+          // @ts-ignore - webkitdirectory is non-standard but required
+          webkitdirectory=""
+          // @ts-ignore
+          directory=""
+          onChange={handleFolderSelect}
+        />
 
         {/* 3. Navigation Links */}
         <nav className="nav-section">

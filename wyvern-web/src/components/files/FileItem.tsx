@@ -91,7 +91,7 @@ export function FileItem({ file, viewMode }: FileItemProps) {
         {viewMode === 'list' && !isFolder && (
           <>
             <span className="file-size">{formatSize((file as WyvernFile).size)}</span>
-            <span className="file-date">{formatDate(file.updatedAt)}</span>
+            <span className="file-date">{formatDate(file.updated_at)}</span>
           </>
         )}
       </div>

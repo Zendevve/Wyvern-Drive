@@ -8,12 +8,12 @@ export interface WyvernFile {
   type: 'file'
   size: number
   path: string
-  parentId: number | null
+  parent_id: number | null  // snake_case to match server
   content: string // JSON array of Discord message IDs
-  encrypted: boolean
-  encryptionIv?: string
-  createdAt: string
-  updatedAt: string
+  encrypted: boolean | number  // SQLite returns 0/1
+  encryption_salt?: string | null // snake_case to match server
+  created_at: string
+  updated_at: string
   // Version info
   version?: number
   versions?: FileVersion[]
@@ -24,10 +24,10 @@ export interface WyvernFolder {
   name: string
   type: 'directory'
   path: string
-  parentId: number | null
+  parent_id: number | null  // snake_case to match server
   children: Record<string, WyvernFile | WyvernFolder>
-  createdAt: string
-  updatedAt: string
+  created_at: string
+  updated_at: string
 }
 
 export interface FileVersion {

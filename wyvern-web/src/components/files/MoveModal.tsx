@@ -18,7 +18,7 @@ export function MoveModal() {
   const buildTree = (parentId: number | null = null, depth = 0): JSX.Element[] => {
     const nodes: JSX.Element[] = []
     Object.values(files)
-      .filter(f => f.type === 'directory' && f.parentId === parentId) // Assuming flat files list has parentId
+      .filter(f => f.type === 'directory' && f.parent_id === parentId)
       .forEach(folder => {
         // Prevent moving into self or children
         if (String(folder.id) === String(activeFileId)) return

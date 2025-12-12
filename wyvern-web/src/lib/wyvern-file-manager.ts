@@ -10,6 +10,7 @@ import {
 } from './types'
 import {
   createEncryptionContext,
+  restoreEncryptionContext,
   encryptChunk,
   decryptChunk
 } from './encryption'
@@ -22,6 +23,7 @@ export class WyvernFileManager {
   private webhookUrl: string
   private key: CryptoKey | null = null
   private salt: string | null = null
+  private password: string | null = null // Store password for restoring keys with different salts
 
   constructor(webhookUrl: string) {
     this.webhookUrl = webhookUrl
@@ -29,11 +31,20 @@ export class WyvernFileManager {
     this.userId = this.hashUrl(webhookUrl)
   }
 
-  // Initialize encryption
+  // Initialize encryption for uploading (creates new salt)
   async setPassword(password: string) {
+    this.password = password
     const { key, salt } = await createEncryptionContext(password)
     this.key = key
     this.salt = salt
+  }
+
+  // Restore encryption key using file's stored salt (for downloading)
+  async restoreKeyForFile(fileSalt: string): Promise<CryptoKey> {
+    if (!this.password) {
+      throw new Error('No password set for decryption')
+    }
+    return restoreEncryptionContext(this.password, fileSalt)
   }
 
   private hashUrl(url: string): string {
@@ -84,12 +95,12 @@ export class WyvernFileManager {
       type: 'file',
       size: file.size,
       path: path, // Note: backend doesn't store full path, frontend constructs it
-      parentId,
+      parent_id: parentId,
       content,
       encrypted: !!this.key,
-      encryptionIv: '', // TODO: Handle IV per chunk or file?
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      encryption_salt: this.salt,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }
   }
 
@@ -313,10 +324,19 @@ export class WyvernFileManager {
     // Sort chunks by index
     chunks.sort((a, b) => a.index - b.index)
 
-    // Check encryption
+    // Check encryption and restore key with file's salt
     const isEncrypted = file.encrypted
-    if (isEncrypted && !this.key) {
-      throw new Error('File is encrypted but no password provided')
+    let decryptionKey: CryptoKey | null = null
+
+    if (isEncrypted) {
+      if (!this.password) {
+        throw new Error('File is encrypted but no password provided')
+      }
+      if (!file.encryption_salt) {
+        throw new Error('File is encrypted but missing salt - file may be corrupted')
+      }
+      // Restore key using the file's original salt
+      decryptionKey = await this.restoreKeyForFile(file.encryption_salt)
     }
 
     // Prepare for download aggregation
@@ -336,10 +356,10 @@ export class WyvernFileManager {
         let data = await this.fetchViaExtension(chunk.url)
 
         // Decrypt if needed
-        if (isEncrypted && this.key) {
+        if (isEncrypted && decryptionKey) {
           if (!chunk.iv) throw new Error('Missing IV for encrypted chunk')
           const iv = new Uint8Array(chunk.iv)
-          data = await decryptChunk(data, this.key, iv)
+          data = await decryptChunk(data, decryptionKey, iv)
         }
 
         fileParts[chunk.index] = data
