@@ -136,6 +136,43 @@
   max-width: 500px;
 }
 
+.preview-video {
+  max-width: 90%;
+  max-height: 80%;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.preview-audio {
+  width: 100%;
+  max-width: 400px;
+}
+
+.audio-player-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  min-width: 300px;
+}
+
+.audio-icon {
+  font-size: 64px;
+}
+
+.audio-filename {
+  color: white;
+  font-size: 14px;
+  text-align: center;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .preview-loading {
   color: rgba(255, 255, 255, 0.7);
   font-size: 14px;

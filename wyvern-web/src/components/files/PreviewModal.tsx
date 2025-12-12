@@ -30,10 +30,10 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
     setIsLoading(false)
   }, [file?.id])
 
-  // Load preview when file changes (for non-encrypted images)
+  // Load preview when file changes (for images, videos, audio)
   useEffect(() => {
     if (!file) return
-    if (!isImageFile(file.name)) return
+    if (!isImageFile(file.name) && !isVideoFile(file.name) && !isAudioFile(file.name)) return
 
     const loadPreview = async () => {
       setIsLoading(true)
@@ -220,21 +220,37 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
               <Loader size={32} className="spinner" />
               <p>Preparing preview...</p>
             </div>
+          ) : isVideo && previewUrl ? (
+            <video
+              src={previewUrl}
+              controls
+              autoPlay
+              className="preview-video"
+            >
+              Your browser does not support video playback.
+            </video>
           ) : isVideo ? (
             <div className="preview-message">
-              <p>🎬 Video Preview</p>
-              <p>{file.name}</p>
-              <button className="download-btn" onClick={handleDownload}>
-                <Download size={16} /> Download to Play
-              </button>
+              <Loader size={32} className="spinner" />
+              <p>Loading video...</p>
+            </div>
+          ) : isAudio && previewUrl ? (
+            <div className="audio-player-container">
+              <div className="audio-icon">🎵</div>
+              <p className="audio-filename">{file.name}</p>
+              <audio
+                src={previewUrl}
+                controls
+                autoPlay
+                className="preview-audio"
+              >
+                Your browser does not support audio playback.
+              </audio>
             </div>
           ) : isAudio ? (
             <div className="preview-message">
-              <p>🎵 Audio File</p>
-              <p>{file.name}</p>
-              <button className="download-btn" onClick={handleDownload}>
-                <Download size={16} /> Download to Listen
-              </button>
+              <Loader size={32} className="spinner" />
+              <p>Loading audio...</p>
             </div>
           ) : (
             <div className="preview-message">
