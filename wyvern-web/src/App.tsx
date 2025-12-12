@@ -12,6 +12,7 @@ import './styles/App.css'
 function App() {
   const { isAuthenticated, initializeManager, loadFiles } = useFileStore()
 
+  // Initialize file manager and load files after authentication
   useEffect(() => {
     if (isAuthenticated) {
       initializeManager().then(() => {
@@ -27,9 +28,25 @@ function App() {
   return (
     <div className="app">
       <Sidebar />
-      <main className="main-content">
-        <FileManager />
-      </main>
+      <div className="app-body">
+        <header className="app-header">
+          <div className="search-container">
+            <span className="search-icon">🔍</span>
+            <input type="text" placeholder="Search your files..." className="global-search-input" />
+          </div>
+
+          <div className="header-actions">
+            <button className="icon-btn" title="Settings">⚙️</button>
+            <button className="icon-btn" title="Notifications">🔔</button>
+          </div>
+        </header>
+
+        <main className="main-content">
+          <FileManager />
+        </main>
+      </div>
+
+      {/* Global Modals */}
       <RenameModal />
       <MoveModal />
       <VersionHistoryModal />

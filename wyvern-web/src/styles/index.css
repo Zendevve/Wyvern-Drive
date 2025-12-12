@@ -1,90 +1,119 @@
-/* Wyvern Drive - Global Styles */
+/* Wyvern Drive - Linear/Modern Design System */
 
 :root {
-  /* Colors - Dark Theme (Primary) */
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #12121a;
-  --bg-tertiary: #1a1a25;
-  --bg-hover: #252535;
+  /* Background System - Deep Space with Ambient Light */
+  --background-deep: #020203;
+  --background-base: #050506;
+  --background-elevated: #0a0a0c;
 
-  /* Accent - Wyvern Purple */
-  --accent-primary: #7c3aed;
-  --accent-secondary: #a855f7;
-  --accent-glow: rgba(124, 58, 237, 0.3);
+  /* Surfaces */
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-hover: rgba(255, 255, 255, 0.08);
 
   /* Text */
-  --text-primary: #f1f1f1;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+  --foreground: #EDEDEF;
+  --foreground-muted: #8A8F98;
+  --foreground-subtle: rgba(255, 255, 255, 0.60);
+
+  /* Accent - Indigo */
+  --accent: #5E6AD2;
+  --accent-bright: #6872D9;
+  --accent-glow: rgba(94, 106, 210, 0.3);
 
   /* Borders */
-  --border-color: #27272a;
-  --border-glow: rgba(124, 58, 237, 0.5);
+  --border-default: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.10);
+  --border-accent: rgba(94, 106, 210, 0.30);
 
   /* Status */
-  --success: #22c55e;
-  --error: #ef4444;
-  --warning: #f59e0b;
+  --success: #3BA55C;
+  --error: #ED4245;
+  --warning: #FAA61A;
 
   /* Spacing */
-  --sidebar-width: 280px;
+  --sidebar-width: 260px;
+  --header-height: 52px;
 
-  /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-normal: 250ms ease;
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 
-  /* Fonts */
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Typography */
+  --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+
+  /* Legacy variable aliases for backward compat */
+  --bg-primary: var(--background-base);
+  --bg-secondary: var(--background-elevated);
+  --bg-tertiary: var(--surface);
+  --bg-hover: var(--surface-hover);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--foreground-muted);
+  --text-muted: var(--foreground-subtle);
+  --accent-primary: var(--accent);
+  --accent-secondary: var(--accent-bright);
+  --border-color: var(--border-default);
+
+  font-family: var(--font-primary);
   font-size: 14px;
   line-height: 1.5;
-  color: var(--text-primary);
-  background-color: var(--bg-primary);
+  color: var(--foreground);
+  background-color: var(--background-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
 }
 
 body {
   overflow: hidden;
+  background: radial-gradient(ellipse at top, #0a0a0f 0%, #050506 50%, #020203 100%);
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-tertiary);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--bg-hover);
+  background: rgba(255, 255, 255, 0.15);
 }
 
-/* Focus styles */
+/* Focus States */
 :focus-visible {
-  outline: 2px solid var(--accent-primary);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 /* Selection */
 ::selection {
-  background: var(--accent-primary);
-  color: var(--text-primary);
+  background: var(--accent);
+  color: white;
 }
 
 /* Buttons */
@@ -97,10 +126,6 @@ button {
 
 /* Links */
 a {
-  color: var(--accent-secondary);
+  color: var(--accent);
   text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
 }
