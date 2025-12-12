@@ -1,104 +1,179 @@
-# Wyvern Drive — Master Roadmap
+# Wyvern Drive — Master Roadmap v2
 
-> **Mission:** Build the definitive, infinite, encrypted cloud storage leveraging Discord.
-> **Timeline:** Late 2025 (Phased Rollout)
-
----
-
-## Phase 1: Foundation ✅ (Complete)
-- [x] Core upload/download engine with chunking
-- [x] AES-GCM encryption
-- [x] Virtual file system (SQLite metadata)
-- [x] Basic UI (Grid/List views)
-- [x] Git remote backup & recovery
+> **Mission:** The definitive Discord-based infinite encrypted storage.
+> **Timeline:** Late 2025 – Q2 2026
 
 ---
 
-## Phase 2: Power User File Ops ✅ (Complete)
-- [x] File/Folder Move & Rename
-- [x] Batch selection state (Zustand)
-- [x] Multi-select drag & drop
-- [x] Ctrl+Click selection UI
-- [ ] *(Deferred)* Batch action toolbar
-- [ ] *(Deferred)* Enhanced transfer status
+## Phase 1: Foundation ✅
+*Core engine that proves the concept works.*
+
+### 1.1 Core Upload Engine ✅
+- [x] File chunking (7.5MB per chunk)
+- [x] Upload to Discord via webhook
+- [x] Store chunk URLs in metadata DB
+
+### 1.2 Core Download Engine ✅
+- [x] Fetch chunk URLs from metadata
+- [x] Download via extension (CORS bypass)
+- [x] Reassemble original file
+
+### 1.3 Encryption Layer ✅
+- [x] AES-256-GCM encryption
+- [x] Per-session key derivation (PBKDF2)
+- [x] Salt storage per file
+
+### 1.4 Virtual File System ✅
+- [x] SQLite metadata database
+- [x] Hierarchical folder structure
+- [x] File versioning support
+
+---
+
+## Phase 2: Power User Ops ✅
+*Make file management actually usable.*
+
+### 2.1 File Operations ✅
+- [x] Rename files/folders
+- [x] Move files between folders
+- [x] Delete with recursive support
+
+### 2.2 Batch Operations ✅
+- [x] Multi-select (Ctrl+Click)
+- [x] Batch drag-drop move
+- [x] Batch delete (store action)
+
+### 2.3 UI Polish (Deferred)
+- [ ] Selection toolbar
+- [ ] Transfer speed/ETA display
+- [ ] Keyboard shortcuts
 
 ---
 
 ## Phase 3: Search & Navigation
-- [ ] Breadcrumb navigation for folder traversal
-- [ ] Client-side fuzzy search (filename, extension)
-- [ ] Filter panel (by type, size, date range)
-- [ ] Sort options (name, size, date, type)
-- [ ] "Recent Files" quick access section
+*Find your files without scrolling forever.*
+
+### 3.1 Navigation
+- [ ] Breadcrumb trail component
+- [ ] Click-to-navigate folders
+- [ ] "Up" button / keyboard nav
+
+### 3.2 Search
+- [ ] Fuzzy search input (Fuse.js)
+- [ ] Highlight matches in results
+- [ ] Search within current folder or global
+
+### 3.3 Filtering & Sorting
+- [ ] Filter by: type, size range, date range
+- [ ] Sort by: name, size, date, type
+- [ ] Persist user preferences
+
+### 3.4 Quick Access
+- [ ] Recent files section
+- [ ] Starred/pinned files
+- [ ] Last opened folders
 
 ---
 
 ## Phase 4: Media Center
-- [ ] Image lightbox with zoom/pan
-- [ ] Audio player with playlist, seeking, volume
-- [ ] Video streaming (sequential chunk fetch)
-- [ ] Thumbnail caching (IndexedDB)
-- [ ] EXIF/metadata viewer for images
+*Stream, view, listen without downloading.*
+
+### 4.1 Image Handling
+- [ ] Lightbox with zoom/pan
+- [ ] Thumbnail grid (lazy load)
+- [ ] EXIF metadata viewer
+- [ ] Slideshow mode
+
+### 4.2 Audio Player
+- [ ] Play encrypted audio (decrypt on fly)
+- [ ] Seekable progress bar
+- [ ] Queue/playlist support
+- [ ] Mini-player widget
+
+### 4.3 Video Streaming
+- [ ] Sequential chunk streaming
+- [ ] Buffer ahead for smooth playback
+- [ ] Quality selector (if transcoding added)
+
+### 4.4 Caching
+- [ ] IndexedDB thumbnail cache
+- [ ] LRU eviction policy
+- [ ] Cache invalidation on file update
 
 ---
 
-## Phase 5: Fort Knox Security
-- [ ] Filename obfuscation (UUID-based names on Discord)
-- [ ] Steganography mode (embed data in valid images)
-- [ ] Key rotation (re-encrypt with new password)
-- [ ] Password change flow (re-key all files)
-- [ ] 2-channel redundancy (RAID-like parity)
-- [ ] Self-heal scan (detect deleted Discord msgs, re-upload)
+## Phase 5: Deployment & Infrastructure
+*Go from localhost to production.*
+
+### 5.1 Database Migration
+- [ ] Evaluate: SQLite → Turso or Postgres
+- [ ] Migration scripts
+- [ ] Connection pooling
+
+### 5.2 Backend Deployment
+- [ ] Railway/Render/Fly.io setup
+- [ ] Environment variables (secrets)
+- [ ] Health check endpoint
+
+### 5.3 Frontend Deployment
+- [ ] Netlify/Vercel build config
+- [ ] API URL environment toggle
+- [ ] Preview deployments
+
+### 5.4 Extension Distribution
+- [ ] Chrome Web Store listing
+- [ ] Auto-update manifest
+- [ ] Firefox port (optional)
 
 ---
 
-## Phase 6: Sync & Sharing
-- [ ] Sync folder watcher (auto-upload on file change)
-- [ ] Ephemeral share links (time-limited, password-protected)
-- [ ] QR code sharing for mobile
-- [ ] Collaborative vaults (multi-user access via shared key)
+## Phase 6: Security Hardening
+*Make it actually secure, not just encrypted.*
+
+### 6.1 Obfuscation
+- [ ] UUID filenames on Discord
+- [ ] Randomized chunk ordering
+- [ ] Steganography option
+
+### 6.2 Key Management
+- [ ] Password change flow
+- [ ] Re-encryption pipeline
+- [ ] Key backup/export
+
+### 6.3 Redundancy
+- [ ] Multi-webhook upload (RAID-1)
+- [ ] Self-heal scan
+- [ ] Integrity verification
 
 ---
 
-## Phase 7: Desktop & CLI
-- [ ] System tray integration (background sync)
-- [ ] Native notifications (upload/download complete)
-- [ ] CLI tool (`wyvern upload ./folder`)
-- [ ] Headless mode for servers
+## Phase 7: Sync & Sharing
+*Use it across devices, share with others.*
+
+### 7.1 Multi-Device Sync
+- [ ] Folder watcher (file system monitor)
+- [ ] Conflict resolution
+- [ ] Sync status indicator
+
+### 7.2 Sharing
+- [ ] Ephemeral links (time-limited)
+- [ ] Password-protected shares
+- [ ] QR code generation
 
 ---
 
-## Phase 8: Polish & Ecosystem
-- [ ] Theming engine (dark/light/custom palettes)
-- [ ] Plugin system (community extensions)
-- [ ] PWA optimization (offline capability, mobile install)
-- [ ] Onboarding wizard (first-time setup)
-- [ ] Usage analytics dashboard (storage used, upload history)
+## Phase 8-10: Future
+*Desktop app, mobile, API, ecosystem.*
 
----
-
-## Phase 9: Advanced Features
-- [ ] File deduplication (hash-based)
-- [ ] Compression before encryption (zstd)
-- [ ] Scheduled backups (cron-like)
-- [ ] Trash/recycle bin (soft delete with restore)
-- [ ] Activity log (who accessed what, when)
-
----
-
-## Phase 10: Mobile & Beyond
-- [ ] React Native app (iOS/Android)
-- [ ] Offline-first sync (queue uploads when back online)
-- [ ] Cross-device clipboard (share files instantly)
-- [ ] Wyvern API (developer access for integrations)
+*(Details to be expanded when earlier phases complete)*
 
 ---
 
 ## Milestones
 
-| Milestone | Target | Key Deliverable |
-|-----------|--------|-----------------|
-| **Alpha** | Mid-Dec 2025 | Phases 1-4 complete, usable daily |
-| **Beta** | Jan 2026 | Security features, sharing |
-| **v1.0** | Feb 2026 | Desktop app, CLI, stable |
-| **v2.0** | Q2 2026 | Mobile app, API, ecosystem |
+| Target | Deliverable |
+|--------|-------------|
+| **Dec 2025** | Phases 1-4 (usable daily driver) |
+| **Jan 2026** | Phase 5 (deployed hybrid) |
+| **Feb 2026** | Phase 6-7 (secure + shareable) |
+| **Q2 2026** | Desktop/Mobile/API |
