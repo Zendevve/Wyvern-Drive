@@ -2,7 +2,7 @@ import { useFileStore } from '../../stores/fileStore'
 import './ProgressToasts.css'
 
 export function ProgressToasts() {
-  const { uploadProgress } = useFileStore()
+  const uploadProgress = useFileStore(state => state.uploadProgress)
 
   if (uploadProgress.size === 0) return null
 

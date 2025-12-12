@@ -11,12 +11,13 @@
 }
 
 .progress-toast {
-  width: 300px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  width: 320px;
+  background: rgba(20, 20, 28, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   animation: slideIn 0.3s ease-out;
 }
 
@@ -35,26 +36,33 @@
 .toast-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.toast-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
 }
 
 .toast-percent {
-  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent, #6366f1);
 }
 
 .progress-bar-bg {
-  height: 6px;
-  background: var(--bg-tertiary);
-  border-radius: 3px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: var(--accent-primary);
-  border-radius: 3px;
-  transition: width 0.2s linear;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 4px;
+  transition: width 0.15s ease-out;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
 }

@@ -63,8 +63,8 @@ export interface EncryptedChunk {
 
 // Config
 export const CONFIG = {
-  CHUNK_SIZE_DEFAULT: 25 * 1024 * 1024 - 1024, // ~25MB minus buffer
-  CHUNK_SIZE_NITRO: 50 * 1024 * 1024 - 1024,   // ~50MB for Nitro
+  CHUNK_SIZE_DEFAULT: 7.5 * 1024 * 1024, // 7.5MB - Discord webhooks limit is 8MB
+  CHUNK_SIZE_NITRO: 24 * 1024 * 1024,    // 24MB - for Nitro/boosted servers with 25MB limit
   MAX_PARALLEL_UPLOADS: 3,
   MAX_PARALLEL_DOWNLOADS: 5,
   RETRY_ATTEMPTS: 3,

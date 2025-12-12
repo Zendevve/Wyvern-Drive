@@ -310,7 +310,7 @@ async function fetchViaExtension(url: string): Promise<ArrayBuffer> {
     setTimeout(() => {
       window.removeEventListener('message', handleResponse)
       reject(new Error('Extension download timeout - is extension installed?'))
-    }, 30000)
+    }, 60000)
   })
 }
 

@@ -29,7 +29,7 @@ export async function deriveKey(password: string, salt: Uint8Array): Promise<Cry
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt,
+      salt: salt as BufferSource,
       iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256',
     },
@@ -64,7 +64,7 @@ export async function encryptChunk(
   const iv = generateIv()
 
   const encryptedData = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as BufferSource },
     key,
     data
   )
@@ -81,7 +81,7 @@ export async function decryptChunk(
   iv: Uint8Array
 ): Promise<ArrayBuffer> {
   return crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as BufferSource },
     key,
     encryptedData
   )

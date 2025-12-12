@@ -3,7 +3,7 @@ import type { WyvernFile, WyvernFolder, ChunkInfo } from '../../lib/types'
 import { useFileStore } from '../../stores/fileStore'
 import { ContextMenu } from './ContextMenu'
 import { getFileIcon, formatSize, formatDate } from '../../lib/utils'
-import { isPreviewable, isImageFile, getMimeType } from '../../lib/thumbnails'
+import { isPreviewable, isImageFile, isVideoFile, getMimeType } from '../../lib/thumbnails'
 import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
 import { Loader } from 'lucide-react'
 import './FileItem.css'
@@ -24,11 +24,12 @@ export function FileItem({ file, viewMode }: FileItemProps) {
 
   const isFolder = file.type === 'directory'
   const isImage = !isFolder && isImageFile(file.name)
+  const isVideo = !isFolder && isVideoFile(file.name)
   const icon = isFolder ? '📁' : getFileIcon(file.name)
 
-  // Load thumbnail for images in grid view
+  // Load thumbnail for images and videos in grid view
   useEffect(() => {
-    if (!isImage || viewMode !== 'grid' || thumbnail) return
+    if ((!isImage && !isVideo) || viewMode !== 'grid' || thumbnail) return
 
     const wyvernFile = file as WyvernFile
     if (!wyvernFile.content) return
@@ -63,8 +64,20 @@ export function FileItem({ file, viewMode }: FileItemProps) {
 
         // Create blob URL
         const blob = new Blob(fileParts, { type: getMimeType(wyvernFile.name) })
-        const url = URL.createObjectURL(blob)
-        setThumbnail(url)
+
+        if (isImage) {
+          // Direct display for images
+          const url = URL.createObjectURL(blob)
+          setThumbnail(url)
+        } else if (isVideo) {
+          // Extract first frame for videos
+          const videoUrl = URL.createObjectURL(blob)
+          const thumbUrl = await extractVideoFrame(videoUrl)
+          URL.revokeObjectURL(videoUrl)
+          if (thumbUrl) {
+            setThumbnail(thumbUrl)
+          }
+        }
 
       } catch (err) {
         console.error('Thumbnail load failed:', err)
@@ -210,5 +223,48 @@ async function fetchViaExtension(url: string): Promise<ArrayBuffer> {
       window.removeEventListener('message', handleResponse)
       reject(new Error('Thumbnail timeout'))
     }, 15000)
+  })
+}
+
+// Extract first frame from video as thumbnail
+async function extractVideoFrame(videoUrl: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video')
+    video.crossOrigin = 'anonymous'
+    video.muted = true
+
+    video.onloadeddata = () => {
+      video.currentTime = 1 // Seek to 1 second for better thumbnail
+    }
+
+    video.onseeked = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = 200
+        canvas.height = 112 // 16:9 ratio
+
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve(null)
+          return
+        }
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        const thumbUrl = canvas.toDataURL('image/jpeg', 0.7)
+        resolve(thumbUrl)
+      } catch {
+        resolve(null)
+      }
+    }
+
+    video.onerror = () => {
+      resolve(null)
+    }
+
+    // Timeout for video loading
+    setTimeout(() => resolve(null), 10000)
+
+    video.src = videoUrl
+    video.load()
   })
 }
