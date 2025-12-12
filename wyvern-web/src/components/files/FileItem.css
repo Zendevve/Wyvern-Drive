@@ -11,6 +11,12 @@
   transition: all var(--transition-fast);
 }
 
+.file-item.drag-over {
+  background: rgba(124, 58, 237, 0.2);
+  border-color: var(--accent-primary);
+  transform: scale(1.02);
+}
+
 .file-item:hover {
   background: var(--bg-tertiary);
   border-color: var(--accent-primary);
