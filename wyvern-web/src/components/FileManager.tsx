@@ -7,13 +7,12 @@ import { Breadcrumb } from './files/Breadcrumb'
 import './FileManager.css'
 
 export function FileManager() {
-  const { currentPath, files, isLoading } = useFileStore()
+  const { currentPath, files, isLoading, uploadFiles } = useFileStore()
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
   const handleFileDrop = useCallback(async (droppedFiles: FileList) => {
-    // TODO: Implement file upload
-    console.log('Files dropped:', droppedFiles)
-  }, [])
+    await uploadFiles(droppedFiles)
+  }, [uploadFiles])
 
   return (
     <div className="file-manager">

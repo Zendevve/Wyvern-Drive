@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { useFileStore } from '../../stores/fileStore'
 import './Toolbar.css'
 
 interface ToolbarProps {
@@ -9,6 +10,8 @@ interface ToolbarProps {
 export function Toolbar({ viewMode, setViewMode }: ToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
+
+  const { uploadFiles } = useFileStore()
 
   const handleUploadFile = () => {
     fileInputRef.current?.click()
@@ -21,6 +24,14 @@ export function Toolbar({ viewMode, setViewMode }: ToolbarProps) {
   const handleNewFolder = () => {
     // TODO: Create folder modal
     console.log('Create new folder')
+  }
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      uploadFiles(e.target.files)
+    }
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   return (
@@ -42,7 +53,7 @@ export function Toolbar({ viewMode, setViewMode }: ToolbarProps) {
           type="file"
           multiple
           style={{ display: 'none' }}
-          onChange={(e) => console.log('Files:', e.target.files)}
+          onChange={onFileChange}
         />
         <input
           ref={folderInputRef}

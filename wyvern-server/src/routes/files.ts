@@ -72,7 +72,7 @@ fileRouter.post('/create/:userId', (req: Request, res: Response) => {
     const result = db.prepare(`
       INSERT INTO files (user_id, parent_id, name, type, size, content, encrypted, encryption_salt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(userId, parent_id || null, name, type, size || 0, content || null, encrypted || 0, encryption_salt || null)
+    `).run(userId, parent_id || null, name, type, size || 0, content || null, encrypted ? 1 : 0, encryption_salt || null)
 
     res.json(result.lastInsertRowid)
   } catch (error) {

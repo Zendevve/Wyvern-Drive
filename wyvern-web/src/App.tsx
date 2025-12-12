@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { FileManager } from './components/FileManager'
 import { Sidebar } from './components/layout/Sidebar'
 import { SetupScreen } from './components/SetupScreen'
@@ -6,7 +6,15 @@ import { useFileStore } from './stores/fileStore'
 import './styles/App.css'
 
 function App() {
-  const { isAuthenticated } = useFileStore()
+  const { isAuthenticated, initializeManager, loadFiles } = useFileStore()
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      initializeManager().then(() => {
+        loadFiles()
+      })
+    }
+  }, [isAuthenticated, initializeManager, loadFiles])
 
   if (!isAuthenticated) {
     return <SetupScreen />
