@@ -19,8 +19,10 @@ export function FileItem({ file, viewMode }: FileItemProps) {
   const [thumbnail, setThumbnail] = useState<string | null>(null)
   const [isLoadingThumb, setIsLoadingThumb] = useState(false)
 
-  const { encryptionPassword } = useFileStore()
+  const { encryptionPassword, selectedIds, toggleSelection } = useFileStore()
   const { moveFile } = useFileStore.getState()
+
+  const isSelected = selectedIds.has(String(file.id))
 
   const isFolder = file.type === 'directory'
   const isImage = !isFolder && isImageFile(file.name)
@@ -110,6 +112,14 @@ export function FileItem({ file, viewMode }: FileItemProps) {
     }
   }
 
+  // Ctrl+Click to toggle selection
+  const handleClick = (e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      toggleSelection(String(file.id))
+    }
+  }
+
   // Drag Source
   const handleDragStart = (e: React.DragEvent) => {
     const { selectedIds } = useFileStore.getState()
@@ -174,7 +184,7 @@ export function FileItem({ file, viewMode }: FileItemProps) {
   return (
     <>
       <div
-        className={`file-item ${viewMode} ${isDragOver ? 'drag-over' : ''} ${isImage && thumbnail ? 'has-thumbnail' : ''}`}
+        className={`file-item ${viewMode} ${isDragOver ? 'drag-over' : ''} ${isImage && thumbnail ? 'has-thumbnail' : ''} ${isSelected ? 'selected' : ''}`}
         draggable="true"
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
@@ -182,6 +192,7 @@ export function FileItem({ file, viewMode }: FileItemProps) {
         onDrop={handleDrop}
         onContextMenu={handleContextMenu}
         onDoubleClick={handleDoubleClick}
+        onClick={handleClick}
       >
         {/* Thumbnail or Icon */}
         {viewMode === 'grid' && isImage && thumbnail ? (
