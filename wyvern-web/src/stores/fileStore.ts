@@ -15,7 +15,8 @@ export interface UploadInfo {
 
 interface FileStore {
   // Auth
-  webhookUrl: string | null
+  webhookUrl: string | null  // @deprecated - kept for backward compatibility migration
+  webhookUrls: string[]      // New: array of webhook URLs for parallel uploads
   userId: string | null
   isAuthenticated: boolean
   encryptionPassword: string | null
@@ -33,9 +34,12 @@ interface FileStore {
   // UI state
   isLoading: boolean
   uploadProgress: Map<string, UploadInfo>
+  isSettingsOpen: boolean
 
   // Actions
-  setWebhookUrl: (url: string) => void
+  setWebhookUrl: (url: string) => void  // @deprecated - use setWebhookUrls
+  setWebhookUrls: (urls: string[]) => void
+  updateWebhooks: (urls: string[]) => Promise<void>  // For post-login updates
   setEncryptionPassword: (password: string | null) => Promise<void>
   initializeManager: () => Promise<void>
   loadFiles: () => Promise<void>
@@ -55,9 +59,9 @@ interface FileStore {
   moveSelected: (parentId: number | null) => Promise<void>
 
   // Modal State
-  activeModal: 'rename' | 'move' | 'versions' | 'share' | null
+  activeModal: 'rename' | 'move' | 'versions' | 'share' | 'settings' | null
   activeFileId: string | null
-  setActiveModal: (modal: 'rename' | 'move' | 'versions' | 'share' | null, fileId?: string | null) => void
+  setActiveModal: (modal: 'rename' | 'move' | 'versions' | 'share' | 'settings' | null, fileId?: string | null) => void
 
   // Preview State
   previewFileId: string | null
@@ -71,13 +75,17 @@ interface FileStore {
   getVersions: (fileId: string) => Promise<FileVersion[]>
   restoreVersion: (fileId: string, versionId: string) => Promise<void>
   deleteVersion: (fileId: string, versionId: string) => Promise<void>
+
+  // Webhook Pool Stats (for UI indicators)
+  getWebhookPoolStats: () => { count: number; isOptimal: boolean; recommendation: string | null } | null
 }
 
 export const useFileStore = create<FileStore>()(
   persist(
     (set, get) => ({
       // Initial state
-      webhookUrl: null,
+      webhookUrl: null,  // @deprecated
+      webhookUrls: [],
       userId: null,
       isAuthenticated: false,
       encryptionPassword: null,
@@ -92,13 +100,48 @@ export const useFileStore = create<FileStore>()(
       activeModal: null,
       activeFileId: null,
       previewFileId: null,
+      isSettingsOpen: false,
 
       // Actions
+      // @deprecated - use setWebhookUrls
       setWebhookUrl: (url) => set({
         webhookUrl: url,
+        webhookUrls: [url],  // Migrate to array
         isAuthenticated: true,
         userId: url // Will be hashed by manager
       }),
+
+      setWebhookUrls: (urls) => {
+        const validUrls = urls.filter(u => u.trim().length > 0)
+        if (validUrls.length === 0) return
+        set({
+          webhookUrls: validUrls,
+          webhookUrl: validUrls[0],  // Keep for backward compat
+          isAuthenticated: true,
+          userId: validUrls[0] // Will be hashed by manager
+        })
+      },
+
+      updateWebhooks: async (urls) => {
+        const validUrls = urls.filter(u => u.trim().length > 0)
+        if (validUrls.length === 0) return
+
+        const { encryptionPassword } = get()
+
+        // Update state
+        set({
+          webhookUrls: validUrls,
+          webhookUrl: validUrls[0]
+        })
+
+        // Reinitialize manager with new webhooks
+        console.log('[FileStore] Updating webhooks and reinitializing manager')
+        const manager = new WyvernFileManager(validUrls)
+        if (encryptionPassword) {
+          await manager.setPassword(encryptionPassword)
+        }
+        set({ fileManager: manager })
+      },
 
       setEncryptionPassword: async (password) => {
         set({ encryptionPassword: password })
@@ -109,11 +152,14 @@ export const useFileStore = create<FileStore>()(
       },
 
       initializeManager: async () => {
-        const { webhookUrl, encryptionPassword } = get()
-        if (!webhookUrl) return
+        const { webhookUrls, webhookUrl, encryptionPassword } = get()
 
-        console.log('[FileStore] Initializing manager. PW present:', !!encryptionPassword)
-        const manager = new WyvernFileManager(webhookUrl)
+        // Use webhookUrls array, fall back to single webhookUrl for backward compat
+        const urls = webhookUrls.length > 0 ? webhookUrls : (webhookUrl ? [webhookUrl] : [])
+        if (urls.length === 0) return
+
+        console.log('[FileStore] Initializing manager with', urls.length, 'webhook(s). PW present:', !!encryptionPassword)
+        const manager = new WyvernFileManager(urls)
         if (encryptionPassword) {
           await manager.setPassword(encryptionPassword)
         }
@@ -442,6 +488,7 @@ export const useFileStore = create<FileStore>()(
 
       logout: () => set({
         webhookUrl: null,
+        webhookUrls: [],
         userId: null,
         isAuthenticated: false,
         encryptionPassword: null,
@@ -450,6 +497,7 @@ export const useFileStore = create<FileStore>()(
         breadcrumbs: [],
         files: {},
         selectedIds: new Set(),
+        isSettingsOpen: false,
       }),
 
       setCurrentPath: (path) => set({ currentPath: path, selectedIds: new Set(), lastSelectedId: null }),
@@ -604,6 +652,17 @@ export const useFileStore = create<FileStore>()(
           console.error('Delete version failed', error)
           alert('Delete version failed')
         }
+      },
+
+      getWebhookPoolStats: () => {
+        const { fileManager } = get()
+        if (!fileManager) return null
+        const stats = fileManager.getWebhookPoolStats()
+        return {
+          count: stats.count,
+          isOptimal: stats.isOptimal,
+          recommendation: stats.recommendation
+        }
       }
 
     }),
@@ -618,7 +677,8 @@ export const useFileStore = create<FileStore>()(
         }
       }),
       partialize: (state) => ({
-        webhookUrl: state.webhookUrl,
+        webhookUrl: state.webhookUrl,  // @deprecated - kept for backward compat
+        webhookUrls: state.webhookUrls,
         userId: state.userId,
         isAuthenticated: state.isAuthenticated,
         // Don't persist sensitive password if possible, but setup screen asks for it.

@@ -61,14 +61,28 @@ export interface EncryptedChunk {
   iv: Uint8Array
 }
 
-// Config
+// Config - Performance optimized based on DDrive benchmarks
 export const CONFIG = {
+  // Chunk sizes
   CHUNK_SIZE_DEFAULT: 7.5 * 1024 * 1024, // 7.5MB - Discord webhooks limit is 8MB
   CHUNK_SIZE_NITRO: 24 * 1024 * 1024,    // 24MB - for Nitro/boosted servers with 25MB limit
-  MAX_PARALLEL_UPLOADS: 3,
+
+  // Parallelism settings (increased from 3 based on competitive analysis)
+  MAX_PARALLEL_UPLOADS: 5,               // DDrive uses 3-5 with multiple webhooks
   MAX_PARALLEL_DOWNLOADS: 5,
+
+  // Webhook pool settings
+  MIN_WEBHOOKS_RECOMMENDED: 3,           // Minimum for good performance
+  OPTIMAL_WEBHOOKS: 5,                   // Optimal for maximum throughput
+
+  // Retry settings
   RETRY_ATTEMPTS: 3,
-  RETRY_DELAY_BASE: 1000, // ms
+  RETRY_DELAY_BASE: 1000, // ms - exponential backoff base
+
+  // Dynamic concurrency thresholds
+  LARGE_FILE_THRESHOLD: 100 * 1024 * 1024, // 100MB - increase concurrency for large files
+  SMALL_FILE_CONCURRENCY: 3,              // Concurrency for files < threshold
+  LARGE_FILE_CONCURRENCY: 5,              // Concurrency for files >= threshold
 } as const
 
 export const FILE_DELIMITER = '/'

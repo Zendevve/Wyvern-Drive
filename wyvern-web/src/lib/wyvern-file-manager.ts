@@ -38,6 +38,7 @@ export class WyvernFileManager {
   private userId: string
   private webhooks: string[]  // Array of webhook URLs for parallel uploads
   private lastWebhookIdx = 0  // Round-robin index
+  private webhookUploadCounts: number[] = [] // Track uploads per webhook
   private key: CryptoKey | null = null
   private salt: string | null = null
   private password: string | null = null // Store password for restoring keys with different salts
@@ -45,13 +46,41 @@ export class WyvernFileManager {
   constructor(webhookUrls: string | string[]) {
     // Support both single URL (backwards compat) and array
     this.webhooks = Array.isArray(webhookUrls) ? webhookUrls : [webhookUrls]
+    // Initialize upload counters for each webhook
+    this.webhookUploadCounts = new Array(this.webhooks.length).fill(0)
     // Simple hash of first webhook URL as userId
     this.userId = this.hashUrl(this.webhooks[0])
   }
 
-  // Round-robin webhook selector for parallel uploads
+  // Get webhook pool statistics for UI display
+  getWebhookPoolStats(): {
+    count: number
+    isOptimal: boolean
+    recommendation: string | null
+    uploadCounts: number[]
+  } {
+    const count = this.webhooks.length
+    const isOptimal = count >= CONFIG.OPTIMAL_WEBHOOKS
+    let recommendation: string | null = null
+
+    if (count < CONFIG.MIN_WEBHOOKS_RECOMMENDED) {
+      recommendation = `Add ${CONFIG.MIN_WEBHOOKS_RECOMMENDED - count} more webhook(s) for better performance`
+    } else if (count < CONFIG.OPTIMAL_WEBHOOKS) {
+      recommendation = `Add ${CONFIG.OPTIMAL_WEBHOOKS - count} more webhook(s) for optimal speed`
+    }
+
+    return {
+      count,
+      isOptimal,
+      recommendation,
+      uploadCounts: [...this.webhookUploadCounts]
+    }
+  }
+
+  // Round-robin webhook selector with load tracking
   private get nextWebhook(): string {
     const url = this.webhooks[this.lastWebhookIdx]
+    this.webhookUploadCounts[this.lastWebhookIdx]++
     this.lastWebhookIdx = (this.lastWebhookIdx + 1) % this.webhooks.length
     return url
   }
@@ -233,6 +262,16 @@ export class WyvernFileManager {
 
     let uploadedBytes = 0
 
+    // Dynamic concurrency: use higher concurrency for large files with multiple webhooks
+    const baseConcurrency = totalSize >= CONFIG.LARGE_FILE_THRESHOLD
+      ? CONFIG.LARGE_FILE_CONCURRENCY
+      : CONFIG.SMALL_FILE_CONCURRENCY
+    // Scale by webhook count: more webhooks = can handle more parallel uploads
+    const concurrency = Math.min(
+      baseConcurrency * Math.ceil(this.webhooks.length / 2),
+      CONFIG.MAX_PARALLEL_UPLOADS * this.webhooks.length
+    )
+
     // Helper to upload a single chunk
     const uploadChunk = async (index: number): Promise<void> => {
       const start = index * chunkSize
@@ -303,8 +342,7 @@ export class WyvernFileManager {
       options?.onProgress?.(uploadedBytes, totalSize)
     }
 
-    // Process chunks in parallel batches
-    const concurrency = CONFIG.MAX_PARALLEL_UPLOADS
+    // Process chunks in parallel batches with dynamic concurrency
     for (let i = 0; i < totalChunks; i += concurrency) {
       const batchIndices = []
       for (let j = i; j < Math.min(i + concurrency, totalChunks); j++) {

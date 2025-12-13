@@ -252,6 +252,72 @@
   color: var(--error);
 }
 
+.settings-btn {
+  background: transparent;
+  border: none;
+  color: var(--foreground-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.settings-btn:hover {
+  background: var(--surface-hover);
+  color: var(--accent);
+}
+
 .mt-4 {
   margin-top: 16px;
+}
+
+/* Webhook Pool Performance Indicator */
+.webhook-pool-indicator {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  border: 1px solid var(--border-default);
+  margin-bottom: 8px;
+}
+
+.webhook-pool-indicator.optimal {
+  border-color: rgba(34, 197, 94, 0.3);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.webhook-pool-indicator.suboptimal {
+  border-color: rgba(234, 179, 8, 0.3);
+  background: rgba(234, 179, 8, 0.08);
+}
+
+.webhook-pool-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--foreground-muted);
+}
+
+.webhook-pool-indicator.optimal .webhook-icon {
+  color: rgb(34, 197, 94);
+}
+
+.webhook-pool-indicator.suboptimal .webhook-icon {
+  color: rgb(234, 179, 8);
+}
+
+.webhook-count {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.webhook-recommendation {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--foreground-muted);
+  line-height: 1.4;
+}
+
+.webhook-pool-indicator.suboptimal .webhook-recommendation {
+  color: rgb(234, 179, 8);
 }

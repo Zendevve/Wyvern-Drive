@@ -8,7 +8,9 @@ import {
   Plus,
   LogOut,
   FileUp,
-  FolderUp
+  FolderUp,
+  Zap,
+  Settings
 } from 'lucide-react'
 import { useFileStore } from '../../stores/fileStore'
 import type { WyvernFile, WyvernFolder } from '../../lib/types'
@@ -36,11 +38,14 @@ function formatStorageSize(bytes: number): string {
 }
 
 export function Sidebar() {
-  const { logout, uploadFiles, uploadFolder, files } = useFileStore()
+  const { logout, uploadFiles, uploadFolder, files, getWebhookPoolStats, setActiveModal } = useFileStore()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   // Calculate total storage used from all files
   const totalStorageUsed = useMemo(() => calculateTotalSize(files), [files])
+
+  // Get webhook pool stats for performance indicator
+  const webhookStats = getWebhookPoolStats()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
@@ -157,11 +162,34 @@ export function Sidebar() {
           </div>
         </div>
 
+        {/* Webhook Pool Performance Indicator */}
+        {webhookStats && (
+          <div className={`webhook-pool-indicator ${webhookStats.isOptimal ? 'optimal' : 'suboptimal'}`}>
+            <div className="webhook-pool-header">
+              <Zap size={14} className="webhook-icon" />
+              <span>Performance</span>
+              <span className="webhook-count">{webhookStats.count} webhook{webhookStats.count !== 1 ? 's' : ''}</span>
+            </div>
+            {webhookStats.recommendation && (
+              <div className="webhook-recommendation">
+                {webhookStats.recommendation}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="user-profile">
           <div className="user-avatar" />
           <div className="user-info">
             <span className="username">User1234</span>
           </div>
+          <button
+            onClick={() => setActiveModal('settings')}
+            className="settings-btn"
+            title="Settings"
+          >
+            <Settings size={16} />
+          </button>
           <button onClick={logout} className="logout-btn" title="Logout">
             <LogOut size={16} />
           </button>

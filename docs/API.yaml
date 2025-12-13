@@ -1,0 +1,548 @@
+openapi: 3.1.0
+info:
+  title: Wyvern Drive API
+  description: |
+    Internal API documentation for Wyvern Drive Supabase Edge Function.
+
+    **⚠️ INTERNAL USE ONLY - NOT FOR PUBLIC DISTRIBUTION**
+
+    This API handles file metadata storage, versioning, sharing, and video streaming.
+    Actual file data is stored on Discord CDN; this API manages the index.
+  version: 1.0.0
+  contact:
+    name: Developer
+
+servers:
+  - url: https://{project-ref}.supabase.co/functions/v1/api
+    description: Production (Supabase Edge Function)
+    variables:
+      project-ref:
+        default: your-project-ref
+
+tags:
+  - name: Files
+    description: File and folder CRUD operations
+  - name: Versions
+    description: File version history management
+  - name: Shares
+    description: Public share link management
+  - name: Streaming
+    description: Range-request video/audio streaming
+
+paths:
+  /:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        '200':
+          description: API is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  name:
+                    type: string
+                    example: Wyvern Drive API
+
+  /files/{userId}:
+    get:
+      tags: [Files]
+      summary: Get file tree
+      description: Returns all files and folders for a user as a nested tree structure.
+      operationId: getFiles
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      responses:
+        '200':
+          description: File tree
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileTree'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      tags: [Files]
+      summary: Create file or directory
+      description: |
+        Creates a new file or folder. If a file with the same name exists,
+        the existing content is versioned and the new content replaces it.
+      operationId: createFile
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                parent_id:
+                  type: integer
+                  nullable: true
+                  description: Parent folder ID (null for root)
+                name:
+                  type: string
+                type:
+                  type: string
+                  enum: [file, directory]
+                size:
+                  type: integer
+                  description: File size in bytes
+                content:
+                  type: string
+                  description: JSON array of chunk info
+                encrypted:
+                  type: boolean
+                encryption_salt:
+                  type: string
+                  description: Base64 salt for encrypted files
+      responses:
+        '200':
+          description: Created file ID
+          content:
+            application/json:
+              schema:
+                type: integer
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /files/{userId}/{fileId}:
+    delete:
+      tags: [Files]
+      summary: Delete file or empty directory
+      operationId: deleteFile
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - $ref: '#/components/parameters/fileId'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '400':
+          description: Directory not empty
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /files/{userId}/{fileId}/update:
+    post:
+      tags: [Files]
+      summary: Update file metadata
+      description: Update file properties (name, parent_id, etc.)
+      operationId: updateFile
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - $ref: '#/components/parameters/fileId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                parent_id:
+                  type: integer
+                  nullable: true
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /files/{userId}/{fileId}/recursive:
+    delete:
+      tags: [Files]
+      summary: Delete directory recursively
+      description: Deletes a folder and all its contents.
+      operationId: deleteRecursive
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - $ref: '#/components/parameters/fileId'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /stream/{userId}/{fileId}:
+    get:
+      tags: [Streaming]
+      summary: Stream video/audio with range requests
+      description: |
+        Supports HTTP Range requests for seeking in video/audio.
+        Cannot stream encrypted files.
+      operationId: streamFile
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - $ref: '#/components/parameters/fileId'
+        - name: Range
+          in: header
+          schema:
+            type: string
+            example: bytes=0-1023
+      responses:
+        '200':
+          description: Full file content
+          headers:
+            Accept-Ranges:
+              schema:
+                type: string
+                example: bytes
+        '206':
+          description: Partial content
+          headers:
+            Content-Range:
+              schema:
+                type: string
+                example: bytes 0-1023/10240
+        '400':
+          description: Cannot stream encrypted files
+
+  /versions/{userId}/{fileId}:
+    get:
+      tags: [Versions]
+      summary: Get version history
+      operationId: getVersions
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - $ref: '#/components/parameters/fileId'
+      responses:
+        '200':
+          description: List of versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Version'
+
+    post:
+      tags: [Versions]
+      summary: Create version manually
+      operationId: createVersion
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - $ref: '#/components/parameters/fileId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                size:
+                  type: integer
+      responses:
+        '200':
+          description: Created version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  versionNumber:
+                    type: integer
+
+  /versions/{userId}/{fileId}/restore/{versionId}:
+    post:
+      tags: [Versions]
+      summary: Restore file to version
+      operationId: restoreVersion
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - $ref: '#/components/parameters/fileId'
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '404':
+          description: Version not found
+
+  /versions/{userId}/{fileId}/{versionId}:
+    delete:
+      tags: [Versions]
+      summary: Delete version
+      operationId: deleteVersion
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - $ref: '#/components/parameters/fileId'
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /shares/{userId}/{fileId}:
+    get:
+      tags: [Shares]
+      summary: List shares for file
+      operationId: listShares
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - $ref: '#/components/parameters/fileId'
+      responses:
+        '200':
+          description: List of share links
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Share'
+
+    post:
+      tags: [Shares]
+      summary: Create share link
+      description: Cannot share encrypted files.
+      operationId: createShare
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - $ref: '#/components/parameters/fileId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresIn:
+                  type: integer
+                  description: Hours until expiry
+                password:
+                  type: string
+                  description: Optional access password
+      responses:
+        '200':
+          description: Created share
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  url:
+                    type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+
+  /shares/{userId}/{shareId}:
+    delete:
+      tags: [Shares]
+      summary: Revoke share link
+      operationId: deleteShare
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - name: shareId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /share/{shareId}/info:
+    get:
+      tags: [Shares]
+      summary: Get share info (public)
+      description: No authentication required. Returns metadata only.
+      operationId: getShareInfo
+      parameters:
+        - name: shareId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Share metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  fileName:
+                    type: string
+                  fileSize:
+                    type: integer
+                  fileType:
+                    type: string
+                  expiresAt:
+                    type: string
+                    nullable: true
+                  passwordRequired:
+                    type: boolean
+                  downloadCount:
+                    type: integer
+        '404':
+          description: Share not found
+        '410':
+          description: Share expired
+
+  /share/{shareId}:
+    get:
+      tags: [Shares]
+      summary: Download shared file (public)
+      description: No authentication. Password via query param if required.
+      operationId: downloadShare
+      parameters:
+        - name: shareId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: password
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File download
+          content:
+            application/octet-stream: {}
+        '401':
+          description: Password required
+        '410':
+          description: Share expired
+
+components:
+  parameters:
+    userId:
+      name: userId
+      in: path
+      required: true
+      description: User identifier (hashed webhook URL)
+      schema:
+        type: string
+
+    fileId:
+      name: fileId
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  schemas:
+    FileTree:
+      type: object
+      properties:
+        children:
+          type: object
+          additionalProperties:
+            oneOf:
+              - $ref: '#/components/schemas/FileEntry'
+              - $ref: '#/components/schemas/FolderEntry'
+
+    FileEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+          enum: [file]
+        size:
+          type: integer
+        content:
+          type: string
+          description: JSON chunk array
+        encrypted:
+          type: integer
+          enum: [0, 1]
+        encryption_salt:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FolderEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          type: string
+          enum: [directory]
+        children:
+          type: object
+          additionalProperties: true
+
+    Version:
+      type: object
+      properties:
+        id:
+          type: integer
+        version_number:
+          type: integer
+        size:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    Share:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        download_count:
+          type: integer
+
+  responses:
+    Success:
+      description: Operation successful
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: true
+
+    ServerError:
+      description: Server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string

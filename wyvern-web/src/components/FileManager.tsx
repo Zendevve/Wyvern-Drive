@@ -5,6 +5,7 @@ import { FileGrid } from './files/FileGrid'
 import { Breadcrumb } from './files/Breadcrumb'
 import { ShareModal } from './files/ShareModal'
 import { PreviewModal } from './files/PreviewModal'
+import { SettingsModal } from './SettingsModal'
 import { LayoutGrid, List as ListIcon, Filter, FolderPlus, UploadCloud } from 'lucide-react'
 import { isPreviewable } from '../lib/thumbnails'
 import type { WyvernFile } from '../lib/types'
@@ -152,6 +153,9 @@ export function FileManager() {
         />
       )}
 
+      {/* Settings Modal */}
+      <SettingsModal />
+
       {/* Status Bar */}
       <div className="status-bar">
         <span>{Object.keys(files).length} items</span>
@@ -162,3 +166,4 @@ export function FileManager() {
     </div>
   )
 }
+

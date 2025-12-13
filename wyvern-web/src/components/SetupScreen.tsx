@@ -1,23 +1,40 @@
 import { useState } from 'react'
 import { useFileStore } from '../stores/fileStore'
-import { Shield, Zap, Lock, Globe, Loader2, Link, Key } from 'lucide-react'
+import { Shield, Zap, Lock, Globe, Loader2, Link, Key, Plus, Minus } from 'lucide-react'
 import './SetupScreen.css'
 
 export function SetupScreen() {
-  const { setWebhookUrl, setEncryptionPassword, isLoading } = useFileStore()
-  const [url, setUrl] = useState('')
+  const { setWebhookUrls, setEncryptionPassword, isLoading } = useFileStore()
+  const [webhooks, setWebhooks] = useState<string[]>([''])
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [useEncryption, setUseEncryption] = useState(false)
 
+  const addWebhook = () => {
+    setWebhooks([...webhooks, ''])
+  }
+
+  const removeWebhook = (index: number) => {
+    if (webhooks.length > 1) {
+      setWebhooks(webhooks.filter((_, i) => i !== index))
+    }
+  }
+
+  const updateWebhook = (index: number, value: string) => {
+    setWebhooks(webhooks.map((w, i) => i === index ? value : w))
+  }
+
+  const validWebhooks = webhooks.filter(w => w.trim().startsWith('https://discord.com/api/webhooks/'))
+  const canSubmit = validWebhooks.length > 0 && (!useEncryption || password.length >= 8)
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!url) return
+    if (!canSubmit) return
 
     if (useEncryption && password) {
       setEncryptionPassword(password)
     }
-    setWebhookUrl(url)
+    setWebhookUrls(validWebhooks)
   }
 
   return (
@@ -56,7 +73,7 @@ export function SetupScreen() {
             <Zap size={20} />
             <div>
               <strong>Lightning Fast</strong>
-              <span>Parallel chunked uploads and downloads</span>
+              <span>Parallel chunked uploads with multi-webhook support</span>
             </div>
           </div>
         </div>
@@ -71,23 +88,61 @@ export function SetupScreen() {
         <div className="setup-card">
           <div className="setup-header">
             <h2>Connect Drive</h2>
-            <p>Enter your Webhook URL to initialize the filesystem.</p>
+            <p>Enter your Webhook URL(s) to initialize the filesystem.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="setup-form">
             <div className="input-group">
-              <label htmlFor="webhook">
-                <Link size={14} /> Webhook URL
+              <label>
+                <Link size={14} /> Webhook URLs
               </label>
-              <input
-                id="webhook"
-                type="password"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://discord.com/api/webhooks/..."
-                required
-                className="setup-input"
-              />
+
+              <div className="webhook-list">
+                {webhooks.map((webhook, index) => (
+                  <div key={index} className="webhook-input-row">
+                    <input
+                      type="password"
+                      value={webhook}
+                      onChange={(e) => updateWebhook(index, e.target.value)}
+                      placeholder="https://discord.com/api/webhooks/..."
+                      className="setup-input"
+                    />
+                    {webhooks.length > 1 && (
+                      <button
+                        type="button"
+                        className="remove-webhook-btn"
+                        onClick={() => removeWebhook(index)}
+                        title="Remove webhook"
+                      >
+                        <Minus size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="add-webhook-btn"
+                onClick={addWebhook}
+              >
+                <Plus size={14} />
+                Add another webhook
+              </button>
+
+              <div className="webhook-tip">
+                <Zap size={12} />
+                <span>
+                  {validWebhooks.length === 0
+                    ? 'Enter at least one valid Discord webhook URL'
+                    : validWebhooks.length < 3
+                      ? `${validWebhooks.length} webhook${validWebhooks.length > 1 ? 's' : ''} — Add ${3 - validWebhooks.length} more for faster uploads`
+                      : validWebhooks.length < 5
+                        ? `${validWebhooks.length} webhooks — Good! Add ${5 - validWebhooks.length} more for optimal speed`
+                        : `${validWebhooks.length} webhooks — Optimal configuration! 🚀`
+                  }
+                </span>
+              </div>
             </div>
 
             <label className="checkbox-label">
@@ -139,7 +194,7 @@ export function SetupScreen() {
             <button
               type="submit"
               className="setup-button"
-              disabled={!url || isLoading}
+              disabled={!canSubmit || isLoading}
             >
               {isLoading ? (
                 <>
