@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import { FileItem } from './FileItem'
+import { VirtualFileGrid } from './VirtualFileGrid'
 import { useFileStore } from '../../stores/fileStore'
 import './FileGrid.css'
 
@@ -12,7 +13,12 @@ interface FileGridProps {
 export function FileGrid({ files, viewMode }: FileGridProps) {
   const items = Object.values(files)
   const { clearSelection } = useFileStore.getState()
-  // We don't need selectedIds here directly if FileItem handles its own selection state
+
+  // Use virtualized grid for large file counts (500+ items)
+  const VIRTUALIZATION_THRESHOLD = 500
+  if (items.length > VIRTUALIZATION_THRESHOLD) {
+    return <VirtualFileGrid files={files} viewMode={viewMode} />
+  }
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [isSelecting, setIsSelecting] = useState(false)

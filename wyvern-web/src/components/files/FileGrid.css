@@ -1,5 +1,28 @@
 /* FileGrid - Linear/Modern Style */
 
+/* Virtual Grid Styles */
+.virtual-file-grid {
+  height: 100%;
+  overflow: auto;
+  padding: var(--spacing-md);
+}
+
+.virtual-file-grid.grid .virtual-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.virtual-file-grid.list .virtual-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.virtual-grid-inner {
+  width: 100%;
+}
+
+/* Original Grid Styles */
 .file-grid {
   display: grid;
   gap: 16px;

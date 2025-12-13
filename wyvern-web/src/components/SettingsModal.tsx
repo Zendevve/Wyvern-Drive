@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { X, Zap, Plus, Minus, Save } from 'lucide-react'
+import { X, Zap, Plus, Minus, Save, Rocket } from 'lucide-react'
 import { useFileStore } from '../stores/fileStore'
+import type { ServerBoostLevel } from '../lib/types'
 import './SettingsModal.css'
 
 export function SettingsModal() {
-  const { activeModal, setActiveModal, webhookUrls, updateWebhooks, getWebhookPoolStats } = useFileStore()
+  const { activeModal, setActiveModal, webhookUrls, updateWebhooks, getWebhookPoolStats, serverBoostLevel, setServerBoostLevel } = useFileStore()
   const [webhooks, setWebhooks] = useState<string[]>([''])
   const [isSaving, setIsSaving] = useState(false)
 
@@ -122,6 +123,42 @@ export function SettingsModal() {
                     : validWebhooks.length < 5
                       ? `${validWebhooks.length} webhooks — Good! Add ${5 - validWebhooks.length} more for optimal speed`
                       : `${validWebhooks.length} webhooks — Optimal configuration! 🚀`
+                }
+              </span>
+            </div>
+          </section>
+
+          {/* Server Boost Level Section */}
+          <section className="settings-section">
+            <div className="section-header">
+              <Rocket size={18} />
+              <h3>Server Boost Level</h3>
+              {serverBoostLevel === 'level3' && (
+                <span className="webhook-badge optimal">24MB chunks</span>
+              )}
+            </div>
+
+            <p className="section-description">
+              Select your Discord server's boost level. Level 3 servers allow 25MB file uploads, enabling 24MB chunks for 3x faster transfers.
+            </p>
+
+            <select
+              className="settings-select"
+              value={serverBoostLevel}
+              onChange={(e) => setServerBoostLevel(e.target.value as ServerBoostLevel)}
+            >
+              <option value="none">No Boost (8MB limit)</option>
+              <option value="level1">Level 1 (8MB limit)</option>
+              <option value="level2">Level 2 (8MB limit)</option>
+              <option value="level3">Level 3 (25MB limit) ⚡</option>
+            </select>
+
+            <div className="webhook-tip">
+              <Rocket size={12} />
+              <span>
+                {serverBoostLevel === 'level3'
+                  ? 'Using 24MB chunks for maximum upload speed!'
+                  : 'Using 7.5MB chunks. Upgrade to Level 3 for 3x faster uploads.'
                 }
               </span>
             </div>

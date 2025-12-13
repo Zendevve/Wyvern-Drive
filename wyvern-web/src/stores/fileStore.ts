@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { WyvernFile, WyvernFolder, FileVersion } from '../lib/types'
+import type { WyvernFile, WyvernFolder, FileVersion, ServerBoostLevel } from '../lib/types'
 import { WyvernFileManager } from '../lib/wyvern-file-manager'
 import { cacheFileTree, getCachedFileTree, clearUserCache, isOnline } from '../lib/offlineCache'
 
@@ -21,6 +21,7 @@ interface FileStore {
   userId: string | null
   isAuthenticated: boolean
   encryptionPassword: string | null
+  serverBoostLevel: ServerBoostLevel  // Discord server boost level for chunk sizing
 
   // Core Engine
   fileManager: WyvernFileManager | null
@@ -44,6 +45,7 @@ interface FileStore {
   setWebhookUrls: (urls: string[]) => void
   updateWebhooks: (urls: string[]) => Promise<void>  // For post-login updates
   setEncryptionPassword: (password: string | null) => Promise<void>
+  setServerBoostLevel: (level: ServerBoostLevel) => void
   initializeManager: () => Promise<void>
   loadFiles: () => Promise<void>
   uploadFiles: (files: FileList) => Promise<void>
@@ -92,6 +94,7 @@ export const useFileStore = create<FileStore>()(
       userId: null,
       isAuthenticated: false,
       encryptionPassword: null,
+      serverBoostLevel: 'none' as ServerBoostLevel,  // Default: no boost
       fileManager: null, // Non-persisted class instance
       currentPath: '',
       breadcrumbs: [],
@@ -141,11 +144,22 @@ export const useFileStore = create<FileStore>()(
 
         // Reinitialize manager with new webhooks
         console.log('[FileStore] Updating webhooks and reinitializing manager')
-        const manager = new WyvernFileManager(validUrls)
+        const { serverBoostLevel } = get()
+        const manager = new WyvernFileManager(validUrls, serverBoostLevel)
         if (encryptionPassword) {
           await manager.setPassword(encryptionPassword)
         }
         set({ fileManager: manager })
+      },
+
+      setServerBoostLevel: (level) => {
+        set({ serverBoostLevel: level })
+        // Update existing manager if present
+        const { fileManager } = get()
+        if (fileManager) {
+          fileManager.setBoostLevel(level)
+          console.log('[FileStore] Updated boost level to:', level)
+        }
       },
 
       setEncryptionPassword: async (password) => {
@@ -157,14 +171,14 @@ export const useFileStore = create<FileStore>()(
       },
 
       initializeManager: async () => {
-        const { webhookUrls, webhookUrl, encryptionPassword } = get()
+        const { webhookUrls, webhookUrl, encryptionPassword, serverBoostLevel } = get()
 
         // Use webhookUrls array, fall back to single webhookUrl for backward compat
         const urls = webhookUrls.length > 0 ? webhookUrls : (webhookUrl ? [webhookUrl] : [])
         if (urls.length === 0) return
 
-        console.log('[FileStore] Initializing manager with', urls.length, 'webhook(s). PW present:', !!encryptionPassword)
-        const manager = new WyvernFileManager(urls)
+        console.log('[FileStore] Initializing manager with', urls.length, 'webhook(s). Boost:', serverBoostLevel, 'PW present:', !!encryptionPassword)
+        const manager = new WyvernFileManager(urls, serverBoostLevel)
         if (encryptionPassword) {
           await manager.setPassword(encryptionPassword)
         }
@@ -714,6 +728,7 @@ export const useFileStore = create<FileStore>()(
         webhookUrls: state.webhookUrls,
         userId: state.userId,
         isAuthenticated: state.isAuthenticated,
+        serverBoostLevel: state.serverBoostLevel,  // Persist boost level setting
         // Don't persist sensitive password if possible, but setup screen asks for it.
         // For MVP we persist it or ask user to re-enter?
         // Let's persist for convenience but exclude manager instance

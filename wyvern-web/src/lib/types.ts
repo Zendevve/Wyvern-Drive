@@ -61,6 +61,25 @@ export interface EncryptedChunk {
   iv: Uint8Array
 }
 
+/**
+ * Discord server boost level - determines max attachment size
+ * - none/level1: 8MB limit → 7.5MB chunks
+ * - level2: 8MB limit → 7.5MB chunks
+ * - level3: 25MB limit → 24MB chunks
+ */
+export type ServerBoostLevel = 'none' | 'level1' | 'level2' | 'level3'
+
+/**
+ * Get the optimal chunk size for a given server boost level
+ */
+export function getChunkSizeForBoostLevel(level: ServerBoostLevel): number {
+  // Only Level 3 boosted servers have 25MB file limit
+  if (level === 'level3') {
+    return 24 * 1024 * 1024 // 24MB
+  }
+  return 7.5 * 1024 * 1024 // 7.5MB for all other levels
+}
+
 // Config - Performance optimized based on DDrive benchmarks
 export const CONFIG = {
   // Chunk sizes
@@ -86,3 +105,4 @@ export const CONFIG = {
 } as const
 
 export const FILE_DELIMITER = '/'
+

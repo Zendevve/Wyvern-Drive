@@ -6,6 +6,8 @@ import {
   type DownloadOptions,
   type ChunkInfo,
   type FileVersion,
+  type ServerBoostLevel,
+  getChunkSizeForBoostLevel,
   FILE_DELIMITER
 } from './types'
 import {
@@ -42,14 +44,27 @@ export class WyvernFileManager {
   private key: CryptoKey | null = null
   private salt: string | null = null
   private password: string | null = null // Store password for restoring keys with different salts
+  private boostLevel: ServerBoostLevel = 'none' // Server boost level for chunk sizing
 
-  constructor(webhookUrls: string | string[]) {
+  constructor(webhookUrls: string | string[], boostLevel: ServerBoostLevel = 'none') {
     // Support both single URL (backwards compat) and array
     this.webhooks = Array.isArray(webhookUrls) ? webhookUrls : [webhookUrls]
     // Initialize upload counters for each webhook
     this.webhookUploadCounts = new Array(this.webhooks.length).fill(0)
     // Simple hash of first webhook URL as userId
     this.userId = this.hashUrl(this.webhooks[0])
+    // Store boost level for dynamic chunk sizing
+    this.boostLevel = boostLevel
+  }
+
+  // Get current chunk size based on server boost level
+  getChunkSize(): number {
+    return getChunkSizeForBoostLevel(this.boostLevel)
+  }
+
+  // Update boost level (e.g., from settings)
+  setBoostLevel(level: ServerBoostLevel): void {
+    this.boostLevel = level
   }
 
   // Get webhook pool statistics for UI display
@@ -256,7 +271,7 @@ export class WyvernFileManager {
     options?: UploadOptions
   ): Promise<WyvernFile> {
     const totalSize = file.size
-    const chunkSize = CONFIG.CHUNK_SIZE_DEFAULT
+    const chunkSize = this.getChunkSize() // Dynamic based on server boost level
     const totalChunks = Math.ceil(totalSize / chunkSize)
     const chunks: ChunkInfo[] = new Array(totalChunks)
 
