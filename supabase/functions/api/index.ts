@@ -675,28 +675,8 @@ Deno.serve(async (req: Request) => {
         return json({ error: "Invalid file data" }, 500)
       }
 
-      // Fetch all chunks
-      const dataParts: Uint8Array[] = []
-      for (const chunk of chunks) {
-        try {
-          const response = await fetch(chunk.url)
-          if (!response.ok) throw new Error("Chunk fetch failed")
-          const buffer = await response.arrayBuffer()
-          dataParts.push(new Uint8Array(buffer))
-        } catch (e) {
-          console.error(`Error fetching chunk:`, e)
-          return json({ error: "Failed to fetch file data" }, 500)
-        }
-      }
-
-      // Combine
-      const totalLength = dataParts.reduce((sum, p) => sum + p.length, 0)
-      const result = new Uint8Array(totalLength)
-      let pos = 0
-      for (const part of dataParts) {
-        result.set(part, pos)
-        pos += part.length
-      }
+      // Calculate total size from metadata
+      const totalLength = chunks.reduce((sum, c) => sum + c.size, 0)
 
       // Determine content type
       const ext = file.name.split('.').pop()?.toLowerCase() || ''
@@ -708,7 +688,38 @@ Deno.serve(async (req: Request) => {
       }
       const contentType = mimeTypes[ext] || 'application/octet-stream'
 
-      return new Response(result, {
+      // Create a stream to serve chunks sequentially without buffering the whole file
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            for (const chunk of chunks) {
+              try {
+                const response = await fetch(chunk.url)
+                if (!response.ok) throw new Error(`Chunk fetch failed: ${response.status}`)
+
+                if (!response.body) throw new Error("No body in chunk response")
+
+                // Pipe the chunk's body to our controller
+                const reader = response.body.getReader()
+                while (true) {
+                  const { done, value } = await reader.read()
+                  if (done) break
+                  controller.enqueue(value)
+                }
+              } catch (e) {
+                console.error(`Error fetching chunk ${chunk.index}:`, e)
+                controller.error(e)
+                return
+              }
+            }
+            controller.close()
+          } catch (e) {
+            controller.error(e)
+          }
+        }
+      })
+
+      return new Response(stream, {
         status: 200,
         headers: {
           ...corsHeaders,
