@@ -27,8 +27,15 @@ Deno.serve(async (req: Request) => {
   const url = new URL(req.url)
   // Supabase prepends function name to path, so "/api/files/123" becomes the path
   // Strip the "/api" prefix to get the actual route
+  // Supabase prepends function name to path, so "/api/files/123" becomes the path
+  // Strip the "/api" prefix to get the actual route
   const rawPath = url.pathname
-  const path = rawPath.startsWith("/api") ? rawPath.slice(4) : rawPath
+  let path = rawPath
+  if (path.startsWith("/functions/v1/api")) {
+    path = path.slice("/functions/v1/api".length)
+  } else if (path.startsWith("/api")) {
+    path = path.slice("/api".length)
+  }
   const method = req.method
 
   console.log(`[DEBUG] Request: ${method} ${rawPath} -> ${path}`)

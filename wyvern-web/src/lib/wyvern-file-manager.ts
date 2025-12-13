@@ -18,7 +18,21 @@ import JSZip from 'jszip'
 
 // API URL: Use Supabase Edge Function in production, Express in development
 // For Supabase: https://[project-ref].supabase.co/functions/v1/api
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+// For Supabase: https://[project-ref].supabase.co/functions/v1/api
+// For Supabase: https://[project-ref].supabase.co/functions/v1/api
+const API_URL = 'https://lrqnovltirjsoqfvtxxu.supabase.co/functions/v1/api'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxycW5vdmx0aXJqc29xZnZ0eHh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NzQ0MjcsImV4cCI6MjA4MTE1MDQyN30.rpusoKvKGgWHofrM15aqWMh5F6A8yx78u_n2vgXxm1Q'
+
+const getHeaders = (contentType: string | null = 'application/json') => {
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+  }
+  if (contentType) {
+    headers['Content-Type'] = contentType
+  }
+  return headers
+}
+
 
 export class WyvernFileManager {
   private userId: string
@@ -62,7 +76,9 @@ export class WyvernFileManager {
   // --- API Interaction ---
 
   async fetchFiles(): Promise<WyvernFolder> {
-    const res = await fetch(`${API_URL}/files/${this.userId}`)
+    const res = await fetch(`${API_URL}/files/${this.userId}`, {
+      headers: getHeaders()
+    })
     if (!res.ok) throw new Error('Failed to fetch files')
     return await res.json()
   }
@@ -75,7 +91,7 @@ export class WyvernFileManager {
   ): Promise<WyvernFile> {
     const res = await fetch(`${API_URL}/files/${this.userId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify({
         name: file.name,
         type: 'file',
@@ -108,7 +124,8 @@ export class WyvernFileManager {
 
   async deleteFile(id: number): Promise<void> {
     const res = await fetch(`${API_URL}/files/${this.userId}/${id}/recursive`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: getHeaders()
     })
     if (!res.ok) throw new Error('Failed to delete file')
   }
@@ -116,7 +133,7 @@ export class WyvernFileManager {
   async renameFile(id: number, name: string): Promise<void> {
     const res = await fetch(`${API_URL}/files/${this.userId}/${id}/update`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify({ name })
     })
     if (!res.ok) throw new Error('Failed to rename file')
@@ -125,28 +142,32 @@ export class WyvernFileManager {
   async moveFile(id: number, parentId: number | null): Promise<void> {
     const res = await fetch(`${API_URL}/files/${this.userId}/${id}/update`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify({ parent_id: parentId })
     })
     if (!res.ok) throw new Error('Failed to move file')
   }
 
   async getVersions(fileId: number): Promise<FileVersion[]> {
-    const res = await fetch(`${API_URL}/versions/${this.userId}/${fileId}`)
+    const res = await fetch(`${API_URL}/versions/${this.userId}/${fileId}`, {
+      headers: getHeaders()
+    })
     if (!res.ok) throw new Error('Failed to fetch versions')
     return await res.json()
   }
 
   async restoreVersion(fileId: number, versionId: number): Promise<void> {
     const res = await fetch(`${API_URL}/versions/${this.userId}/${fileId}/restore/${versionId}`, {
-      method: 'POST'
+      method: 'POST',
+      headers: getHeaders()
     })
     if (!res.ok) throw new Error('Failed to restore version')
   }
 
   async deleteVersion(fileId: number, versionId: number): Promise<void> {
     const res = await fetch(`${API_URL}/versions/${this.userId}/${fileId}/${versionId}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: getHeaders()
     })
     if (!res.ok) throw new Error('Failed to delete version')
   }
@@ -255,7 +276,7 @@ export class WyvernFileManager {
     const createDirectory = async (name: string, pId: number | null): Promise<number> => {
       const res = await fetch(`${API_URL}/files/${this.userId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify({
           name,
           type: 'directory',
