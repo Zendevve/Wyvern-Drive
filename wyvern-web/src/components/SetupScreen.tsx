@@ -1,101 +1,174 @@
 import { useState } from 'react'
 import { useFileStore } from '../stores/fileStore'
+import { Shield, Zap, Lock, Globe, Loader2, Link, Key } from 'lucide-react'
+import './SetupScreen.css'
 
 export function SetupScreen() {
-  const [webhookUrl, setWebhookUrl] = useState('')
+  const { setWebhookUrl, setEncryptionPassword, isLoading } = useFileStore()
+  const [url, setUrl] = useState('')
   const [password, setPassword] = useState('')
-  const [useEncryption, setUseEncryption] = useState(true)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [useEncryption, setUseEncryption] = useState(false)
 
-  const { setWebhookUrl: saveWebhookUrl, setEncryptionPassword } = useFileStore()
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
+    if (!url) return
 
-    // Validate webhook URL
-    if (!webhookUrl.includes('discord.com/api/webhooks/') &&
-      !webhookUrl.includes('discordapp.com/api/webhooks/')) {
-      setError('Please enter a valid Discord webhook URL')
-      return
+    if (useEncryption && password) {
+      setEncryptionPassword(password)
     }
-
-    // Validate password if encryption is enabled
-    if (useEncryption && password.length < 8) {
-      setError('Encryption password must be at least 8 characters')
-      return
-    }
-
-    setIsLoading(true)
-
-    try {
-      saveWebhookUrl(webhookUrl)
-      if (useEncryption) {
-        setEncryptionPassword(password)
-      }
-    } catch (err) {
-      setError('Failed to connect. Please check your webhook URL.')
-    } finally {
-      setIsLoading(false)
-    }
+    setWebhookUrl(url)
   }
 
   return (
     <div className="setup-screen">
-      <form className="setup-card" onSubmit={handleSubmit}>
-        <h1>🐉 Wyvern Drive</h1>
-        <p>Cloud storage powered by Discord. Secure, fast, unlimited.</p>
+      {/* Left Panel - Branding & Hero */}
+      <div className="setup-panel-left">
+        <div className="brand-header">
+          <Shield size={24} />
+          <span>WYVERN DRIVE</span>
+        </div>
 
-        <input
-          type="url"
-          className="setup-input"
-          placeholder="Discord Webhook URL"
-          value={webhookUrl}
-          onChange={(e) => setWebhookUrl(e.target.value)}
-          required
-        />
-
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: 'var(--text-secondary)' }}>
-          <input
-            type="checkbox"
-            checked={useEncryption}
-            onChange={(e) => setUseEncryption(e.target.checked)}
-          />
-          Enable client-side encryption
-        </label>
-
-        {useEncryption && (
-          <input
-            type="password"
-            className="setup-input"
-            placeholder="Encryption password (min 8 characters)"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
-          />
-        )}
-
-        {error && (
-          <p style={{ color: 'var(--error)', marginBottom: '16px', fontSize: '13px' }}>
-            {error}
+        <div className="hero-content">
+          <h1>Storage,<br />Evolved.</h1>
+          <p className="hero-subtitle">
+            A decentralized, encrypted file system that lives directly in your Discord server.
+            Unlimited storage, zero monthly fees.
           </p>
-        )}
+        </div>
 
-        {useEncryption && (
-          <p style={{ color: 'var(--warning)', marginBottom: '16px', fontSize: '12px' }}>
-            ⚠️ Lost password = lost data. We cannot recover encrypted files.
-          </p>
-        )}
+        <div className="feature-list">
+          <div className="feature-item">
+            <Globe size={20} />
+            <div>
+              <strong>Decentralized Core</strong>
+              <span>Powered by Discord's robust CDN infrastructure</span>
+            </div>
+          </div>
+          <div className="feature-item">
+            <Lock size={20} />
+            <div>
+              <strong>End-to-End Encryption</strong>
+              <span>Client-side AES-256 encryption ensures privacy</span>
+            </div>
+          </div>
+          <div className="feature-item">
+            <Zap size={20} />
+            <div>
+              <strong>Lightning Fast</strong>
+              <span>Parallel chunked uploads and downloads</span>
+            </div>
+          </div>
+        </div>
 
-        <button
-          type="submit"
-          className="setup-button"
-          disabled={isLoading}
-        >
-          {isLoading ? 'Connecting...' : 'Connect to Discord'}
-        </button>
-      </form>
+        <div className="panel-footer">
+          v1.0.0 • Open Source MIT License
+        </div>
+      </div>
+
+      {/* Right Panel - Auth Form */}
+      <div className="setup-panel-right">
+        <div className="setup-card">
+          <div className="setup-header">
+            <h2>Connect Drive</h2>
+            <p>Enter your Webhook URL to initialize the filesystem.</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="setup-form">
+            <div className="input-group">
+              <label htmlFor="webhook">
+                <Link size={14} /> Webhook URL
+              </label>
+              <input
+                id="webhook"
+                type="password"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://discord.com/api/webhooks/..."
+                required
+                className="setup-input"
+              />
+            </div>
+
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={useEncryption}
+                onChange={(e) => setUseEncryption(e.target.checked)}
+              />
+              Enable Client-Side Encryption
+            </label>
+
+            {useEncryption && (
+              <div className="input-group animate-in">
+                <label htmlFor="password">
+                  <Key size={14} /> Master Password
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Set a strong decryption password"
+                    required={useEncryption}
+                    className="setup-input"
+                    minLength={8}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="setup-button"
+              disabled={!url || isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="spinner" size={18} /> Initializing...
+                </>
+              ) : (
+                <>Connect to Wyvern <ChevronRight size={16} /></>
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
     </div>
+  )
+}
+
+function ChevronRight({ size = 24 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m9 18 6-6-6-6" />
+    </svg>
   )
 }
