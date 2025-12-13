@@ -104,6 +104,14 @@ export function FileItem({ file, viewMode }: FileItemProps) {
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
+    e.stopPropagation()
+
+    // If right-clicking an unselected item, select it first (standard behavior)
+    const { selectedIds, selectFile } = useFileStore.getState()
+    if (!selectedIds.has(String(file.id))) {
+      selectFile(String(file.id))
+    }
+    // Now show context menu (will reflect current selection)
     setContextMenu({ x: e.clientX, y: e.clientY })
   }
 
@@ -124,12 +132,18 @@ export function FileItem({ file, viewMode }: FileItemProps) {
 
   // Ctrl+Click to toggle, Shift+Click for range selection
   const handleClick = (e: React.MouseEvent) => {
+    // Stop propagation so FileGrid background click doesn't trigger clearSelection
+    e.stopPropagation()
+
     if (e.shiftKey && lastSelectedId) {
       e.preventDefault()
       setRangeSelection(lastSelectedId, String(file.id))
     } else if (e.ctrlKey || e.metaKey) {
       e.preventDefault()
       toggleSelection(String(file.id))
+    } else {
+      // Single click selects only this file
+      useFileStore.getState().selectFile(String(file.id))
     }
   }
 
@@ -138,8 +152,17 @@ export function FileItem({ file, viewMode }: FileItemProps) {
     const { selectedIds } = useFileStore.getState()
 
     // If this file is part of a selection, drag all selected
-    if (selectedIds.has(String(file.id)) && selectedIds.size > 1) {
-      e.dataTransfer.setData('application/wyvern-file-ids', JSON.stringify(Array.from(selectedIds)))
+    // If not selected, select it first (unless multiple selected already and we just didn't click?)
+    // Actually, usually simpler: if dragging unselected item, select it.
+    if (!selectedIds.has(String(file.id))) {
+      useFileStore.getState().selectFile(String(file.id))
+    }
+
+    // Refresh state after potential update
+    const currentSelectedIds = useFileStore.getState().selectedIds
+
+    if (currentSelectedIds.size > 1) {
+      e.dataTransfer.setData('application/wyvern-file-ids', JSON.stringify(Array.from(currentSelectedIds)))
       e.dataTransfer.effectAllowed = 'move'
     } else {
       // Single file drag
@@ -199,6 +222,7 @@ export function FileItem({ file, viewMode }: FileItemProps) {
       <div
         className={`file-item ${viewMode} ${isDragOver ? 'drag-over' : ''} ${isImage && thumbnail ? 'has-thumbnail' : ''} ${isSelected ? 'selected' : ''}`}
         draggable="true"
+        data-id={file.id}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}

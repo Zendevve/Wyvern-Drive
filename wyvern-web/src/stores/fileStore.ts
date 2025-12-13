@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { WyvernFile, WyvernFolder, FileVersion } from '../lib/types'
 import { WyvernFileManager } from '../lib/wyvern-file-manager'
 
@@ -15,6 +15,7 @@ interface FileStore {
 
   // File tree
   currentPath: string
+  breadcrumbs: { id: string; name: string }[]
   files: Record<string, WyvernFile | WyvernFolder>
   selectedIds: Set<string>
   lastSelectedId: string | null
@@ -35,6 +36,7 @@ interface FileStore {
   deleteFile: (fileId: string) => Promise<void>
   logout: () => void
   setCurrentPath: (path: string) => void
+  selectFile: (id: string) => void
   toggleSelection: (id: string) => void
   clearSelection: () => void
   selectAll: () => void
@@ -71,6 +73,7 @@ export const useFileStore = create<FileStore>()(
       encryptionPassword: null,
       fileManager: null, // Non-persisted class instance
       currentPath: '',
+      breadcrumbs: [],
       files: {},
       selectedIds: new Set(),
       lastSelectedId: null,
@@ -115,31 +118,47 @@ export const useFileStore = create<FileStore>()(
         try {
           const root = await fileManager.fetchFiles()
 
-          // If currentPath is set (folder ID), find that folder's children
+          // If currentPath is set (folder ID), find that folder's children and build breadcrumbs
           if (currentPath && currentPath !== '') {
-            const findFolder = (node: WyvernFolder): WyvernFolder | null => {
-              if (String(node.id) === currentPath) return node
+            let foundPath: { id: string; name: string }[] = []
+
+            const findFolderAndPath = (
+              node: WyvernFolder,
+              currentBreadcrumbs: { id: string; name: string }[]
+            ): WyvernFolder | null => {
+              if (String(node.id) === currentPath) {
+                foundPath = [...currentBreadcrumbs, { id: String(node.id), name: node.name }]
+                return node
+              }
               if (node.children) {
                 for (const child of Object.values(node.children)) {
                   if (child.type === 'directory') {
-                    const found = findFolder(child as WyvernFolder)
-                    if (found) return found
+                    const result = findFolderAndPath(child as WyvernFolder, [
+                      ...currentBreadcrumbs,
+                      { id: String(node.id), name: node.name },
+                    ])
+                    if (result) return result
                   }
                 }
               }
               return null
             }
 
-            const targetFolder = findFolder(root)
+            // Start search from root
+            // Root doesn't have a name usually or is "Root", we can handle root breadcrumb in the UI or here.
+            // Let's assume root ID 0 or similar needs special handling if we want "Home".
+            // For now, recursively search.
+            const targetFolder = findFolderAndPath(root, [])
+
             if (targetFolder) {
-              set({ files: targetFolder.children || {} })
+              set({ files: targetFolder.children || {}, breadcrumbs: foundPath })
             } else {
               // Folder not found, reset to root
-              set({ files: root.children, currentPath: '' })
+              set({ files: root.children, currentPath: '', breadcrumbs: [] })
             }
           } else {
             // Root level
-            set({ files: root.children })
+            set({ files: root.children, breadcrumbs: [] })
           }
         } catch (error) {
           console.error('Failed to load files:', error)
@@ -346,6 +365,40 @@ export const useFileStore = create<FileStore>()(
         }
       },
 
+      deleteSelected: async () => {
+        const { fileManager, selectedIds } = get()
+        if (!fileManager || selectedIds.size === 0) return
+
+        try {
+          // Delete all selected items
+          for (const id of selectedIds) {
+            await fileManager.deleteFile(Number(id))
+          }
+          // Clear selection and refresh
+          set({ selectedIds: new Set(), lastSelectedId: null })
+          get().loadFiles()
+        } catch (error) {
+          console.error('Failed to delete selected files:', error)
+          alert('Failed to delete some files')
+        }
+      },
+
+      moveSelected: async (parentId) => {
+        const { fileManager, selectedIds } = get()
+        if (!fileManager || selectedIds.size === 0) return
+
+        try {
+          for (const id of selectedIds) {
+            await fileManager.moveFile(Number(id), parentId)
+          }
+          set({ selectedIds: new Set(), lastSelectedId: null })
+          get().loadFiles()
+        } catch (error) {
+          console.error('Failed to move selected files:', error)
+          alert('Failed to move some files')
+        }
+      },
+
       logout: () => set({
         webhookUrl: null,
         userId: null,
@@ -353,11 +406,14 @@ export const useFileStore = create<FileStore>()(
         encryptionPassword: null,
         fileManager: null,
         currentPath: '',
+        breadcrumbs: [],
         files: {},
         selectedIds: new Set(),
       }),
 
-      setCurrentPath: (path) => set({ currentPath: path }),
+      setCurrentPath: (path) => set({ currentPath: path, selectedIds: new Set(), lastSelectedId: null }),
+
+      selectFile: (id) => set({ selectedIds: new Set([id]), lastSelectedId: id }),
 
       toggleSelection: (id) => set((state) => {
         const newSelection = new Set(state.selectedIds)
@@ -512,6 +568,14 @@ export const useFileStore = create<FileStore>()(
     }),
     {
       name: 'wyvern-drive-storage',
+      storage: createJSONStorage(() => {
+        if (typeof window !== 'undefined') return window.localStorage
+        return {
+          getItem: () => null,
+          setItem: () => { },
+          removeItem: () => { },
+        }
+      }),
       partialize: (state) => ({
         webhookUrl: state.webhookUrl,
         userId: state.userId,

@@ -12,7 +12,7 @@ import './FileManager.css'
 
 export function FileManager() {
   useKeyboardShortcuts() // Enable global keyboard shortcuts
-  const { currentPath, files, isLoading, uploadFiles, uploadFolder, previewFileId, setPreviewFile } = useFileStore()
+  const { files, isLoading, uploadFiles, uploadFolder, previewFileId, setPreviewFile } = useFileStore()
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -77,7 +77,7 @@ export function FileManager() {
       {/* Context Bar: Breadcrumb + View Controls */}
       <div className="context-bar">
         <div className="context-left">
-          <Breadcrumb path={currentPath} />
+          <Breadcrumb />
         </div>
         <div className="context-right">
           <div className="view-toggle">
@@ -138,6 +138,14 @@ export function FileManager() {
         hasPrev={currentPreviewIndex > 0}
         hasNext={currentPreviewIndex < previewableFiles.length - 1}
       />
+
+      {/* Status Bar */}
+      <div className="status-bar">
+        <span>{Object.keys(files).length} items</span>
+        {useFileStore.getState().selectedIds.size > 0 && (
+          <span> • {useFileStore.getState().selectedIds.size} selected</span>
+        )}
+      </div>
     </div>
   )
 }

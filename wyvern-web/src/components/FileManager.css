@@ -1,5 +1,17 @@
 /* FileManager - Modern Cloud Context */
 
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: var(--surface-subtle);
+  border-top: 1px solid var(--border-default);
+  font-size: 11px;
+  color: var(--foreground-muted);
+  gap: 8px;
+}
+
 .file-manager {
   display: flex;
   flex-direction: column;

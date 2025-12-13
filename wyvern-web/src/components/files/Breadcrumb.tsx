@@ -2,44 +2,37 @@ import { useFileStore } from '../../stores/fileStore'
 import { Home, ChevronRight } from 'lucide-react'
 import './Breadcrumb.css'
 
-interface BreadcrumbProps {
-  path: string
-}
+export function Breadcrumb() {
+  const { currentPath, breadcrumbs, setCurrentPath, loadFiles } = useFileStore()
 
-export function Breadcrumb({ path }: BreadcrumbProps) {
-  const { setCurrentPath, loadFiles } = useFileStore()
-
-  // For now, path is just the folder ID
-  // We need to track folder names for proper breadcrumb display
-  // Simple approach: if path is empty, we're at root
-  const isRoot = !path || path === ''
-
-  const handleNavigateHome = () => {
-    setCurrentPath('')
+  const handleNavigate = (path: string) => {
+    setCurrentPath(path)
     loadFiles()
   }
 
-  // TODO: For proper nested breadcrumbs, we'd need to track the navigation path
-  // For now, just show Home and current folder
+  const isRoot = !currentPath || currentPath === ''
 
   return (
     <nav className="breadcrumb">
       <button
         className={`breadcrumb-item ${isRoot ? 'active' : ''}`}
-        onClick={handleNavigateHome}
+        onClick={() => handleNavigate('')}
       >
         <Home size={14} />
         <span>Home</span>
       </button>
 
-      {!isRoot && (
-        <>
+      {breadcrumbs.map((crumb, index) => (
+        <div key={crumb.id} className="breadcrumb-segment">
           <ChevronRight size={14} className="breadcrumb-separator" />
-          <span className="breadcrumb-item active">
-            Current Folder
-          </span>
-        </>
-      )}
+          <button
+            className={`breadcrumb-item ${index === breadcrumbs.length - 1 ? 'active' : ''}`}
+            onClick={() => handleNavigate(crumb.id)}
+          >
+            {crumb.name}
+          </button>
+        </div>
+      ))}
     </nav>
   )
 }
