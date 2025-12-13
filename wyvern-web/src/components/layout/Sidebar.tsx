@@ -41,8 +41,6 @@ export function Sidebar() {
 
   // Calculate total storage used from all files
   const totalStorageUsed = useMemo(() => calculateTotalSize(files), [files])
-  const storageLimit = 15 * 1024 * 1024 * 1024 // 15 GB (Discord webhook limit assumption)
-  const storagePercent = Math.min((totalStorageUsed / storageLimit) * 100, 100)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
@@ -152,10 +150,10 @@ export function Sidebar() {
         <div className="storage-meter">
           <div className="storage-text">
             <span>Storage</span>
-            <span>{formatStorageSize(totalStorageUsed)} / {formatStorageSize(storageLimit)}</span>
+            <span>{formatStorageSize(totalStorageUsed)} / ∞</span>
           </div>
-          <div className="meter-track">
-            <div className="meter-fill" style={{ width: `${storagePercent}%` }} />
+          <div className="meter-track unlimited">
+            <div className="meter-fill" style={{ width: '100%' }} />
           </div>
         </div>
 
