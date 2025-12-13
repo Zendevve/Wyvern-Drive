@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useMemo } from 'react'
 import {
   Home,
   Cloud,
@@ -11,11 +11,38 @@ import {
   FolderUp
 } from 'lucide-react'
 import { useFileStore } from '../../stores/fileStore'
+import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import './Sidebar.css'
 
+// Helper to recursively calculate total size of all files
+function calculateTotalSize(items: Record<string, WyvernFile | WyvernFolder>): number {
+  let total = 0
+  for (const item of Object.values(items)) {
+    if (item.type === 'file') {
+      total += (item as WyvernFile).size || 0
+    } else if (item.type === 'directory' && (item as WyvernFolder).children) {
+      total += calculateTotalSize((item as WyvernFolder).children)
+    }
+  }
+  return total
+}
+
+function formatStorageSize(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
 export function Sidebar() {
-  const { logout, uploadFiles, uploadFolder } = useFileStore()
+  const { logout, uploadFiles, uploadFolder, files } = useFileStore()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+
+  // Calculate total storage used from all files
+  const totalStorageUsed = useMemo(() => calculateTotalSize(files), [files])
+  const storageLimit = 15 * 1024 * 1024 * 1024 // 15 GB (Discord webhook limit assumption)
+  const storagePercent = Math.min((totalStorageUsed / storageLimit) * 100, 100)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
@@ -125,10 +152,10 @@ export function Sidebar() {
         <div className="storage-meter">
           <div className="storage-text">
             <span>Storage</span>
-            <span>7.2 GB / 15 GB</span>
+            <span>{formatStorageSize(totalStorageUsed)} / {formatStorageSize(storageLimit)}</span>
           </div>
           <div className="meter-track">
-            <div className="meter-fill" style={{ width: '45%' }} />
+            <div className="meter-fill" style={{ width: `${storagePercent}%` }} />
           </div>
         </div>
 
