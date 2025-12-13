@@ -1,12 +1,12 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { useFileStore } from './fileStore'
 import type { WyvernFile, WyvernFolder } from '../lib/types'
 
 // Mock files for testing
 const mockFiles: Record<string, WyvernFile | WyvernFolder> = {
-  '1': { id: 1, name: 'Folder A', type: 'directory', parent_id: null, created_at: '', updated_at: '', user_id: 1, path: '/Folder A' },
-  '2': { id: 2, name: 'File B', type: 'file', parent_id: null, created_at: '', updated_at: '', user_id: 1, size: 100, mime_type: 'text/plain', path: '/File B' },
-  '3': { id: 3, name: 'File C', type: 'file', parent_id: null, created_at: '', updated_at: '', user_id: 1, size: 200, mime_type: 'image/png', path: '/File C' },
+  '1': { id: 1, name: 'Folder A', type: 'directory', parent_id: null, created_at: '', updated_at: '', path: '/Folder A', children: {} },
+  '2': { id: 2, name: 'File B', type: 'file', parent_id: null, created_at: '', updated_at: '', size: 100, path: '/File B', content: '[]', encrypted: false },
+  '3': { id: 3, name: 'File C', type: 'file', parent_id: null, created_at: '', updated_at: '', size: 200, path: '/File C', content: '[]', encrypted: false },
 }
 
 // Mock localStorage if in Node environment

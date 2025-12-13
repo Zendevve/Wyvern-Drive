@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import { FileItem } from './FileItem'
 import { useFileStore } from '../../stores/fileStore'
@@ -11,7 +11,7 @@ interface FileGridProps {
 
 export function FileGrid({ files, viewMode }: FileGridProps) {
   const items = Object.values(files)
-  const { clearSelection, toggleSelection } = useFileStore.getState()
+  const { clearSelection } = useFileStore.getState()
   // We don't need selectedIds here directly if FileItem handles its own selection state
 
   const containerRef = useRef<HTMLDivElement>(null)
