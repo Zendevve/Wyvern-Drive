@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { WyvernFile, WyvernFolder, FileVersion } from '../lib/types'
 import { WyvernFileManager } from '../lib/wyvern-file-manager'
+import { cacheFileTree, getCachedFileTree, clearUserCache, isOnline } from '../lib/offlineCache'
 
 // Progress tracking with speed info
 export interface UploadInfo {
@@ -33,6 +34,8 @@ interface FileStore {
 
   // UI state
   isLoading: boolean
+  isSyncing: boolean     // Background sync in progress
+  isOffline: boolean     // No network connection
   uploadProgress: Map<string, UploadInfo>
   isSettingsOpen: boolean
 
@@ -96,6 +99,8 @@ export const useFileStore = create<FileStore>()(
       selectedIds: new Set(),
       lastSelectedId: null,
       isLoading: false,
+      isSyncing: false,
+      isOffline: !isOnline(),
       uploadProgress: new Map(),
       activeModal: null,
       activeFileId: null,
@@ -167,14 +172,11 @@ export const useFileStore = create<FileStore>()(
       },
 
       loadFiles: async () => {
-        const { fileManager, currentPath } = get()
-        if (!fileManager) return
+        const { fileManager, currentPath, userId } = get()
+        if (!fileManager || !userId) return
 
-        set({ isLoading: true })
-        try {
-          const root = await fileManager.fetchFiles()
-
-          // If currentPath is set (folder ID), find that folder's children and build breadcrumbs
+        // Helper to apply file tree to state
+        const applyFileTree = (root: WyvernFolder) => {
           if (currentPath && currentPath !== '') {
             let foundPath: { id: string; name: string }[] = []
 
@@ -200,26 +202,48 @@ export const useFileStore = create<FileStore>()(
               return null
             }
 
-            // Start search from root
-            // Root doesn't have a name usually or is "Root", we can handle root breadcrumb in the UI or here.
-            // Let's assume root ID 0 or similar needs special handling if we want "Home".
-            // For now, recursively search.
             const targetFolder = findFolderAndPath(root, [])
 
             if (targetFolder) {
               set({ files: targetFolder.children || {}, breadcrumbs: foundPath })
             } else {
-              // Folder not found, reset to root
               set({ files: root.children, currentPath: '', breadcrumbs: [] })
             }
           } else {
-            // Root level
             set({ files: root.children, breadcrumbs: [] })
           }
+        }
+
+        // STEP 1: Try to load from cache first (instant UI)
+        const cachedTree = await getCachedFileTree(userId)
+        if (cachedTree) {
+          console.log('[FileStore] Loaded from cache - instant UI!')
+          // Create a fake root to reuse applyFileTree logic
+          const cachedRoot = { children: cachedTree } as WyvernFolder
+          applyFileTree(cachedRoot)
+
+          // Start background sync
+          set({ isSyncing: true, isOffline: !isOnline() })
+        } else {
+          // No cache - show loading state
+          set({ isLoading: true, isOffline: !isOnline() })
+        }
+
+        // STEP 2: Fetch fresh data from API (sync)
+        try {
+          const root = await fileManager.fetchFiles()
+          applyFileTree(root)
+
+          // STEP 3: Cache the file tree for next time
+          await cacheFileTree(userId, root.children)
+          console.log('[FileStore] File tree cached for offline use')
+
         } catch (error) {
           console.error('Failed to load files:', error)
+          set({ isOffline: true })
+          // If we had cache, we're still showing it (graceful offline)
         } finally {
-          set({ isLoading: false })
+          set({ isLoading: false, isSyncing: false })
         }
       },
 
@@ -486,19 +510,28 @@ export const useFileStore = create<FileStore>()(
         }
       },
 
-      logout: () => set({
-        webhookUrl: null,
-        webhookUrls: [],
-        userId: null,
-        isAuthenticated: false,
-        encryptionPassword: null,
-        fileManager: null,
-        currentPath: '',
-        breadcrumbs: [],
-        files: {},
-        selectedIds: new Set(),
-        isSettingsOpen: false,
-      }),
+      logout: () => {
+        const { userId } = get()
+        // Clear offline cache for this user
+        if (userId) {
+          clearUserCache(userId).catch(console.error)
+        }
+        set({
+          webhookUrl: null,
+          webhookUrls: [],
+          userId: null,
+          isAuthenticated: false,
+          encryptionPassword: null,
+          fileManager: null,
+          currentPath: '',
+          breadcrumbs: [],
+          files: {},
+          selectedIds: new Set(),
+          isSettingsOpen: false,
+          isSyncing: false,
+          isOffline: false,
+        })
+      },
 
       setCurrentPath: (path) => set({ currentPath: path, selectedIds: new Set(), lastSelectedId: null }),
 

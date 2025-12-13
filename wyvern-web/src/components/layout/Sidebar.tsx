@@ -2,6 +2,8 @@ import { useRef, useState, useMemo } from 'react'
 import {
   Home,
   Cloud,
+  CloudOff,
+  RefreshCw,
   Clock,
   Star,
   Trash2,
@@ -38,7 +40,7 @@ function formatStorageSize(bytes: number): string {
 }
 
 export function Sidebar() {
-  const { logout, uploadFiles, uploadFolder, files, getWebhookPoolStats, setActiveModal } = useFileStore()
+  const { logout, uploadFiles, uploadFolder, files, getWebhookPoolStats, setActiveModal, isSyncing, isOffline } = useFileStore()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   // Calculate total storage used from all files
@@ -160,6 +162,26 @@ export function Sidebar() {
           <div className="meter-track unlimited">
             <div className="meter-fill" style={{ width: '100%' }} />
           </div>
+        </div>
+
+        {/* Connection Status Indicator */}
+        <div className={`connection-indicator ${isOffline ? 'offline' : isSyncing ? 'syncing' : 'online'}`}>
+          {isOffline ? (
+            <>
+              <CloudOff size={14} />
+              <span>Offline Mode</span>
+            </>
+          ) : isSyncing ? (
+            <>
+              <RefreshCw size={14} className="spin" />
+              <span>Syncing...</span>
+            </>
+          ) : (
+            <>
+              <Cloud size={14} />
+              <span>Connected</span>
+            </>
+          )}
         </div>
 
         {/* Webhook Pool Performance Indicator */}
