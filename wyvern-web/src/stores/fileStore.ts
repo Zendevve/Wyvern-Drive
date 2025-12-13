@@ -3,6 +3,16 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import type { WyvernFile, WyvernFolder, FileVersion } from '../lib/types'
 import { WyvernFileManager } from '../lib/wyvern-file-manager'
 
+// Progress tracking with speed info
+export interface UploadInfo {
+  percent: number
+  loaded: number
+  total: number
+  startTime: number
+  type: 'upload' | 'download'
+  unit: 'bytes' | 'files'  // bytes for single file, files for folder operations
+}
+
 interface FileStore {
   // Auth
   webhookUrl: string | null
@@ -22,7 +32,7 @@ interface FileStore {
 
   // UI state
   isLoading: boolean
-  uploadProgress: Map<string, number>
+  uploadProgress: Map<string, UploadInfo>
 
   // Actions
   setWebhookUrl: (url: string) => void
@@ -174,10 +184,18 @@ export const useFileStore = create<FileStore>()(
         for (let i = 0; i < fileList.length; i++) {
           const file = fileList[i]
           const tempId = `temp-${Date.now()}-${i}`
+          const startTime = Date.now()
 
           set((state) => {
             const newProgress = new Map(state.uploadProgress)
-            newProgress.set(tempId, 0)
+            newProgress.set(tempId, {
+              percent: 0,
+              loaded: 0,
+              total: file.size,
+              startTime,
+              type: 'upload',
+              unit: 'bytes'
+            })
             return { uploadProgress: newProgress }
           })
 
@@ -191,7 +209,14 @@ export const useFileStore = create<FileStore>()(
                 onProgress: (loaded, total) => {
                   set((state) => {
                     const newProgress = new Map(state.uploadProgress)
-                    newProgress.set(tempId, (loaded / total) * 100)
+                    newProgress.set(tempId, {
+                      percent: (loaded / total) * 100,
+                      loaded,
+                      total,
+                      startTime,
+                      type: 'upload',
+                      unit: 'bytes'
+                    })
                     return { uploadProgress: newProgress }
                   })
                 }
@@ -226,10 +251,20 @@ export const useFileStore = create<FileStore>()(
 
         // Use a consistent ID for the folder upload progress
         const tempId = `up-folder-${Date.now()}`
+        const startTime = Date.now()
+        // Folder upload tracks file count, not bytes
+        const totalFiles = files.length
 
         set((state) => {
           const newProgress = new Map(state.uploadProgress)
-          newProgress.set(tempId, 0)
+          newProgress.set(tempId, {
+            percent: 0,
+            loaded: 0,
+            total: totalFiles,
+            startTime,
+            type: 'upload',
+            unit: 'files'
+          })
           return { uploadProgress: newProgress }
         })
 
@@ -239,7 +274,14 @@ export const useFileStore = create<FileStore>()(
             onProgress: (loaded, total) => {
               set((state) => {
                 const newProgress = new Map(state.uploadProgress)
-                newProgress.set(tempId, (loaded / total) * 100)
+                newProgress.set(tempId, {
+                  percent: (loaded / total) * 100,
+                  loaded,
+                  total,
+                  startTime,
+                  type: 'upload',
+                  unit: 'files'
+                })
                 return { uploadProgress: newProgress }
               })
             }
@@ -285,9 +327,19 @@ export const useFileStore = create<FileStore>()(
         }
 
         const tempId = `dl-${file.id}`
+        const startTime = Date.now()
+        const fileSize = (file as WyvernFile).size || 0
+
         set((state) => {
           const newProgress = new Map(state.uploadProgress)
-          newProgress.set(tempId, 0)
+          newProgress.set(tempId, {
+            percent: 0,
+            loaded: 0,
+            total: fileSize,
+            startTime,
+            type: 'download',
+            unit: 'bytes'
+          })
           return { uploadProgress: newProgress }
         })
 
@@ -296,7 +348,14 @@ export const useFileStore = create<FileStore>()(
             onProgress: (loaded, total) => {
               set((state) => {
                 const newProgress = new Map(state.uploadProgress)
-                newProgress.set(tempId, (loaded / total) * 100)
+                newProgress.set(tempId, {
+                  percent: (loaded / total) * 100,
+                  loaded,
+                  total,
+                  startTime,
+                  type: 'download',
+                  unit: 'bytes'
+                })
                 return { uploadProgress: newProgress }
               })
             }
@@ -324,9 +383,18 @@ export const useFileStore = create<FileStore>()(
         }
 
         const tempId = `dl-zip-${folderId}`
+        const startTime = Date.now()
+
         set((state) => {
           const newProgress = new Map(state.uploadProgress)
-          newProgress.set(tempId, 0)
+          newProgress.set(tempId, {
+            percent: 0,
+            loaded: 0,
+            total: 100, // Folder tracks file count, not bytes
+            startTime,
+            type: 'download',
+            unit: 'files'
+          })
           return { uploadProgress: newProgress }
         })
 
@@ -335,7 +403,14 @@ export const useFileStore = create<FileStore>()(
             onProgress: (loaded, total) => {
               set((state) => {
                 const newProgress = new Map(state.uploadProgress)
-                newProgress.set(tempId, (loaded / total) * 100)
+                newProgress.set(tempId, {
+                  percent: (loaded / total) * 100,
+                  loaded,
+                  total,
+                  startTime,
+                  type: 'download',
+                  unit: 'files'
+                })
                 return { uploadProgress: newProgress }
               })
             }
@@ -362,40 +437,6 @@ export const useFileStore = create<FileStore>()(
         } catch (error) {
           console.error('Failed to delete file:', error)
           alert('Failed to delete file')
-        }
-      },
-
-      deleteSelected: async () => {
-        const { fileManager, selectedIds } = get()
-        if (!fileManager || selectedIds.size === 0) return
-
-        try {
-          // Delete all selected items
-          for (const id of selectedIds) {
-            await fileManager.deleteFile(Number(id))
-          }
-          // Clear selection and refresh
-          set({ selectedIds: new Set(), lastSelectedId: null })
-          get().loadFiles()
-        } catch (error) {
-          console.error('Failed to delete selected files:', error)
-          alert('Failed to delete some files')
-        }
-      },
-
-      moveSelected: async (parentId) => {
-        const { fileManager, selectedIds } = get()
-        if (!fileManager || selectedIds.size === 0) return
-
-        try {
-          for (const id of selectedIds) {
-            await fileManager.moveFile(Number(id), parentId)
-          }
-          set({ selectedIds: new Set(), lastSelectedId: null })
-          get().loadFiles()
-        } catch (error) {
-          console.error('Failed to move selected files:', error)
-          alert('Failed to move some files')
         }
       },
 

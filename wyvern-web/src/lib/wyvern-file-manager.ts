@@ -36,15 +36,24 @@ const getHeaders = (contentType: string | null = 'application/json') => {
 
 export class WyvernFileManager {
   private userId: string
-  private webhookUrl: string
+  private webhooks: string[]  // Array of webhook URLs for parallel uploads
+  private lastWebhookIdx = 0  // Round-robin index
   private key: CryptoKey | null = null
   private salt: string | null = null
   private password: string | null = null // Store password for restoring keys with different salts
 
-  constructor(webhookUrl: string) {
-    this.webhookUrl = webhookUrl
-    // Simple hash of webhook URL as userId for now
-    this.userId = this.hashUrl(webhookUrl)
+  constructor(webhookUrls: string | string[]) {
+    // Support both single URL (backwards compat) and array
+    this.webhooks = Array.isArray(webhookUrls) ? webhookUrls : [webhookUrls]
+    // Simple hash of first webhook URL as userId
+    this.userId = this.hashUrl(this.webhooks[0])
+  }
+
+  // Round-robin webhook selector for parallel uploads
+  private get nextWebhook(): string {
+    const url = this.webhooks[this.lastWebhookIdx]
+    this.lastWebhookIdx = (this.lastWebhookIdx + 1) % this.webhooks.length
+    return url
   }
 
   // Initialize encryption for uploading (creates new salt)
@@ -180,15 +189,16 @@ export class WyvernFileManager {
     parentId: number | null,
     options?: UploadOptions
   ): Promise<WyvernFile> {
-    const chunks: ChunkInfo[] = []
     const totalSize = file.size
     const chunkSize = CONFIG.CHUNK_SIZE_DEFAULT
     const totalChunks = Math.ceil(totalSize / chunkSize)
+    const chunks: ChunkInfo[] = new Array(totalChunks)
 
     let uploadedBytes = 0
 
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * chunkSize
+    // Helper to upload a single chunk
+    const uploadChunk = async (index: number): Promise<void> => {
+      const start = index * chunkSize
       const end = Math.min(start + chunkSize, totalSize)
       const chunkBlob = file.slice(start, end)
       let chunkData = await chunkBlob.arrayBuffer()
@@ -201,9 +211,8 @@ export class WyvernFileManager {
         iv = encrypted.iv
       }
 
-      // Upload to Discord
-      const formData = new FormData()
-      formData.append('file', new Blob([chunkData]), `chunk_${i}`)
+      // Keep the chunk data for retries
+      const chunkBuffer = chunkData
 
       // Retry logic
       let attempts = 0
@@ -212,7 +221,12 @@ export class WyvernFileManager {
 
       while (attempts < CONFIG.RETRY_ATTEMPTS && (!messageId || !attachmentUrl)) {
         try {
-          const res = await fetch(this.webhookUrl, {
+          // Create fresh FormData and Blob for each attempt (blobs are consumed on use)
+          const formData = new FormData()
+          formData.append('file', new Blob([chunkBuffer]), `chunk_${index}`)
+
+          const webhookUrl = this.nextWebhook // Round-robin
+          const res = await fetch(webhookUrl, {
             method: 'POST',
             body: formData
           })
@@ -240,17 +254,28 @@ export class WyvernFileManager {
 
       if (!messageId || !attachmentUrl) throw new Error('Failed to upload chunk or get attachment URL')
 
-      chunks.push({
-        index: i,
+      chunks[index] = {
+        index,
         messageId,
         url: attachmentUrl,
-        size: chunkData.byteLength,
-        iv: iv ? Array.from(iv) : undefined // Store IV if encrypted
-      })
+        size: chunkBuffer.byteLength,
+        iv: iv ? Array.from(iv) : undefined
+      }
 
       uploadedBytes += chunkBlob.size
       options?.onProgress?.(uploadedBytes, totalSize)
     }
+
+    // Process chunks in parallel batches
+    const concurrency = CONFIG.MAX_PARALLEL_UPLOADS
+    for (let i = 0; i < totalChunks; i += concurrency) {
+      const batchIndices = []
+      for (let j = i; j < Math.min(i + concurrency, totalChunks); j++) {
+        batchIndices.push(j)
+      }
+      await Promise.all(batchIndices.map(uploadChunk))
+    }
+
     // Save metadata to server
     return this.createFile(path, file, parentId, JSON.stringify(chunks))
   }
