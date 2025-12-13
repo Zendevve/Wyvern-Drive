@@ -7,9 +7,11 @@ import { PreviewModal } from './files/PreviewModal'
 import { LayoutGrid, List as ListIcon, Filter, FolderPlus, UploadCloud } from 'lucide-react'
 import { isPreviewable } from '../lib/thumbnails'
 import type { WyvernFile } from '../lib/types'
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import './FileManager.css'
 
 export function FileManager() {
+  useKeyboardShortcuts() // Enable global keyboard shortcuts
   const { currentPath, files, isLoading, uploadFiles, uploadFolder, previewFileId, setPreviewFile } = useFileStore()
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const fileInputRef = useRef<HTMLInputElement>(null)

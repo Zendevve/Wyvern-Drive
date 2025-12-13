@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import type { WyvernFile, WyvernFolder, ChunkInfo } from '../../lib/types'
 import { useFileStore } from '../../stores/fileStore'
 import { ContextMenu } from './ContextMenu'
-import { getFileIcon, formatSize, formatDate } from '../../lib/utils'
+import { getFileIconName, formatSize, formatDate } from '../../lib/utils'
 import { isPreviewable, isImageFile, isVideoFile, getMimeType } from '../../lib/thumbnails'
 import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
-import { Loader } from 'lucide-react'
+import { Loader, Folder, File, FileText, Image, Music, Video, Archive, Code, Cog } from 'lucide-react'
 import './FileItem.css'
 
 interface FileItemProps {
@@ -19,7 +19,7 @@ export function FileItem({ file, viewMode }: FileItemProps) {
   const [thumbnail, setThumbnail] = useState<string | null>(null)
   const [isLoadingThumb, setIsLoadingThumb] = useState(false)
 
-  const { encryptionPassword, selectedIds, toggleSelection } = useFileStore()
+  const { encryptionPassword, selectedIds, toggleSelection, lastSelectedId, setRangeSelection } = useFileStore()
   const { moveFile } = useFileStore.getState()
 
   const isSelected = selectedIds.has(String(file.id))
@@ -27,7 +27,12 @@ export function FileItem({ file, viewMode }: FileItemProps) {
   const isFolder = file.type === 'directory'
   const isImage = !isFolder && isImageFile(file.name)
   const isVideo = !isFolder && isVideoFile(file.name)
-  const icon = isFolder ? '📁' : getFileIcon(file.name)
+  const iconName = isFolder ? 'Folder' : getFileIconName(file.name)
+
+  // Icon component mapping
+  const IconComponent = {
+    Folder, File, FileText, Image, Music, Video, Archive, Code, Cog
+  }[iconName] || File
 
   // Load thumbnail for images and videos in grid view
   useEffect(() => {
@@ -104,7 +109,12 @@ export function FileItem({ file, viewMode }: FileItemProps) {
 
   const handleDoubleClick = () => {
     if (isFolder) {
-      console.log('Navigate to:', file.path)
+      // Navigate into folder
+      const { setCurrentPath, loadFiles } = useFileStore.getState()
+      // Build path from folder name (simple approach, assuming flat structure for now)
+      // For nested folders, we'd need to track parent path properly
+      setCurrentPath(String(file.id)) // Using ID as path key for now
+      loadFiles()
     } else if (isPreviewable(file.name)) {
       useFileStore.getState().setPreviewFile(String(file.id))
     } else {
@@ -112,9 +122,12 @@ export function FileItem({ file, viewMode }: FileItemProps) {
     }
   }
 
-  // Ctrl+Click to toggle selection
+  // Ctrl+Click to toggle, Shift+Click for range selection
   const handleClick = (e: React.MouseEvent) => {
-    if (e.ctrlKey || e.metaKey) {
+    if (e.shiftKey && lastSelectedId) {
+      e.preventDefault()
+      setRangeSelection(lastSelectedId, String(file.id))
+    } else if (e.ctrlKey || e.metaKey) {
       e.preventDefault()
       toggleSelection(String(file.id))
     }
@@ -204,7 +217,7 @@ export function FileItem({ file, viewMode }: FileItemProps) {
             <Loader size={24} className="spinner" />
           </div>
         ) : (
-          <span className="file-icon">{icon}</span>
+          <span className="file-icon"><IconComponent size={viewMode === 'grid' ? 32 : 18} /></span>
         )}
 
         <span className="file-name">{file.name}</span>

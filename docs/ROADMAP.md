@@ -1,179 +1,93 @@
-# Wyvern Drive — Master Roadmap v2
+# Wyvern Drive — Master Roadmap v3
 
 > **Mission:** The definitive Discord-based infinite encrypted storage.
-> **Timeline:** Late 2025 – Q2 2026
+> **Philosophy:** Granular, concise, high-impact features.
 
 ---
 
-## Phase 1: Foundation ✅
-*Core engine that proves the concept works.*
+## Phase 3: Navigation & UX Foundation
+*Make the file system feel native and snappy.*
 
-### 1.1 Core Upload Engine ✅
-- [x] File chunking (7.5MB per chunk)
-- [x] Upload to Discord via webhook
-- [x] Store chunk URLs in metadata DB
+### 3.1 Navigation Core
+- [ ] **Breadcrumb Trail**: Interactive path segments for quick parent folder navigation.
+- [ ] **History Navigation**: "Back" and "Forward" buttons that work with browser history.
+- [ ] **Keyboard Navigation**: Arrow keys to navigate grid, Enter to open.
 
-### 1.2 Core Download Engine ✅
-- [x] Fetch chunk URLs from metadata
-- [x] Download via extension (CORS bypass)
-- [x] Reassemble original file
+### 3.2 Selection System
+- [ ] **Multi-Select**: Shift+Click (range) and Ctrl+Click (additive).
+- [ ] **Drag Selection**: Box selection on the file grid background.
+- [ ] **Selection State**: status bar showing "X items selected (Y MB)".
 
-### 1.3 Encryption Layer ✅
-- [x] AES-256-GCM encryption
-- [x] Per-session key derivation (PBKDF2)
-- [x] Salt storage per file
-
-### 1.4 Virtual File System ✅
-- [x] SQLite metadata database
-- [x] Hierarchical folder structure
-- [x] File versioning support
+### 3.3 Context Actions
+- [ ] **Right-Click Menu**: Custom context menu for files/folders (Open, Rename, Delete, etc.).
+- [ ] **Keyboard Shortcuts**: `Del` to delete, `F2` to rename, `Ctrl+A` to select all.
 
 ---
 
-## Phase 2: Power User Ops ✅
-*Make file management actually usable.*
+## Phase 4: Search & Info
+*Find what you need instantly.*
 
-### 2.1 File Operations ✅
-- [x] Rename files/folders
-- [x] Move files between folders
-- [x] Delete with recursive support
+### 4.1 Metadata Panel
+- [ ] **Info Sidebar**: Show details for selected file (Type, Size, Created, Hash).
+- [ ] **Preview Card**: Small thumbnail/icon preview in the sidebar.
 
-### 2.2 Batch Operations ✅
-- [x] Multi-select (Ctrl+Click)
-- [x] Batch drag-drop move
-- [x] Batch delete (store action)
+### 4.2 Search Engine
+- [ ] **Fuzzy Search**: Implement Fuse.js for typo-tolerant searching.
+- [ ] **Scope Control**: Toggle between "Current Folder" and "Global" search.
+- [ ] **Result Highlighting**: Visually emphasize matching terms in filenames.
 
-### 2.3 UI Polish (Deferred)
-- [ ] Selection toolbar
-- [ ] Transfer speed/ETA display
-- [ ] Keyboard shortcuts
+### 4.3 Advanced Filtering
+- [ ] **Sort Options**: Name, Size, Date Modified, Type (Asc/Desc).
+- [ ] **Filter Chips**: Quick toggles for "Images", "Videos", "Documents".
 
 ---
 
-## Phase 3: Search & Navigation
-*Find your files without scrolling forever.*
+## Phase 5: Media Experience
+*Turn storage into a streaming center.*
 
-### 3.1 Navigation
-- [ ] Breadcrumb trail component
-- [ ] Click-to-navigate folders
-- [ ] "Up" button / keyboard nav
+### 5.1 Image Viewer
+- [ ] **Lightbox Overlay**: Full-screen image viewer with backdrop.
+- [ ] **Zoom & Pan**: Interactive image manipulation.
+- [ ] **Gallery Mode**: Previous/Next navigation within the current folder.
 
-### 3.2 Search
-- [ ] Fuzzy search input (Fuse.js)
-- [ ] Highlight matches in results
-- [ ] Search within current folder or global
+### 5.2 Audio Player
+- [ ] **Persistent Player**: Floating bottom bar player that persists across navigation.
+- [ ] **Playlist Queue**: Auto-queue audio files from the current folder.
+- [ ] **Visualizer**: (Optional) Simple audio spectrum visualization.
 
-### 3.3 Filtering & Sorting
-- [ ] Filter by: type, size range, date range
-- [ ] Sort by: name, size, date, type
-- [ ] Persist user preferences
-
-### 3.4 Quick Access
-- [ ] Recent files section
-- [ ] Starred/pinned files
-- [ ] Last opened folders
+### 5.3 Video Playback
+- [ ] **Stream Engine**: Fetch and play video chunks sequentially.
+- [ ] **Custom Controls**: Sleek play/pause, volume, fullscreen controls.
 
 ---
 
-## Phase 4: Media Center
-*Stream, view, listen without downloading.*
+## Phase 6: Performance & Polish
+*Scale to thousands of files.*
 
-### 4.1 Image Handling
-- [ ] Lightbox with zoom/pan
-- [ ] Thumbnail grid (lazy load)
-- [ ] EXIF metadata viewer
-- [ ] Slideshow mode
+### 6.1 Virtualization
+- [ ] **Virtual Grid**: Only render visible items to handle folders with 10k+ files.
+- [ ] **Lazy Loading**: Defer loading of thumbnails/metadata until scrolled into view.
 
-### 4.2 Audio Player
-- [ ] Play encrypted audio (decrypt on fly)
-- [ ] Seekable progress bar
-- [ ] Queue/playlist support
-- [ ] Mini-player widget
-
-### 4.3 Video Streaming
-- [ ] Sequential chunk streaming
-- [ ] Buffer ahead for smooth playback
-- [ ] Quality selector (if transcoding added)
-
-### 4.4 Caching
-- [ ] IndexedDB thumbnail cache
-- [ ] LRU eviction policy
-- [ ] Cache invalidation on file update
+### 6.2 Caching Strategy
+- [ ] **Metadata Cache**: Persist file lists in `localStorage` or `IndexedDB`.
+- [ ] **Thumbnail Cache**: Store generated thumbnails locally to save bandwidth.
 
 ---
 
-## Phase 5: Deployment & Infrastructure
-*Go from localhost to production.*
+## Phase 7: Security & Sharing
+*Safe sharing.*
 
-### 5.1 Database Migration
-- [ ] Evaluate: SQLite → Turso or Postgres
-- [ ] Migration scripts
-- [ ] Connection pooling
+### 7.1 Key Management
+- [ ] **Session Lock**: Auto-lock vault after inactivity.
+- [ ] **Key Export**: Export/Import encryption keys for backup.
 
-### 5.2 Backend Deployment
-- [ ] Railway/Render/Fly.io setup
-- [ ] Environment variables (secrets)
-- [ ] Health check endpoint
-
-### 5.3 Frontend Deployment
-- [ ] Netlify/Vercel build config
-- [ ] API URL environment toggle
-- [ ] Preview deployments
-
-### 5.4 Extension Distribution
-- [ ] Chrome Web Store listing
-- [ ] Auto-update manifest
-- [ ] Firefox port (optional)
+### 7.2 Secure Sharing
+- [ ] **Ephemeral Links**: Generate time-limited public download links (via proxy).
+- [ ] **Encrypted Share**: Share file with another public key (future).
 
 ---
 
-## Phase 6: Security Hardening
-*Make it actually secure, not just encrypted.*
-
-### 6.1 Obfuscation
-- [ ] UUID filenames on Discord
-- [ ] Randomized chunk ordering
-- [ ] Steganography option
-
-### 6.2 Key Management
-- [ ] Password change flow
-- [ ] Re-encryption pipeline
-- [ ] Key backup/export
-
-### 6.3 Redundancy
-- [ ] Multi-webhook upload (RAID-1)
-- [ ] Self-heal scan
-- [ ] Integrity verification
-
----
-
-## Phase 7: Sync & Sharing
-*Use it across devices, share with others.*
-
-### 7.1 Multi-Device Sync
-- [ ] Folder watcher (file system monitor)
-- [ ] Conflict resolution
-- [ ] Sync status indicator
-
-### 7.2 Sharing
-- [ ] Ephemeral links (time-limited)
-- [ ] Password-protected shares
-- [ ] QR code generation
-
----
-
-## Phase 8-10: Future
-*Desktop app, mobile, API, ecosystem.*
-
-*(Details to be expanded when earlier phases complete)*
-
----
-
-## Milestones
-
-| Target | Deliverable |
-|--------|-------------|
-| **Dec 2025** | Phases 1-4 (usable daily driver) |
-| **Jan 2026** | Phase 5 (deployed hybrid) |
-| **Feb 2026** | Phase 6-7 (secure + shareable) |
-| **Q2 2026** | Desktop/Mobile/API |
+## Future: Ecosystem
+- **Phase 8**: Desktop App (Electron wrappers).
+- **Phase 9**: Mobile App (React Native).
+- **Phase 10**: CLI Tool (Headless uploads).

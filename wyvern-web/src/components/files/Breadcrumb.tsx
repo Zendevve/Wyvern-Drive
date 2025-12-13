@@ -1,5 +1,5 @@
 import { useFileStore } from '../../stores/fileStore'
-import { FILE_DELIMITER } from '../../lib/types'
+import { Home, ChevronRight } from 'lucide-react'
 import './Breadcrumb.css'
 
 interface BreadcrumbProps {
@@ -7,39 +7,39 @@ interface BreadcrumbProps {
 }
 
 export function Breadcrumb({ path }: BreadcrumbProps) {
-  const { setCurrentPath } = useFileStore()
+  const { setCurrentPath, loadFiles } = useFileStore()
 
-  const parts = path ? path.split(FILE_DELIMITER).filter(Boolean) : []
+  // For now, path is just the folder ID
+  // We need to track folder names for proper breadcrumb display
+  // Simple approach: if path is empty, we're at root
+  const isRoot = !path || path === ''
 
-  const handleNavigate = (index: number) => {
-    if (index === -1) {
-      setCurrentPath('')
-    } else {
-      const newPath = FILE_DELIMITER + parts.slice(0, index + 1).join(FILE_DELIMITER)
-      setCurrentPath(newPath)
-    }
+  const handleNavigateHome = () => {
+    setCurrentPath('')
+    loadFiles()
   }
+
+  // TODO: For proper nested breadcrumbs, we'd need to track the navigation path
+  // For now, just show Home and current folder
 
   return (
     <nav className="breadcrumb">
       <button
-        className="breadcrumb-item"
-        onClick={() => handleNavigate(-1)}
+        className={`breadcrumb-item ${isRoot ? 'active' : ''}`}
+        onClick={handleNavigateHome}
       >
-        🏠 Home
+        <Home size={14} />
+        <span>Home</span>
       </button>
 
-      {parts.map((part, index) => (
-        <span key={index} className="breadcrumb-segment">
-          <span className="breadcrumb-separator">/</span>
-          <button
-            className="breadcrumb-item"
-            onClick={() => handleNavigate(index)}
-          >
-            {part}
-          </button>
-        </span>
-      ))}
+      {!isRoot && (
+        <>
+          <ChevronRight size={14} className="breadcrumb-separator" />
+          <span className="breadcrumb-item active">
+            Current Folder
+          </span>
+        </>
+      )}
     </nav>
   )
 }

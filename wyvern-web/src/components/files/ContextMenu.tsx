@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import { useFileStore } from '../../stores/fileStore'
+import { Download, Archive, Pencil, FolderInput, History, Trash2 } from 'lucide-react'
 import './ContextMenu.css'
 
 interface ContextMenuProps {
@@ -65,28 +66,28 @@ export function ContextMenu({ x, y, file, onClose }: ContextMenuProps) {
     >
       {!isFolder && (
         <button onClick={() => handleAction('download')}>
-          <span>📥</span> Download
+          <Download size={14} /> Download
         </button>
       )}
       {isFolder && (
         <button onClick={() => handleAction('download-zip')}>
-          <span>📦</span> Download as ZIP
+          <Archive size={14} /> Download as ZIP
         </button>
       )}
       <button onClick={() => handleAction('rename')}>
-        <span>✏️</span> Rename
+        <Pencil size={14} /> Rename
       </button>
       <button onClick={() => handleAction('move')}>
-        <span>📂</span> Move to...
+        <FolderInput size={14} /> Move to...
       </button>
       {!isFolder && (
         <button onClick={() => handleAction('versions')}>
-          <span>🕒</span> Version History
+          <History size={14} /> Version History
         </button>
       )}
       <div className="context-divider" />
       <button onClick={() => handleAction('delete')} className="danger">
-        <span>🗑️</span> Delete
+        <Trash2 size={14} /> Delete
       </button>
     </div>
   )

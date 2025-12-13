@@ -17,6 +17,7 @@ interface FileStore {
   currentPath: string
   files: Record<string, WyvernFile | WyvernFolder>
   selectedIds: Set<string>
+  lastSelectedId: string | null
 
   // UI state
   isLoading: boolean
@@ -37,6 +38,7 @@ interface FileStore {
   toggleSelection: (id: string) => void
   clearSelection: () => void
   selectAll: () => void
+  setRangeSelection: (fromId: string, toId: string) => void
   deleteSelected: () => Promise<void>
   moveSelected: (parentId: number | null) => Promise<void>
 
@@ -71,6 +73,7 @@ export const useFileStore = create<FileStore>()(
       currentPath: '',
       files: {},
       selectedIds: new Set(),
+      lastSelectedId: null,
       isLoading: false,
       uploadProgress: new Map(),
       activeModal: null,
@@ -105,16 +108,39 @@ export const useFileStore = create<FileStore>()(
       },
 
       loadFiles: async () => {
-        const { fileManager } = get()
+        const { fileManager, currentPath } = get()
         if (!fileManager) return
 
         set({ isLoading: true })
         try {
           const root = await fileManager.fetchFiles()
-          // Flatten tree to record for now, or just use root.children
-          // Simple flattening for the grid view
-          // TODO: Improve this to handle deep nesting properly in UI
-          set({ files: root.children })
+
+          // If currentPath is set (folder ID), find that folder's children
+          if (currentPath && currentPath !== '') {
+            const findFolder = (node: WyvernFolder): WyvernFolder | null => {
+              if (String(node.id) === currentPath) return node
+              if (node.children) {
+                for (const child of Object.values(node.children)) {
+                  if (child.type === 'directory') {
+                    const found = findFolder(child as WyvernFolder)
+                    if (found) return found
+                  }
+                }
+              }
+              return null
+            }
+
+            const targetFolder = findFolder(root)
+            if (targetFolder) {
+              set({ files: targetFolder.children || {} })
+            } else {
+              // Folder not found, reset to root
+              set({ files: root.children, currentPath: '' })
+            }
+          } else {
+            // Root level
+            set({ files: root.children })
+          }
         } catch (error) {
           console.error('Failed to load files:', error)
         } finally {
@@ -340,14 +366,37 @@ export const useFileStore = create<FileStore>()(
         } else {
           newSelection.add(id)
         }
-        return { selectedIds: newSelection }
+        return { selectedIds: newSelection, lastSelectedId: id }
       }),
 
-      clearSelection: () => set({ selectedIds: new Set() }),
+      clearSelection: () => set({ selectedIds: new Set(), lastSelectedId: null }),
 
       selectAll: () => set((state) => {
         const allIds = new Set(Object.values(state.files).map(f => String(f.id)))
-        return { selectedIds: allIds }
+        return { selectedIds: allIds, lastSelectedId: null }
+      }),
+
+      setRangeSelection: (fromId, toId) => set((state) => {
+        // Get ordered list of file IDs (folders first, then by name)
+        const items = Object.values(state.files)
+        const sortedItems = items.sort((a, b) => {
+          if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+          return a.name.localeCompare(b.name)
+        })
+        const orderedIds = sortedItems.map(f => String(f.id))
+
+        const fromIndex = orderedIds.indexOf(fromId)
+        const toIndex = orderedIds.indexOf(toId)
+        if (fromIndex === -1 || toIndex === -1) return {}
+
+        const start = Math.min(fromIndex, toIndex)
+        const end = Math.max(fromIndex, toIndex)
+        const rangeIds = orderedIds.slice(start, end + 1)
+
+        const newSelection = new Set(state.selectedIds)
+        rangeIds.forEach(id => newSelection.add(id))
+
+        return { selectedIds: newSelection, lastSelectedId: toId }
       }),
 
       deleteSelected: async () => {

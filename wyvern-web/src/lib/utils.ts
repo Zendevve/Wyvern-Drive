@@ -1,15 +1,50 @@
-export function getFileIcon(filename: string): string {
+// File type to icon mapping - returns Lucide icon name
+export function getFileIconName(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase() || ''
-  const icons: Record<string, string> = {
-    pdf: '📕', doc: '📄', docx: '📄', txt: '📝',
-    jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', webp: '🖼️',
-    mp3: '🎵', wav: '🎵', flac: '🎵', ogg: '🎵',
-    mp4: '🎬', mkv: '🎬', avi: '🎬', mov: '🎬',
-    zip: '📦', rar: '📦', '7z': '📦', tar: '📦',
-    js: '📜', ts: '📜', py: '🐍', rs: '🦀',
-    exe: '⚙️', msi: '⚙️',
+  const iconMap: Record<string, string> = {
+    // Documents
+    pdf: 'FileText',
+    doc: 'FileText',
+    docx: 'FileText',
+    txt: 'FileText',
+    // Images
+    jpg: 'Image',
+    jpeg: 'Image',
+    png: 'Image',
+    gif: 'Image',
+    webp: 'Image',
+    svg: 'Image',
+    // Audio
+    mp3: 'Music',
+    wav: 'Music',
+    flac: 'Music',
+    ogg: 'Music',
+    // Video
+    mp4: 'Video',
+    mkv: 'Video',
+    avi: 'Video',
+    mov: 'Video',
+    // Archives
+    zip: 'Archive',
+    rar: 'Archive',
+    '7z': 'Archive',
+    tar: 'Archive',
+    // Code
+    js: 'Code',
+    ts: 'Code',
+    py: 'Code',
+    rs: 'Code',
+    // Executables
+    exe: 'Cog',
+    msi: 'Cog',
   }
-  return icons[ext] || '📄'
+  return iconMap[ext] || 'File'
+}
+
+// Legacy function for backwards compatibility - returns empty string
+// Components should use Lucide icons directly
+export function getFileIcon(_filename: string): string {
+  return ''
 }
 
 export function formatSize(bytes: number): string {
