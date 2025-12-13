@@ -520,6 +520,202 @@ Deno.serve(async (req: Request) => {
       return json({ success: true })
     }
 
+    // ===== SHARE LINKS =====
+
+    // POST /shares/:userId/:fileId - Create share link
+    const createShareMatch = path.match(/^\/shares\/([^\/]+)\/(\d+)$/)
+    if (createShareMatch && method === "POST") {
+      const [, userId, fileId] = createShareMatch
+      const supabase = getSupabase()
+
+      // Verify file exists and belongs to user
+      const { data: file } = await supabase
+        .from("files")
+        .select("id, name, encrypted")
+        .eq("user_id", userId)
+        .eq("id", fileId)
+        .maybeSingle()
+
+      if (!file) return json({ error: "File not found" }, 404)
+
+      // Can't share encrypted files (need password to decrypt)
+      if (file.encrypted) {
+        return json({ error: "Cannot share encrypted files" }, 400)
+      }
+
+      // Parse options from body
+      let expiresAt: string | null = null
+      let passwordHash: string | null = null
+
+      try {
+        const body = await req.json()
+        if (body.expiresIn) {
+          // expiresIn is in hours
+          const hours = parseInt(body.expiresIn)
+          if (hours > 0) {
+            expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
+          }
+        }
+        if (body.password) {
+          // Simple hash for demo - use proper hashing in production
+          passwordHash = btoa(body.password)
+        }
+      } catch {
+        // No body is fine
+      }
+
+      // Create share
+      const { data: share, error } = await supabase
+        .from("shares")
+        .insert({
+          file_id: parseInt(fileId),
+          user_id: userId,
+          expires_at: expiresAt,
+          password_hash: passwordHash
+        })
+        .select("id")
+        .single()
+
+      if (error) return json({ error: error.message }, 500)
+
+      return json({
+        id: share.id,
+        url: `/share/${share.id}`,
+        expiresAt
+      })
+    }
+
+    // GET /share/:shareId - Public download (NO AUTH)
+    const publicShareMatch = path.match(/^\/share\/([a-f0-9-]+)$/)
+    if (publicShareMatch && method === "GET") {
+      const [, shareId] = publicShareMatch
+      const supabase = getSupabase()
+
+      // Get share
+      const { data: share } = await supabase
+        .from("shares")
+        .select("*, files(*)")
+        .eq("id", shareId)
+        .maybeSingle()
+
+      if (!share) return json({ error: "Share not found" }, 404)
+
+      // Check expiry
+      if (share.expires_at && new Date(share.expires_at) < new Date()) {
+        return json({ error: "Share link expired" }, 410)
+      }
+
+      // Check password
+      const providedPassword = url.searchParams.get("password")
+      if (share.password_hash) {
+        if (!providedPassword || btoa(providedPassword) !== share.password_hash) {
+          return json({ error: "Password required", passwordRequired: true }, 401)
+        }
+      }
+
+      const file = share.files
+      if (!file || !file.content) {
+        return json({ error: "File data not found" }, 404)
+      }
+
+      // Increment download count
+      await supabase
+        .from("shares")
+        .update({ download_count: (share.download_count || 0) + 1 })
+        .eq("id", shareId)
+
+      // Parse chunks and stream file
+      interface ChunkInfo {
+        index: number
+        url: string
+        size: number
+      }
+
+      let chunks: ChunkInfo[]
+      try {
+        chunks = JSON.parse(file.content)
+        chunks.sort((a: ChunkInfo, b: ChunkInfo) => a.index - b.index)
+      } catch {
+        return json({ error: "Invalid file data" }, 500)
+      }
+
+      // Fetch all chunks
+      const dataParts: Uint8Array[] = []
+      for (const chunk of chunks) {
+        try {
+          const response = await fetch(chunk.url)
+          if (!response.ok) throw new Error("Chunk fetch failed")
+          const buffer = await response.arrayBuffer()
+          dataParts.push(new Uint8Array(buffer))
+        } catch (e) {
+          console.error(`Error fetching chunk:`, e)
+          return json({ error: "Failed to fetch file data" }, 500)
+        }
+      }
+
+      // Combine
+      const totalLength = dataParts.reduce((sum, p) => sum + p.length, 0)
+      const result = new Uint8Array(totalLength)
+      let pos = 0
+      for (const part of dataParts) {
+        result.set(part, pos)
+        pos += part.length
+      }
+
+      // Determine content type
+      const ext = file.name.split('.').pop()?.toLowerCase() || ''
+      const mimeTypes: Record<string, string> = {
+        mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg',
+        wav: 'audio/wav', png: 'image/png', jpg: 'image/jpeg',
+        jpeg: 'image/jpeg', gif: 'image/gif', pdf: 'application/pdf',
+        zip: 'application/zip', txt: 'text/plain',
+      }
+      const contentType = mimeTypes[ext] || 'application/octet-stream'
+
+      return new Response(result, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": contentType,
+          "Content-Length": String(totalLength),
+          "Content-Disposition": `attachment; filename="${file.name}"`
+        }
+      })
+    }
+
+    // DELETE /shares/:userId/:shareId - Revoke share
+    const deleteShareMatch = path.match(/^\/shares\/([^\/]+)\/([a-f0-9-]+)$/)
+    if (deleteShareMatch && method === "DELETE") {
+      const [, userId, shareId] = deleteShareMatch
+      const supabase = getSupabase()
+
+      // Delete share (only if belongs to user)
+      const { error } = await supabase
+        .from("shares")
+        .delete()
+        .eq("id", shareId)
+        .eq("user_id", userId)
+
+      if (error) return json({ error: error.message }, 500)
+      return json({ success: true })
+    }
+
+    // GET /shares/:userId/:fileId - List shares for a file
+    const listSharesMatch = path.match(/^\/shares\/([^\/]+)\/(\d+)$/)
+    if (listSharesMatch && method === "GET") {
+      const [, userId, fileId] = listSharesMatch
+      const supabase = getSupabase()
+
+      const { data: shares, error } = await supabase
+        .from("shares")
+        .select("id, created_at, expires_at, download_count")
+        .eq("user_id", userId)
+        .eq("file_id", fileId)
+
+      if (error) return json({ error: error.message }, 500)
+      return json(shares || [])
+    }
+
     // Not found
     return json({ error: "Not found", path, method }, 404)
 

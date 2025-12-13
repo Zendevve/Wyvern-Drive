@@ -100,7 +100,7 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
         URL.revokeObjectURL(previewUrl)
       }
     }
-  }, [file?.id, file?.content, file?.encrypted, encryptionPassword, fileManager])
+  }, [file?.id, file?.content, file?.encrypted, encryptionPassword])
 
   // Keyboard navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {

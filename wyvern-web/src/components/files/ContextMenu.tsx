@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import { useFileStore } from '../../stores/fileStore'
-import { Download, Archive, Pencil, FolderInput, History, Trash2 } from 'lucide-react'
+import { Download, Archive, Pencil, FolderInput, History, Trash2, Share2 } from 'lucide-react'
 import './ContextMenu.css'
 
 interface ContextMenuProps {
@@ -90,6 +90,9 @@ export function ContextMenu({ x, y, file, onClose }: ContextMenuProps) {
     } else if (action === 'versions' && !isFolder && !currentIsMultiple) {
       setActiveModal('versions', String(file.id))
       onClose()
+    } else if (action === 'share' && !isFolder && !currentIsMultiple) {
+      setActiveModal('share', String(file.id))
+      onClose()
     } else {
       onClose()
     }
@@ -133,6 +136,12 @@ export function ContextMenu({ x, y, file, onClose }: ContextMenuProps) {
       {!isMultiple && !isFolder && (
         <button onClick={() => handleAction('versions')}>
           <History size={14} /> Version History
+        </button>
+      )}
+
+      {!isMultiple && !isFolder && (
+        <button onClick={() => handleAction('share')}>
+          <Share2 size={14} /> Share Link
         </button>
       )}
 

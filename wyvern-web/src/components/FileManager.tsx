@@ -3,6 +3,7 @@ import { useFileStore } from '../stores/fileStore'
 import { FileDropZone } from './files/FileDropZone'
 import { FileGrid } from './files/FileGrid'
 import { Breadcrumb } from './files/Breadcrumb'
+import { ShareModal } from './files/ShareModal'
 import { PreviewModal } from './files/PreviewModal'
 import { LayoutGrid, List as ListIcon, Filter, FolderPlus, UploadCloud } from 'lucide-react'
 import { isPreviewable } from '../lib/thumbnails'
@@ -12,9 +13,13 @@ import './FileManager.css'
 
 export function FileManager() {
   useKeyboardShortcuts() // Enable global keyboard shortcuts
-  const { files, isLoading, uploadFiles, uploadFolder, previewFileId, setPreviewFile } = useFileStore()
+  const { files, isLoading, uploadFiles, uploadFolder, previewFileId, setPreviewFile, activeModal, activeFileId, setActiveModal } = useFileStore()
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const activeFile = activeFileId
+    ? (Object.values(files).find(f => String(f.id) === activeFileId) as WyvernFile)
+    : null
 
   // Get list of previewable files for navigation
   const previewableFiles = useMemo(() => {
@@ -138,6 +143,14 @@ export function FileManager() {
         hasPrev={currentPreviewIndex > 0}
         hasNext={currentPreviewIndex < previewableFiles.length - 1}
       />
+
+      {/* Share Modal */}
+      {activeModal === 'share' && activeFile && (
+        <ShareModal
+          file={activeFile}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
 
       {/* Status Bar */}
       <div className="status-bar">

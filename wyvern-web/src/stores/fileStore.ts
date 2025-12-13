@@ -55,9 +55,9 @@ interface FileStore {
   moveSelected: (parentId: number | null) => Promise<void>
 
   // Modal State
-  activeModal: 'rename' | 'move' | 'versions' | null
+  activeModal: 'rename' | 'move' | 'versions' | 'share' | null
   activeFileId: string | null
-  setActiveModal: (modal: 'rename' | 'move' | 'versions' | null, fileId?: string | null) => void
+  setActiveModal: (modal: 'rename' | 'move' | 'versions' | 'share' | null, fileId?: string | null) => void
 
   // Preview State
   previewFileId: string | null

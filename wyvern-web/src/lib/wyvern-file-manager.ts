@@ -192,6 +192,32 @@ export class WyvernFileManager {
     if (!res.ok) throw new Error('Failed to delete version')
   }
 
+  // --- Share Links ---
+
+  async createShareLink(fileId: number, options: { expiresIn?: number; password?: string } = {}): Promise<{ id: string; url: string; expiresAt?: string }> {
+    const res = await fetch(`${API_URL}/shares/${this.userId}/${fileId}`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        expiresIn: options.expiresIn,
+        password: options.password
+      })
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || 'Failed to create share link')
+    }
+    return await res.json()
+  }
+
+  async revokeShareLink(shareId: string): Promise<void> {
+    const res = await fetch(`${API_URL}/shares/${this.userId}/${shareId}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    })
+    if (!res.ok) throw new Error('Failed to revoke share link')
+  }
+
   // --- Discord Interaction ---
 
   async uploadFile(
