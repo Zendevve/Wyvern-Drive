@@ -28,18 +28,15 @@ export function AudioPlayer() {
     closePlayer
   } = useAudioPlayer()
 
-  // Don't render if no track
-  if (!currentTrack) return null
-
   // Sync audio element with play state
   useEffect(() => {
-    if (!audioRef.current) return
+    if (!audioRef.current || !currentTrack) return
     if (isPlaying) {
       audioRef.current.play().catch(() => setIsPlaying(false))
     } else {
       audioRef.current.pause()
     }
-  }, [isPlaying, setIsPlaying])
+  }, [isPlaying, setIsPlaying, currentTrack])
 
   // Sync volume
   useEffect(() => {
@@ -47,6 +44,9 @@ export function AudioPlayer() {
       audioRef.current.volume = volume
     }
   }, [volume])
+
+  // Don't render if no track (MUST be after all hooks)
+  if (!currentTrack) return null
 
   // Handle progress bar click
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
