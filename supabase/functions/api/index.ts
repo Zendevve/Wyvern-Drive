@@ -6,6 +6,10 @@ import { Hono } from "https://deno.land/x/hono@v3.4.1/mod.ts"
 import { cors } from "https://deno.land/x/hono@v3.4.1/middleware.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
+// Use basePath to match Supabase function URL structure
+// Supabase calls: /functions/v1/api/...
+// But Hono receives requests at: /...
+// So we don't need to set basePath - Supabase strips /functions/v1/api for us
 const app = new Hono()
 
 // Enable CORS
@@ -386,9 +390,19 @@ app.delete("/versions/:userId/:fileId/:versionId", async (c) => {
   return c.json({ success: true })
 })
 
+// Root route
+app.get("/", (c) => {
+  return c.json({ status: "ok", name: "Wyvern Drive API", message: "Use /files/:userId for file operations" })
+})
+
 // Health check
 app.get("/health", (c) => {
   return c.json({ status: "ok", name: "Wyvern Drive API" })
+})
+
+// Catch-all for debugging
+app.all("*", (c) => {
+  return c.json({ error: "Not found", path: c.req.path, method: c.req.method }, 404)
 })
 
 serve(app.fetch)
