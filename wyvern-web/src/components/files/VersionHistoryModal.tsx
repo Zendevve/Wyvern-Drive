@@ -30,14 +30,16 @@ export function VersionHistoryModal() {
   }
 
   const handleRestore = async (versionId: number) => {
-    if (!confirm('Are you sure?Current file content will be saved as a new version.')) return
-    await restoreVersion(String(versionId))
+    if (!activeFileId) return
+    if (!confirm('Are you sure? Current file content will be saved as a new version.')) return
+    await restoreVersion(activeFileId, String(versionId))
     setActiveModal(null)
   }
 
   const handleDelete = async (versionId: number) => {
+    if (!activeFileId) return
     if (!confirm('Delete this version permanently?')) return
-    await deleteVersion(String(versionId))
+    await deleteVersion(activeFileId, String(versionId))
     loadVersions()
   }
 

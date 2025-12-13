@@ -55,8 +55,8 @@ interface FileStore {
 
   // Versions
   getVersions: (fileId: string) => Promise<FileVersion[]>
-  restoreVersion: (versionId: string) => Promise<void>
-  deleteVersion: (versionId: string) => Promise<void>
+  restoreVersion: (fileId: string, versionId: string) => Promise<void>
+  deleteVersion: (fileId: string, versionId: string) => Promise<void>
 }
 
 export const useFileStore = create<FileStore>()(
@@ -437,11 +437,11 @@ export const useFileStore = create<FileStore>()(
         }
       },
 
-      restoreVersion: async (versionId) => {
+      restoreVersion: async (fileId, versionId) => {
         const { fileManager } = get()
         if (!fileManager) return
         try {
-          await fileManager.restoreVersion(Number(versionId))
+          await fileManager.restoreVersion(Number(fileId), Number(versionId))
           get().loadFiles()
         } catch (error) {
           console.error('Restore version failed', error)
@@ -449,11 +449,11 @@ export const useFileStore = create<FileStore>()(
         }
       },
 
-      deleteVersion: async (versionId) => {
+      deleteVersion: async (fileId, versionId) => {
         const { fileManager } = get()
         if (!fileManager) return
         try {
-          await fileManager.deleteVersion(Number(versionId))
+          await fileManager.deleteVersion(Number(fileId), Number(versionId))
         } catch (error) {
           console.error('Delete version failed', error)
           alert('Delete version failed')

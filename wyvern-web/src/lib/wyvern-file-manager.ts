@@ -16,7 +16,9 @@ import {
 } from './encryption'
 import JSZip from 'jszip'
 
-const API_URL = 'http://localhost:8080'
+// API URL: Use Supabase Edge Function in production, Express in development
+// For Supabase: https://[project-ref].supabase.co/functions/v1/api
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 export class WyvernFileManager {
   private userId: string
@@ -60,7 +62,7 @@ export class WyvernFileManager {
   // --- API Interaction ---
 
   async fetchFiles(): Promise<WyvernFolder> {
-    const res = await fetch(`${API_URL}/files/get/${this.userId}`)
+    const res = await fetch(`${API_URL}/files/${this.userId}`)
     if (!res.ok) throw new Error('Failed to fetch files')
     return await res.json()
   }
@@ -71,7 +73,7 @@ export class WyvernFileManager {
     parentId: number | null,
     content: string
   ): Promise<WyvernFile> {
-    const res = await fetch(`${API_URL}/files/create/${this.userId}`, {
+    const res = await fetch(`${API_URL}/files/${this.userId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -105,14 +107,14 @@ export class WyvernFileManager {
   }
 
   async deleteFile(id: number): Promise<void> {
-    const res = await fetch(`${API_URL}/files/delete-recursive/${this.userId}/${id}`, {
+    const res = await fetch(`${API_URL}/files/${this.userId}/${id}/recursive`, {
       method: 'DELETE'
     })
     if (!res.ok) throw new Error('Failed to delete file')
   }
 
   async renameFile(id: number, name: string): Promise<void> {
-    const res = await fetch(`${API_URL}/files/update/${this.userId}/${id}`, {
+    const res = await fetch(`${API_URL}/files/${this.userId}/${id}/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name })
@@ -121,7 +123,7 @@ export class WyvernFileManager {
   }
 
   async moveFile(id: number, parentId: number | null): Promise<void> {
-    const res = await fetch(`${API_URL}/files/update/${this.userId}/${id}`, {
+    const res = await fetch(`${API_URL}/files/${this.userId}/${id}/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ parent_id: parentId })
@@ -130,20 +132,20 @@ export class WyvernFileManager {
   }
 
   async getVersions(fileId: number): Promise<FileVersion[]> {
-    const res = await fetch(`${API_URL}/files/versions/${this.userId}/${fileId}`)
+    const res = await fetch(`${API_URL}/versions/${this.userId}/${fileId}`)
     if (!res.ok) throw new Error('Failed to fetch versions')
     return await res.json()
   }
 
-  async restoreVersion(versionId: number): Promise<void> {
-    const res = await fetch(`${API_URL}/files/restore/${this.userId}/${versionId}`, {
+  async restoreVersion(fileId: number, versionId: number): Promise<void> {
+    const res = await fetch(`${API_URL}/versions/${this.userId}/${fileId}/restore/${versionId}`, {
       method: 'POST'
     })
     if (!res.ok) throw new Error('Failed to restore version')
   }
 
-  async deleteVersion(versionId: number): Promise<void> {
-    const res = await fetch(`${API_URL}/files/versions/${this.userId}/${versionId}`, {
+  async deleteVersion(fileId: number, versionId: number): Promise<void> {
+    const res = await fetch(`${API_URL}/versions/${this.userId}/${fileId}/${versionId}`, {
       method: 'DELETE'
     })
     if (!res.ok) throw new Error('Failed to delete version')
@@ -251,7 +253,7 @@ export class WyvernFileManager {
     if (parentId !== null) dirCache.set('', parentId)
 
     const createDirectory = async (name: string, pId: number | null): Promise<number> => {
-      const res = await fetch(`${API_URL}/files/create/${this.userId}`, {
+      const res = await fetch(`${API_URL}/files/${this.userId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
