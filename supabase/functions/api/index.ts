@@ -585,6 +585,42 @@ Deno.serve(async (req: Request) => {
       })
     }
 
+    // GET /share/:shareId/info - Get share info (NO AUTH, NO DOWNLOAD)
+    const shareInfoMatch = path.match(/^\/share\/([a-f0-9-]+)\/info$/)
+    if (shareInfoMatch && method === "GET") {
+      const [, shareId] = shareInfoMatch
+      const supabase = getSupabase()
+
+      // Get share with file info
+      const { data: share } = await supabase
+        .from("shares")
+        .select("*, files(id, name, size, type)")
+        .eq("id", shareId)
+        .maybeSingle()
+
+      if (!share) return json({ error: "Share not found" }, 404)
+
+      // Check expiry
+      if (share.expires_at && new Date(share.expires_at) < new Date()) {
+        return json({ error: "Share link expired", expired: true }, 410)
+      }
+
+      const file = share.files
+      if (!file) {
+        return json({ error: "File not found" }, 404)
+      }
+
+      return json({
+        id: share.id,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        expiresAt: share.expires_at,
+        passwordRequired: !!share.password_hash,
+        downloadCount: share.download_count || 0
+      })
+    }
+
     // GET /share/:shareId - Public download (NO AUTH)
     const publicShareMatch = path.match(/^\/share\/([a-f0-9-]+)$/)
     if (publicShareMatch && method === "GET") {

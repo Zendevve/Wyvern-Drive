@@ -1,7 +1,9 @@
 import { useEffect } from 'react'
+import { Routes, Route } from 'react-router-dom'
 import { FileManager } from './components/FileManager'
 import { Sidebar } from './components/layout/Sidebar'
 import { SetupScreen } from './components/SetupScreen'
+import { ShareView } from './components/ShareView'
 import { RenameModal } from './components/files/RenameModal'
 import { MoveModal } from './components/files/MoveModal'
 import { VersionHistoryModal } from './components/files/VersionHistoryModal'
@@ -9,7 +11,7 @@ import { ProgressToasts } from './components/ui/ProgressToasts'
 import { useFileStore } from './stores/fileStore'
 import './styles/App.css'
 
-function App() {
+function AuthenticatedApp() {
   const { isAuthenticated, initializeManager, loadFiles } = useFileStore()
 
   // Initialize file manager and load files after authentication
@@ -52,6 +54,18 @@ function App() {
       <VersionHistoryModal />
       <ProgressToasts />
     </div>
+  )
+}
+
+function App() {
+  return (
+    <Routes>
+      {/* Public share route - no auth required */}
+      <Route path="/share/:shareId" element={<ShareView />} />
+
+      {/* All other routes - auth required */}
+      <Route path="/*" element={<AuthenticatedApp />} />
+    </Routes>
   )
 }
 

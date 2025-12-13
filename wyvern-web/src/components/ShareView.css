@@ -1,0 +1,199 @@
+.share-view {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  padding: var(--spacing-lg);
+}
+
+.share-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-2xl);
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.share-card.share-error {
+  text-align: center;
+}
+
+.share-header {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.share-header .wyvern-logo {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  margin-bottom: var(--spacing-sm);
+}
+
+.share-header h1 {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.file-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-xl);
+}
+
+.file-icon {
+  font-size: 3rem;
+  flex-shrink: 0;
+}
+
+.file-info {
+  min-width: 0;
+}
+
+.file-name {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  word-break: break-word;
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.file-size {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.password-section {
+  margin-bottom: var(--spacing-lg);
+}
+
+.password-section label {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.password-section input {
+  width: 100%;
+  padding: var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+  transition: border-color var(--transition-fast);
+}
+
+.password-section input:focus {
+  outline: none;
+  border-color: var(--brand-primary);
+}
+
+.error-message {
+  color: var(--status-error);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-md);
+  text-align: center;
+}
+
+.download-btn {
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--brand-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  transition: all var(--transition-fast);
+}
+
+.download-btn:hover:not(:disabled) {
+  background: var(--brand-primary-hover);
+  transform: translateY(-1px);
+}
+
+.download-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.share-meta {
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--border-subtle);
+  text-align: center;
+}
+
+.share-meta p {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  margin: var(--spacing-xs) 0;
+}
+
+.share-loading {
+  text-align: center;
+  padding: var(--spacing-2xl);
+}
+
+.share-loading p {
+  color: var(--text-secondary);
+  margin-top: var(--spacing-md);
+}
+
+.error-icon {
+  font-size: 3rem;
+  margin-bottom: var(--spacing-lg);
+}
+
+.back-link {
+  display: inline-block;
+  margin-top: var(--spacing-lg);
+  color: var(--brand-primary);
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-subtle);
+  border-top-color: var(--brand-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
