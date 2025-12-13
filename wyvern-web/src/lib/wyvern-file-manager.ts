@@ -82,6 +82,17 @@ export class WyvernFileManager {
     return Math.abs(hash).toString(16)
   }
 
+  // Get streaming URL for video/audio playback with seeking support
+  // Includes auth token as query param since <video>/<audio> tags can't send headers
+  getStreamUrl(fileId: number): string {
+    return `${API_URL}/stream/${this.userId}/${fileId}?apikey=${SUPABASE_ANON_KEY}`
+  }
+
+  // Get userId for external use
+  getUserId(): string {
+    return this.userId
+  }
+
   // --- API Interaction ---
 
   async fetchFiles(): Promise<WyvernFolder> {

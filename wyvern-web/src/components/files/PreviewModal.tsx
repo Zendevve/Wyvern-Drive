@@ -40,7 +40,11 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
       setError(null)
 
       try {
-        // Parse chunks
+        // NOTE: Streaming URL approach blocked by JWT verification on Edge Function
+        // For now, use chunk-based download for all media types
+        // TODO: Implement signed URLs or disable JWT for stream endpoint
+
+        // Download all chunks for preview
         if (!file.content) {
           throw new Error('No content data')
         }
@@ -90,13 +94,13 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
 
     loadPreview()
 
-    // Cleanup blob URL
+    // Cleanup blob URL (but not stream URLs)
     return () => {
-      if (previewUrl) {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrl)
       }
     }
-  }, [file?.id, file?.content, file?.encrypted, encryptionPassword])
+  }, [file?.id, file?.content, file?.encrypted, encryptionPassword, fileManager])
 
   // Keyboard navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {

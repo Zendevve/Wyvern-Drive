@@ -60,6 +60,163 @@ Deno.serve(async (req: Request) => {
       return json({ status: "ok", name: "Wyvern Drive API" })
     }
 
+    // GET /stream/:userId/:fileId - Range request streaming for video/audio
+    const streamMatch = path.match(/^\/stream\/([^\/]+)\/(\d+)$/)
+    if (streamMatch && method === "GET") {
+      const [, userId, fileId] = streamMatch
+      const supabase = getSupabase()
+
+      // 1. Get file metadata
+      const { data: file, error: fileError } = await supabase
+        .from("files")
+        .select("id, name, size, content, encrypted, type")
+        .eq("user_id", userId)
+        .eq("id", fileId)
+        .maybeSingle()
+
+      if (fileError || !file) {
+        return json({ error: "File not found" }, 404)
+      }
+
+      // Don't stream encrypted files - they need full download for decryption
+      if (file.encrypted) {
+        return json({ error: "Cannot stream encrypted files" }, 400)
+      }
+
+      if (!file.content) {
+        return json({ error: "File has no content" }, 400)
+      }
+
+      // 2. Parse chunk map
+      interface ChunkInfo {
+        index: number
+        messageId: string
+        url: string
+        size: number
+      }
+
+      let chunks: ChunkInfo[]
+      try {
+        chunks = JSON.parse(file.content)
+        chunks.sort((a, b) => a.index - b.index)
+      } catch {
+        return json({ error: "Invalid chunk data" }, 500)
+      }
+
+      // 3. Calculate total size and chunk offsets
+      const totalSize = chunks.reduce((sum, c) => sum + c.size, 0)
+      const chunkOffsets: number[] = []
+      let offset = 0
+      for (const chunk of chunks) {
+        chunkOffsets.push(offset)
+        offset += chunk.size
+      }
+
+      // 4. Parse Range header
+      const rangeHeader = req.headers.get("Range")
+      let rangeStart = 0
+      let rangeEnd = totalSize - 1
+
+      if (rangeHeader) {
+        const match = rangeHeader.match(/bytes=(\d*)-(\d*)/)
+        if (match) {
+          if (match[1]) rangeStart = parseInt(match[1])
+          if (match[2]) rangeEnd = parseInt(match[2])
+        }
+      }
+
+      // Clamp to valid range
+      rangeStart = Math.max(0, rangeStart)
+      rangeEnd = Math.min(totalSize - 1, rangeEnd)
+      const contentLength = rangeEnd - rangeStart + 1
+
+      // 5. Find which chunks contain the requested range
+      const neededChunks: { chunk: ChunkInfo; startOffset: number; sliceStart: number; sliceEnd: number }[] = []
+
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkStart = chunkOffsets[i]
+        const chunkEnd = chunkStart + chunks[i].size - 1
+
+        // Check if this chunk overlaps with requested range
+        if (chunkEnd >= rangeStart && chunkStart <= rangeEnd) {
+          const sliceStart = Math.max(0, rangeStart - chunkStart)
+          const sliceEnd = Math.min(chunks[i].size, rangeEnd - chunkStart + 1)
+          neededChunks.push({
+            chunk: chunks[i],
+            startOffset: chunkStart,
+            sliceStart,
+            sliceEnd
+          })
+        }
+      }
+
+      // 6. Fetch needed chunks from Discord CDN
+      const dataParts: Uint8Array[] = []
+
+      for (const { chunk, sliceStart, sliceEnd } of neededChunks) {
+        try {
+          const response = await fetch(chunk.url)
+          if (!response.ok) {
+            throw new Error(`Failed to fetch chunk: ${response.status}`)
+          }
+          const buffer = await response.arrayBuffer()
+          const slice = new Uint8Array(buffer).slice(sliceStart, sliceEnd)
+          dataParts.push(slice)
+        } catch (e) {
+          console.error(`Error fetching chunk ${chunk.index}:`, e)
+          return json({ error: "Failed to fetch file data" }, 500)
+        }
+      }
+
+      // 7. Combine parts
+      const totalLength = dataParts.reduce((sum, p) => sum + p.length, 0)
+      const result = new Uint8Array(totalLength)
+      let pos = 0
+      for (const part of dataParts) {
+        result.set(part, pos)
+        pos += part.length
+      }
+
+      // 8. Determine content type from filename
+      const ext = file.name.split('.').pop()?.toLowerCase() || ''
+      const mimeTypes: Record<string, string> = {
+        mp4: 'video/mp4',
+        webm: 'video/webm',
+        mkv: 'video/x-matroska',
+        avi: 'video/x-msvideo',
+        mov: 'video/quicktime',
+        mp3: 'audio/mpeg',
+        wav: 'audio/wav',
+        ogg: 'audio/ogg',
+        flac: 'audio/flac',
+        m4a: 'audio/mp4',
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        gif: 'image/gif',
+        webp: 'image/webp',
+        pdf: 'application/pdf',
+      }
+      const contentType = mimeTypes[ext] || 'application/octet-stream'
+
+      // 9. Return partial content (206) or full content (200)
+      const isRangeRequest = rangeHeader !== null
+      const status = isRangeRequest ? 206 : 200
+
+      const headers: Record<string, string> = {
+        ...corsHeaders,
+        "Content-Type": contentType,
+        "Content-Length": String(contentLength),
+        "Accept-Ranges": "bytes",
+      }
+
+      if (isRangeRequest) {
+        headers["Content-Range"] = `bytes ${rangeStart}-${rangeEnd}/${totalSize}`
+      }
+
+      return new Response(result, { status, headers })
+    }
+
     // GET /files/:userId
     const filesMatch = path.match(/^\/files\/([^\/]+)$/)
     if (filesMatch && method === "GET") {
