@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
-import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, Loader } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, Loader, RotateCcw } from 'lucide-react'
 import type { WyvernFile, ChunkInfo } from '../../lib/types'
 import { isImageFile, isVideoFile, isAudioFile, getMimeType } from '../../lib/thumbnails'
 import { useFileStore } from '../../stores/fileStore'
+import { useAudioPlayer } from '../../stores/audioPlayerStore'
 import { decryptChunk } from '../../lib/encryption'
 import { restoreEncryptionContext } from '../../lib/encryption'
 import './PreviewModal.css'
@@ -17,18 +18,68 @@ interface PreviewModalProps {
 
 export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: PreviewModalProps) {
   const [zoom, setZoom] = useState(1)
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadedChunks, setLoadedChunks] = useState(0)
+  const [totalChunks, setTotalChunks] = useState(0)
+  const imageRef = useRef<HTMLImageElement>(null)
   const { downloadFile, encryptionPassword } = useFileStore()
 
   // Reset state when file changes
   useEffect(() => {
     setZoom(1)
+    setPosition({ x: 0, y: 0 })
     setPreviewUrl(null)
     setError(null)
     setIsLoading(false)
+    setLoadedChunks(0)
+    setTotalChunks(0)
   }, [file?.id])
+
+  // Reset zoom and position
+  const resetView = useCallback(() => {
+    setZoom(1)
+    setPosition({ x: 0, y: 0 })
+  }, [])
+
+  // Handle mouse drag for panning
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (zoom <= 1) return // Only pan when zoomed in
+    e.preventDefault()
+    setIsDragging(true)
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y })
+  }, [zoom, position])
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging) return
+    const newX = e.clientX - dragStart.x
+    const newY = e.clientY - dragStart.y
+    setPosition({ x: newX, y: newY })
+  }, [isDragging, dragStart])
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+
+  // Handle wheel zoom (centered on cursor)
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault()
+    const delta = e.deltaY > 0 ? -0.1 : 0.1
+    setZoom(z => Math.min(Math.max(z + delta, 0.5), 5))
+  }, [])
+
+  // Double-click to reset or fit
+  const handleDoubleClick = useCallback(() => {
+    if (zoom !== 1 || position.x !== 0 || position.y !== 0) {
+      resetView()
+    } else {
+      setZoom(2) // Zoom in on double-click when at 100%
+    }
+  }, [zoom, position, resetView])
 
   // Load preview when file changes (for images, videos, audio)
   useEffect(() => {
@@ -102,6 +153,22 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
     }
   }, [file?.id, file?.content, file?.encrypted, encryptionPassword])
 
+  // Send audio to persistent player when preview URL is ready
+  const { playTrack } = useAudioPlayer()
+  useEffect(() => {
+    if (!file || !previewUrl) return
+    if (!isAudioFile(file.name)) return
+
+    // Send to persistent audio player
+    playTrack({
+      id: String(file.id),
+      name: file.name,
+      file: file,
+      blobUrl: previewUrl
+    })
+  }, [file?.id, previewUrl, playTrack])
+
+
   // Keyboard navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     switch (e.key) {
@@ -159,12 +226,15 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
           <div className="preview-actions">
             {isImage && previewUrl && (
               <>
-                <button onClick={() => setZoom(z => Math.max(z - 0.25, 0.5))} title="Zoom out">
+                <button onClick={() => setZoom(z => Math.max(z - 0.25, 0.5))} title="Zoom out (-)">
                   <ZoomOut size={20} />
                 </button>
                 <span className="zoom-level">{Math.round(zoom * 100)}%</span>
-                <button onClick={() => setZoom(z => Math.min(z + 0.25, 3))} title="Zoom in">
+                <button onClick={() => setZoom(z => Math.min(z + 0.25, 5))} title="Zoom in (+)">
                   <ZoomIn size={20} />
+                </button>
+                <button onClick={resetView} title="Reset view" className={zoom !== 1 || position.x !== 0 || position.y !== 0 ? 'active' : ''}>
+                  <RotateCcw size={18} />
                 </button>
               </>
             )}
@@ -198,11 +268,18 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
         )}
 
         {/* Preview content */}
-        <div className="preview-body">
+        <div
+          className={`preview-body ${isDragging ? 'dragging' : ''} ${isImage && zoom > 1 ? 'pannable' : ''}`}
+          onMouseDown={isImage ? handleMouseDown : undefined}
+          onMouseMove={isImage ? handleMouseMove : undefined}
+          onMouseUp={isImage ? handleMouseUp : undefined}
+          onMouseLeave={isImage ? handleMouseUp : undefined}
+          onWheel={isImage ? handleWheel : undefined}
+        >
           {isLoading ? (
             <div className="preview-loading">
               <Loader size={32} className="spinner" />
-              <p>Loading preview...</p>
+              <p>Loading preview{totalChunks > 0 ? ` (${loadedChunks}/${totalChunks} chunks)` : ''}...</p>
             </div>
           ) : error ? (
             <div className="preview-message error">
@@ -214,10 +291,16 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
             </div>
           ) : isImage && previewUrl ? (
             <img
+              ref={imageRef}
               src={previewUrl}
               alt={file.name}
-              style={{ transform: `scale(${zoom})` }}
+              style={{
+                transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+                cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+              }}
               className="preview-image"
+              onDoubleClick={handleDoubleClick}
+              draggable={false}
             />
           ) : isImage ? (
             <div className="preview-message">
@@ -242,14 +325,10 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
             <div className="audio-player-container">
               <div className="audio-icon">🎵</div>
               <p className="audio-filename">{file.name}</p>
-              <audio
-                src={previewUrl}
-                controls
-                autoPlay
-                className="preview-audio"
-              >
-                Your browser does not support audio playback.
-              </audio>
+              <p className="audio-hint">Playing in persistent player below</p>
+              <button className="download-btn" onClick={onClose}>
+                Close Preview
+              </button>
             </div>
           ) : isAudio ? (
             <div className="preview-message">

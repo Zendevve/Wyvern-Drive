@@ -8,6 +8,7 @@ import { RenameModal } from './components/files/RenameModal'
 import { MoveModal } from './components/files/MoveModal'
 import { VersionHistoryModal } from './components/files/VersionHistoryModal'
 import { ProgressToasts } from './components/ui/ProgressToasts'
+import { AudioPlayer } from './components/AudioPlayer'
 import { useFileStore } from './stores/fileStore'
 import './styles/App.css'
 
@@ -53,6 +54,7 @@ function AuthenticatedApp() {
       <MoveModal />
       <VersionHistoryModal />
       <ProgressToasts />
+      <AudioPlayer />
     </div>
   )
 }
