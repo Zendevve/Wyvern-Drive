@@ -1,0 +1,18 @@
+# Netlify Build Configuration
+
+[build]
+  base = "wyvern-web"
+  command = "npm run build"
+  publish = "dist"
+
+# SPA routing - redirect all routes to index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Environment variables will be set in Netlify dashboard
+# VITE_API_URL = https://lrqnovltirjsoqfvtxxu.supabase.co/functions/v1/api
+
+[build.environment]
+  NODE_VERSION = "20"
