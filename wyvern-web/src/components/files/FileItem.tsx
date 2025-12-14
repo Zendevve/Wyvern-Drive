@@ -8,7 +8,7 @@ import { getFileIconName, formatSize, formatDate } from '../../lib/utils'
 import { isPreviewable, isImageFile, isVideoFile, getMimeType } from '../../lib/thumbnails'
 import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
-import { Loader, Folder, File, FileText, Image, Music, Video, Archive, Code, Cog } from 'lucide-react'
+import { Loader, Folder, File, FileText, Image, Music, Video, Archive, Code, Cog, AlertTriangle } from 'lucide-react'
 import './FileItem.css'
 
 // Module-level icon mapping (prevents recreation on each render)
@@ -26,6 +26,7 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
   const [isDragOver, setIsDragOver] = useState(false)
   const [thumbnail, setThumbnail] = useState<string | null>(null)
   const [isLoadingThumb, setIsLoadingThumb] = useState(false)
+  const [isUnavailable, setIsUnavailable] = useState(false) // Health check state
   const thumbnailRef = useRef<string | null>(null) // For reliable cleanup
 
   // Optimized selectors - only re-render when THIS file's selection changes
@@ -104,6 +105,11 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
 
       } catch (err) {
         console.error('Thumbnail load failed:', err)
+        // Check if this is a 404/unavailable error
+        const errorMsg = String(err)
+        if (errorMsg.includes('404') || errorMsg.includes('not found') || errorMsg.includes('timeout')) {
+          setIsUnavailable(true)
+        }
       } finally {
         setIsLoadingThumb(false)
       }
@@ -283,6 +289,13 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
         )}
 
         <span className="file-name">{file.name}</span>
+
+        {/* Unavailable warning badge */}
+        {isUnavailable && (
+          <span className="file-unavailable-badge" title="File unavailable - Discord content may have been deleted">
+            <AlertTriangle size={14} />
+          </span>
+        )}
 
         {viewMode === 'list' && !isFolder && (
           <>

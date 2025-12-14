@@ -153,3 +153,42 @@
   align-items: center;
   justify-content: space-between;
 }
+
+/* Unavailable file warning badge */
+.file-unavailable-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: rgba(245, 158, 11, 0.2);
+  border-radius: 50%;
+  color: #f59e0b;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  animation: pulse 2s infinite;
+}
+
+.file-item.list .file-unavailable-badge {
+  position: static;
+  margin-left: 8px;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Dim unavailable files slightly */
+.file-item:has(.file-unavailable-badge) .file-thumbnail,
+.file-item:has(.file-unavailable-badge) .file-icon {
+  opacity: 0.5;
+}
