@@ -69,13 +69,16 @@
   top: calc(100% + 8px);
   left: 0;
   right: 0;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  /* Solid opaque background - not transparent */
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
   max-height: 400px;
   overflow-y: auto;
-  z-index: 1000;
+  z-index: 9999;
+  backdrop-filter: none;
+  /* Disable any blur that could make it transparent */
 }
 
 .search-results-header {
@@ -84,8 +87,9 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--foreground-muted);
-  border-bottom: 1px solid var(--border-default);
+  color: rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1a1a2e;
 }
 
 .search-result-item {
@@ -99,11 +103,11 @@
 
 .search-result-item:hover,
 .search-result-item.selected {
-  background: var(--surface-hover);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .search-result-item.selected {
-  background: var(--accent-bg);
+  background: rgba(94, 106, 210, 0.2);
 }
 
 .result-icon {
@@ -112,9 +116,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface);
-  border-radius: var(--radius-md);
-  color: var(--foreground-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  flex-shrink: 0;
 }
 
 .result-info {
@@ -161,15 +166,17 @@
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  border-top: 1px solid var(--border-default);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 11px;
-  color: var(--foreground-muted);
+  color: rgba(255, 255, 255, 0.4);
+  background: #1a1a2e;
 }
 
 .keyboard-hint kbd {
-  background: var(--surface);
-  border: 1px solid var(--border-default);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 10px;
+  font-family: inherit;
 }
