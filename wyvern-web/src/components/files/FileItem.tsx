@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import type { WyvernFile, WyvernFolder, ChunkInfo, LegacyChunkInfo } from '../../lib/types'
 import { normalizeChunk } from '../../lib/types'
 import { useFileStore } from '../../stores/fileStore'
@@ -10,31 +10,36 @@ import { decompressData } from '../../lib/compression'
 import { Loader, Folder, File, FileText, Image, Music, Video, Archive, Code, Cog } from 'lucide-react'
 import './FileItem.css'
 
+// Module-level icon mapping (prevents recreation on each render)
+const ICON_MAP: Record<string, typeof File> = {
+  Folder, File, FileText, Image, Music, Video, Archive, Code, Cog
+}
+
 interface FileItemProps {
   file: WyvernFile | WyvernFolder
   viewMode: 'grid' | 'list'
 }
 
-export function FileItem({ file, viewMode }: FileItemProps) {
+function FileItemComponent({ file, viewMode }: FileItemProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const [thumbnail, setThumbnail] = useState<string | null>(null)
   const [isLoadingThumb, setIsLoadingThumb] = useState(false)
+  const thumbnailRef = useRef<string | null>(null) // For reliable cleanup
 
-  const { encryptionPassword, selectedIds, toggleSelection, lastSelectedId, setRangeSelection } = useFileStore()
+  // Optimized selectors - only re-render when THIS file's selection changes
+  const isSelected = useFileStore(state => state.selectedIds.has(String(file.id)))
+  const encryptionPassword = useFileStore(state => state.encryptionPassword)
+  const toggleSelection = useFileStore(state => state.toggleSelection)
+  const lastSelectedId = useFileStore(state => state.lastSelectedId)
+  const setRangeSelection = useFileStore(state => state.setRangeSelection)
   const { moveFile } = useFileStore.getState()
-
-  const isSelected = selectedIds.has(String(file.id))
 
   const isFolder = file.type === 'directory'
   const isImage = !isFolder && isImageFile(file.name)
   const isVideo = !isFolder && isVideoFile(file.name)
   const iconName = isFolder ? 'Folder' : getFileIconName(file.name)
-
-  // Icon component mapping
-  const IconComponent = {
-    Folder, File, FileText, Image, Music, Video, Archive, Code, Cog
-  }[iconName] || File
+  const IconComponent = ICON_MAP[iconName] || File
 
   // Load thumbnail for images and videos in grid view
   useEffect(() => {
@@ -83,6 +88,7 @@ export function FileItem({ file, viewMode }: FileItemProps) {
         if (isImage) {
           // Direct display for images
           const url = URL.createObjectURL(blob)
+          thumbnailRef.current = url
           setThumbnail(url)
         } else if (isVideo) {
           // Extract first frame for videos
@@ -90,6 +96,7 @@ export function FileItem({ file, viewMode }: FileItemProps) {
           const thumbUrl = await extractVideoFrame(videoUrl)
           URL.revokeObjectURL(videoUrl)
           if (thumbUrl) {
+            thumbnailRef.current = thumbUrl
             setThumbnail(thumbUrl)
           }
         }
@@ -103,9 +110,11 @@ export function FileItem({ file, viewMode }: FileItemProps) {
 
     loadThumbnail()
 
+    // Cleanup using ref for reliable URL revocation
     return () => {
-      if (thumbnail) {
-        URL.revokeObjectURL(thumbnail)
+      if (thumbnailRef.current) {
+        URL.revokeObjectURL(thumbnailRef.current)
+        thumbnailRef.current = null
       }
     }
   }, [file.id, viewMode, isImage, encryptionPassword])
@@ -292,6 +301,9 @@ export function FileItem({ file, viewMode }: FileItemProps) {
     </>
   )
 }
+
+// Memoized export - prevent re-renders when parent updates but props haven't changed
+export const FileItem = memo(FileItemComponent)
 
 // Fetch via extension to bypass CORS
 async function fetchViaExtension(url: string): Promise<ArrayBuffer> {

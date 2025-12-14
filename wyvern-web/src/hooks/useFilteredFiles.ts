@@ -83,17 +83,6 @@ function sortFiles(files: FileItem[], sortBy: SortBy, sortOrder: SortOrder): Fil
 }
 
 /**
- * Search files using Fuse.js
- */
-function searchFiles(files: FileItem[], query: string): FileItem[] {
-  if (!query.trim()) return files
-
-  const fuse = new Fuse(files, FUSE_OPTIONS)
-  const results = fuse.search(query)
-  return results.map(r => r.item)
-}
-
-/**
  * Hook: Get filtered, sorted, and searched files
  */
 export function useFilteredFiles() {
@@ -105,26 +94,35 @@ export function useFilteredFiles() {
     filterType
   } = useFileStore()
 
+  // Memoize file list conversion
+  const fileList = useMemo(() => Object.values(files), [files])
+
+  // Memoize Fuse index separately - only rebuild when files change
+  const fuseIndex = useMemo(() => {
+    return new Fuse(fileList, FUSE_OPTIONS)
+  }, [fileList])
+
   const filteredFiles = useMemo(() => {
-    let result = Object.values(files)
+    let result = fileList
 
     // 1. Filter by file type
     result = filterByType(result, filterType)
 
     // 2. Search (if query exists)
     if (searchQuery.trim()) {
-      result = searchFiles(result, searchQuery)
+      const searchResults = fuseIndex.search(searchQuery)
+      result = searchResults.map(r => r.item).filter(item => result.includes(item))
     } else {
       // 3. Sort (only if not searching - search returns by relevance)
       result = sortFiles(result, sortBy, sortOrder)
     }
 
     return result
-  }, [files, searchQuery, sortBy, sortOrder, filterType])
+  }, [fileList, searchQuery, sortBy, sortOrder, filterType, fuseIndex])
 
   return {
     files: filteredFiles,
-    totalCount: Object.values(files).length,
+    totalCount: fileList.length,
     filteredCount: filteredFiles.length,
     hasFilter: filterType !== 'all' || searchQuery.trim().length > 0
   }
