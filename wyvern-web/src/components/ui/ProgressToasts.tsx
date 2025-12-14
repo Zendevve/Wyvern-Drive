@@ -2,19 +2,6 @@ import { useRef, useEffect } from 'react'
 import { useFileStore, type UploadInfo } from '../../stores/fileStore'
 import './ProgressToasts.css'
 
-// Rolling window for speed calculation (stores last N samples)
-interface SpeedSample {
-  timestamp: number
-  bytes: number
-}
-
-// Map to store speed samples per transfer
-const speedSamples = new Map<string, SpeedSample[]>()
-
-// Config
-const SAMPLE_WINDOW_MS = 5000 // Use last 5 seconds of data
-const MAX_SAMPLES = 50 // Max samples to keep per transfer
-
 // Format bytes to human readable size
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -46,36 +33,67 @@ function formatPercent(info: UploadInfo): string {
   return `${Math.round(percent)}%`
 }
 
-// Add a speed sample and calculate current speed using rolling window
+// Store for EMA-smoothed speeds (smoother than raw rolling window)
+const smoothedSpeeds = new Map<string, number>()
+const lastUpdates = new Map<string, { timestamp: number; bytes: number }>()
+
+// EMA smoothing factor (lower = smoother/slower to respond, higher = more reactive)
+// 0.15 gives a nice balance - responds to changes but doesn't spike
+const EMA_ALPHA = 0.15
+
+// Minimum time between speed updates (prevents micro-bursts from spiking)
+const MIN_UPDATE_INTERVAL_MS = 500
+
+// Add a speed sample and calculate current speed using EMA smoothing
 function updateSpeedSample(id: string, loaded: number): number {
   const now = Date.now()
-  let samples = speedSamples.get(id) || []
+  const lastUpdate = lastUpdates.get(id)
+  let currentSmoothed = smoothedSpeeds.get(id) || 0
 
-  // Add new sample
-  samples.push({ timestamp: now, bytes: loaded })
-
-  // Remove samples older than window
-  const cutoff = now - SAMPLE_WINDOW_MS
-  samples = samples.filter(s => s.timestamp >= cutoff)
-
-  // Keep only latest MAX_SAMPLES
-  if (samples.length > MAX_SAMPLES) {
-    samples = samples.slice(-MAX_SAMPLES)
+  if (!lastUpdate) {
+    // First sample - just store it
+    lastUpdates.set(id, { timestamp: now, bytes: loaded })
+    return 0
   }
 
-  speedSamples.set(id, samples)
+  const timeDiff = now - lastUpdate.timestamp
 
-  // Calculate speed from samples
-  if (samples.length < 2) return 0
+  // Don't update too frequently (prevents burst spikes)
+  if (timeDiff < MIN_UPDATE_INTERVAL_MS) {
+    return currentSmoothed
+  }
 
-  const oldest = samples[0]
-  const newest = samples[samples.length - 1]
-  const timeDiff = (newest.timestamp - oldest.timestamp) / 1000 // seconds
-  const bytesDiff = newest.bytes - oldest.bytes
+  const bytesDiff = loaded - lastUpdate.bytes
+  const instantSpeed = bytesDiff / (timeDiff / 1000) // bytes per second
 
-  if (timeDiff < 0.1) return 0 // Need at least 100ms of data
+  // Apply EMA smoothing
+  // newEMA = alpha * newValue + (1 - alpha) * oldEMA
+  if (currentSmoothed === 0) {
+    // First real speed calculation
+    currentSmoothed = instantSpeed
+  } else {
+    currentSmoothed = EMA_ALPHA * instantSpeed + (1 - EMA_ALPHA) * currentSmoothed
+  }
 
-  return bytesDiff / timeDiff // bytes per second
+  // Sanity check: cap at reasonable max (1 Gbps = 125 MB/s)
+  const MAX_REASONABLE_SPEED = 125 * 1024 * 1024 // 125 MB/s
+  currentSmoothed = Math.min(currentSmoothed, MAX_REASONABLE_SPEED)
+
+  // Store updated values
+  lastUpdates.set(id, { timestamp: now, bytes: loaded })
+  smoothedSpeeds.set(id, currentSmoothed)
+
+  return currentSmoothed
+}
+
+// Cleanup function for completed transfers
+function cleanupSpeedData(activeIds: Set<string>) {
+  for (const id of smoothedSpeeds.keys()) {
+    if (!activeIds.has(id)) {
+      smoothedSpeeds.delete(id)
+      lastUpdates.delete(id)
+    }
+  }
 }
 
 // Get current speed from samples
@@ -125,14 +143,7 @@ function truncateName(name: string, maxLen = 25): string {
   return truncatedBase + '...' + ext
 }
 
-// Cleanup speed samples for completed transfers
-function cleanupSamples(activeIds: Set<string>) {
-  for (const id of speedSamples.keys()) {
-    if (!activeIds.has(id)) {
-      speedSamples.delete(id)
-    }
-  }
-}
+
 
 export function ProgressToasts() {
   const uploadProgress = useFileStore(state => state.uploadProgress)
@@ -156,12 +167,13 @@ export function ProgressToasts() {
 
   if (uploadProgress.size === 0) {
     // Cleanup all samples when no active transfers
-    speedSamples.clear()
+    smoothedSpeeds.clear()
+    lastUpdates.clear()
     return null
   }
 
   // Cleanup samples for completed transfers
-  cleanupSamples(new Set(uploadProgress.keys()))
+  cleanupSpeedData(new Set(uploadProgress.keys()))
 
   // Convert map to array for rendering
   const items = Array.from(uploadProgress.entries()).map(([id, info]) => {
