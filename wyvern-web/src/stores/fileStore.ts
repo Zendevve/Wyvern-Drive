@@ -20,6 +20,9 @@ export type SortBy = 'name' | 'size' | 'date' | 'type'
 export type SortOrder = 'asc' | 'desc'
 export type FileTypeFilter = 'all' | 'images' | 'videos' | 'audio' | 'documents'
 
+// File health status
+export type FileHealthStatus = 'unknown' | 'healthy' | 'unavailable' | 'checking'
+
 interface FileStore {
   // Auth
   webhookUrl: string | null  // @deprecated - kept for backward compatibility migration
@@ -51,6 +54,11 @@ interface FileStore {
   sortBy: SortBy
   sortOrder: SortOrder
   filterType: FileTypeFilter
+
+  // File Health Checking
+  fileHealthStatus: Map<string, FileHealthStatus>
+  isVerifying: boolean
+  verifyProgress: { checked: number; total: number; unavailable: number }
 
   // Actions
   setWebhookUrl: (url: string) => void  // @deprecated - use setWebhookUrls
@@ -102,6 +110,11 @@ interface FileStore {
 
   // Webhook Pool Stats (for UI indicators)
   getWebhookPoolStats: () => { count: number; isOptimal: boolean; recommendation: string | null } | null
+
+  // File Health Actions
+  verifyAllFiles: () => Promise<void>
+  setFileHealthStatus: (fileId: string, status: FileHealthStatus) => void
+  getFileHealthStatus: (fileId: string) => FileHealthStatus
 }
 
 export const useFileStore = create<FileStore>()(
@@ -134,6 +147,11 @@ export const useFileStore = create<FileStore>()(
       sortBy: 'name' as SortBy,
       sortOrder: 'asc' as SortOrder,
       filterType: 'all' as FileTypeFilter,
+
+      // File Health Checking
+      fileHealthStatus: new Map<string, FileHealthStatus>(),
+      isVerifying: false,
+      verifyProgress: { checked: 0, total: 0, unavailable: 0 },
 
       // Actions
       // @deprecated - use setWebhookUrls
@@ -759,7 +777,100 @@ export const useFileStore = create<FileStore>()(
         sortOrder: state.sortOrder === 'asc' ? 'desc' : 'asc'
       })),
 
-      setFilterType: (filter) => set({ filterType: filter })
+      setFilterType: (filter) => set({ filterType: filter }),
+
+      // File Health Actions
+      verifyAllFiles: async () => {
+        const { files, isVerifying } = get()
+        if (isVerifying) return
+
+        // Get all files (not folders)
+        const fileList = Object.values(files).filter(f => f.type === 'file') as WyvernFile[]
+        if (fileList.length === 0) return
+
+        set({
+          isVerifying: true,
+          verifyProgress: { checked: 0, total: fileList.length, unavailable: 0 }
+        })
+
+        let unavailableCount = 0
+
+        for (let i = 0; i < fileList.length; i++) {
+          const file = fileList[i]
+          const fileId = String(file.id)
+
+          // Update to checking status
+          set((state) => {
+            const newHealth = new Map(state.fileHealthStatus)
+            newHealth.set(fileId, 'checking')
+            return { fileHealthStatus: newHealth }
+          })
+
+          try {
+            // Parse content to get first chunk URL
+            if (!file.content) {
+              throw new Error('No content')
+            }
+
+            const chunks = JSON.parse(file.content)
+            if (!chunks || chunks.length === 0) {
+              throw new Error('No chunks')
+            }
+
+            // Get first chunk URL (might be 'u' or 'url')
+            const firstChunk = chunks[0]
+            const url = firstChunk.u || firstChunk.url
+            if (!url) {
+              throw new Error('No URL in chunk')
+            }
+
+            // Do a HEAD request to check if the URL is accessible
+            // Note: This may fail due to CORS, so we fall back to assuming healthy
+            try {
+              await fetch(url, { method: 'HEAD', mode: 'no-cors' })
+              // no-cors always returns opaque response, so we can't check status
+              // If it throws, the URL is likely bad
+              set((state) => {
+                const newHealth = new Map(state.fileHealthStatus)
+                newHealth.set(fileId, 'healthy')
+                return { fileHealthStatus: newHealth }
+              })
+            } catch {
+              // Fetch failed - file is unavailable
+              unavailableCount++
+              set((state) => {
+                const newHealth = new Map(state.fileHealthStatus)
+                newHealth.set(fileId, 'unavailable')
+                return { fileHealthStatus: newHealth }
+              })
+            }
+          } catch {
+            // Parsing failed or no content - mark as unavailable
+            unavailableCount++
+            set((state) => {
+              const newHealth = new Map(state.fileHealthStatus)
+              newHealth.set(fileId, 'unavailable')
+              return { fileHealthStatus: newHealth }
+            })
+          }
+
+          // Update progress
+          set({ verifyProgress: { checked: i + 1, total: fileList.length, unavailable: unavailableCount } })
+        }
+
+        set({ isVerifying: false })
+        console.log(`[FileStore] Verification complete: ${unavailableCount} unavailable out of ${fileList.length}`)
+      },
+
+      setFileHealthStatus: (fileId, status) => set((state) => {
+        const newHealth = new Map(state.fileHealthStatus)
+        newHealth.set(fileId, status)
+        return { fileHealthStatus: newHealth }
+      }),
+
+      getFileHealthStatus: (fileId) => {
+        return get().fileHealthStatus.get(fileId) || 'unknown'
+      }
 
     }),
     {

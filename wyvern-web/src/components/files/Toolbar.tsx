@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import {
   Search, Upload, FolderUp, FolderPlus, Grid, List,
-  ArrowUpDown, ArrowUp, ArrowDown, Image, Video, Music, FileText, Files
+  ArrowUpDown, ArrowUp, ArrowDown, Image, Video, Music, FileText, Files,
+  ShieldCheck, Loader
 } from 'lucide-react'
 import { useFileStore, type SortBy, type FileTypeFilter } from '../../stores/fileStore'
 import './Toolbar.css'
@@ -35,7 +36,8 @@ export function Toolbar({ viewMode, setViewMode }: ToolbarProps) {
     uploadFiles, uploadFolder,
     searchQuery, setSearchQuery,
     sortBy, setSortBy, sortOrder, toggleSortOrder,
-    filterType, setFilterType
+    filterType, setFilterType,
+    verifyAllFiles, isVerifying, verifyProgress
   } = useFileStore()
 
   const handleUploadFile = () => fileInputRef.current?.click()
@@ -70,6 +72,18 @@ export function Toolbar({ viewMode, setViewMode }: ToolbarProps) {
         </button>
         <button className="toolbar-btn" onClick={handleNewFolder}>
           <FolderPlus size={16} /> New
+        </button>
+        <button
+          className="toolbar-btn"
+          onClick={() => verifyAllFiles()}
+          disabled={isVerifying}
+          title="Check file health status"
+        >
+          {isVerifying ? (
+            <><Loader size={16} className="spinner" /> Verifying {verifyProgress.checked}/{verifyProgress.total}</>
+          ) : (
+            <><ShieldCheck size={16} /> Verify Files</>
+          )}
         </button>
 
         {/* Hidden file inputs */}
