@@ -5,18 +5,27 @@ import { FileGrid } from './files/FileGrid'
 import { Breadcrumb } from './files/Breadcrumb'
 import { ShareModal } from './files/ShareModal'
 import { PreviewModal } from './files/PreviewModal'
+import { InfoSidebar } from './files/InfoSidebar'
 import { SettingsModal } from './SettingsModal'
-import { LayoutGrid, List as ListIcon, Filter, FolderPlus, UploadCloud } from 'lucide-react'
+import { LayoutGrid, List as ListIcon, Filter, FolderPlus, UploadCloud, Info } from 'lucide-react'
 import { isPreviewable } from '../lib/thumbnails'
-import type { WyvernFile } from '../lib/types'
+import type { WyvernFile, WyvernFolder } from '../lib/types'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import './FileManager.css'
 
 export function FileManager() {
   useKeyboardShortcuts() // Enable global keyboard shortcuts
-  const { files, isLoading, uploadFiles, uploadFolder, previewFileId, setPreviewFile, activeModal, activeFileId, setActiveModal } = useFileStore()
+  const { files, isLoading, uploadFiles, uploadFolder, previewFileId, setPreviewFile, activeModal, activeFileId, setActiveModal, selectedIds } = useFileStore()
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [showInfoSidebar, setShowInfoSidebar] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Get selected file for info sidebar (show first selected)
+  const selectedFile = useMemo(() => {
+    if (selectedIds.size === 0) return null
+    const firstId = Array.from(selectedIds)[0]
+    return Object.values(files).find(f => String(f.id) === firstId) as WyvernFile | WyvernFolder | null
+  }, [selectedIds, files])
 
   // Handle Ctrl+V paste upload
   useEffect(() => {
@@ -149,6 +158,14 @@ export function FileManager() {
             <Filter size={14} />
             <span>Filter</span>
           </button>
+          <button
+            className={`filter-btn ${showInfoSidebar ? 'active' : ''}`}
+            onClick={() => setShowInfoSidebar(!showInfoSidebar)}
+            title="Toggle Info Panel"
+          >
+            <Info size={14} />
+            <span>Info</span>
+          </button>
         </div>
       </div>
 
@@ -174,6 +191,14 @@ export function FileManager() {
           </div>
         )}
       </FileDropZone>
+
+      {/* Info Sidebar */}
+      {showInfoSidebar && (
+        <InfoSidebar
+          file={selectedFile}
+          onClose={() => setShowInfoSidebar(false)}
+        />
+      )}
 
       {/* Preview Modal */}
       <PreviewModal
