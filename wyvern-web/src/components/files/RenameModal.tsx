@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useFileStore } from '../../stores/fileStore'
+import { useFocusTrap } from '../../hooks/useFocusTrap'
 import './RenameModal.css'
 
 export function RenameModal() {
@@ -8,6 +9,7 @@ export function RenameModal() {
   const [error, setError] = useState<string | null>(null)
 
   const isOpen = activeModal === 'rename' && activeFileId
+  const focusTrapRef = useFocusTrap(!!isOpen, () => setActiveModal(null))
 
   useEffect(() => {
     if (isOpen && activeFileId) {
@@ -32,8 +34,15 @@ export function RenameModal() {
 
   return (
     <div className="modal-overlay" onClick={() => setActiveModal(null)}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <h3>Rename</h3>
+      <div
+        className="modal-content"
+        onClick={e => e.stopPropagation()}
+        ref={focusTrapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rename-modal-title"
+      >
+        <h3 id="rename-modal-title">Rename</h3>
         <form onSubmit={handleSubmit}>
           <input
             type="text"

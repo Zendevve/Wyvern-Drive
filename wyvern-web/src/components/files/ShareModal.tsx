@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Copy, Check, Link2, Clock, Lock, X } from 'lucide-react'
 import { useFileStore } from '../../stores/fileStore'
+import { useFocusTrap } from '../../hooks/useFocusTrap'
 import type { WyvernFile } from '../../lib/types'
 import './ShareModal.css'
 
@@ -17,6 +18,9 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
   const [isCreating, setIsCreating] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Focus trap for accessibility
+  const focusTrapRef = useFocusTrap(!!file, onClose)
 
   useEffect(() => {
     // Reset state when file changes
@@ -60,9 +64,16 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="share-modal" onClick={e => e.stopPropagation()}>
+      <div
+        className="share-modal"
+        onClick={e => e.stopPropagation()}
+        ref={focusTrapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-modal-title"
+      >
         <div className="modal-header">
-          <h3><Link2 size={18} /> Share File</h3>
+          <h3 id="share-modal-title"><Link2 size={18} /> Share File</h3>
           <button className="close-btn" onClick={onClose}>
             <X size={18} />
           </button>

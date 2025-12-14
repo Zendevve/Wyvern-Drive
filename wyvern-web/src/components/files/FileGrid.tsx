@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import { FileItem } from './FileItem'
 import { VirtualFileGrid } from './VirtualFileGrid'
@@ -123,13 +123,58 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
     }
   }
 
-  // Calculate box style
   const boxStyle = selectionBox ? {
     left: Math.min(selectionBox.startX, selectionBox.currentX),
     top: Math.min(selectionBox.startY, selectionBox.currentY),
     width: Math.abs(selectionBox.currentX - selectionBox.startX),
     height: Math.abs(selectionBox.currentY - selectionBox.startY)
   } : {}
+
+  // Arrow key navigation between file items
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
+
+    e.preventDefault()
+    const fileItems = containerRef.current?.querySelectorAll('.file-item') as NodeListOf<HTMLElement>
+    if (!fileItems || fileItems.length === 0) return
+
+    // Find currently focused item
+    const currentIndex = Array.from(fileItems).findIndex(el => el === document.activeElement)
+    let newIndex = currentIndex
+
+    // Grid has ~6 items per row (approximate), list is 1
+    const itemsPerRow = viewMode === 'grid' ? 6 : 1
+
+    switch (e.key) {
+      case 'ArrowRight':
+        newIndex = Math.min(currentIndex + 1, fileItems.length - 1)
+        break
+      case 'ArrowLeft':
+        newIndex = Math.max(currentIndex - 1, 0)
+        break
+      case 'ArrowDown':
+        newIndex = Math.min(currentIndex + itemsPerRow, fileItems.length - 1)
+        break
+      case 'ArrowUp':
+        newIndex = Math.max(currentIndex - itemsPerRow, 0)
+        break
+      case 'Home':
+        newIndex = 0
+        break
+      case 'End':
+        newIndex = fileItems.length - 1
+        break
+    }
+
+    if (newIndex !== currentIndex && newIndex >= 0) {
+      fileItems[newIndex].focus()
+      // Also select the item
+      const id = fileItems[newIndex].getAttribute('data-id')
+      if (id) {
+        useFileStore.getState().selectFile(id)
+      }
+    }
+  }, [viewMode])
 
   return (
     <div
@@ -140,6 +185,9 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onClick={handleBackgroundClick}
+      onKeyDown={handleKeyDown}
+      role="grid"
+      aria-label="File list"
     >
       {items.map((item) => (
         <FileItem key={item.id} file={item} viewMode={viewMode} />

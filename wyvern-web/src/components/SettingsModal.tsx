@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Zap, Plus, Minus, Save, Rocket } from 'lucide-react'
 import { useFileStore } from '../stores/fileStore'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import type { ServerBoostLevel } from '../lib/types'
 import './SettingsModal.css'
 
@@ -53,11 +54,20 @@ export function SettingsModal() {
     setActiveModal(null)
   }
 
+  const focusTrapRef = useFocusTrap(true, handleClose)
+
   return (
     <div className="settings-modal-overlay" onClick={handleClose}>
-      <div className="settings-modal" onClick={e => e.stopPropagation()}>
+      <div
+        className="settings-modal"
+        onClick={e => e.stopPropagation()}
+        ref={focusTrapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-modal-title"
+      >
         <div className="settings-header">
-          <h2>Settings</h2>
+          <h2 id="settings-modal-title">Settings</h2>
           <button className="close-btn" onClick={handleClose}>
             <X size={20} />
           </button>

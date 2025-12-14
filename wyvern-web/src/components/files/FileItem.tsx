@@ -155,6 +155,20 @@ export function FileItem({ file, viewMode }: FileItemProps) {
     }
   }
 
+  // Keyboard navigation handler
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Enter = open (same as double-click)
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleDoubleClick()
+    }
+    // Space = toggle selection
+    if (e.key === ' ') {
+      e.preventDefault()
+      toggleSelection(String(file.id))
+    }
+  }
+
   // Drag Source
   const handleDragStart = (e: React.DragEvent) => {
     const { selectedIds } = useFileStore.getState()
@@ -231,6 +245,10 @@ export function FileItem({ file, viewMode }: FileItemProps) {
         className={`file-item ${viewMode} ${isDragOver ? 'drag-over' : ''} ${isImage && thumbnail ? 'has-thumbnail' : ''} ${isSelected ? 'selected' : ''}`}
         draggable="true"
         data-id={file.id}
+        tabIndex={0}
+        role="button"
+        aria-label={`${file.name}, ${isFolder ? 'Folder' : iconName}`}
+        aria-selected={isSelected}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -238,6 +256,7 @@ export function FileItem({ file, viewMode }: FileItemProps) {
         onContextMenu={handleContextMenu}
         onDoubleClick={handleDoubleClick}
         onClick={handleClick}
+        onKeyDown={handleKeyDown}
       >
         {/* Thumbnail or Icon */}
         {viewMode === 'grid' && isImage && thumbnail ? (
