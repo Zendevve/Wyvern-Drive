@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useMemo } from 'react'
+import { useRef, useCallback, useState, useMemo, useEffect } from 'react'
 import { useFileStore } from '../stores/fileStore'
 import { FileDropZone } from './files/FileDropZone'
 import { FileGrid } from './files/FileGrid'
@@ -17,6 +17,45 @@ export function FileManager() {
   const { files, isLoading, uploadFiles, uploadFolder, previewFileId, setPreviewFile, activeModal, activeFileId, setActiveModal } = useFileStore()
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Handle Ctrl+V paste upload
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      // Don't intercept if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      const items = e.clipboardData?.items
+      if (!items) return
+
+      const files: File[] = []
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (item.kind === 'file') {
+          const file = item.getAsFile()
+          if (file) {
+            // Generate a meaningful name for clipboard images
+            const ext = file.type.split('/')[1] || 'png'
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')
+            const namedFile = new File([file], `pasted_${timestamp}.${ext}`, { type: file.type })
+            files.push(namedFile)
+          }
+        }
+      }
+
+      if (files.length > 0) {
+        e.preventDefault()
+        // Create a FileList-like object
+        const dataTransfer = new DataTransfer()
+        files.forEach(f => dataTransfer.items.add(f))
+        await uploadFiles(dataTransfer.files)
+      }
+    }
+
+    document.addEventListener('paste', handlePaste)
+    return () => document.removeEventListener('paste', handlePaste)
+  }, [uploadFiles])
 
   const activeFile = activeFileId
     ? (Object.values(files).find(f => String(f.id) === activeFileId) as WyvernFile)

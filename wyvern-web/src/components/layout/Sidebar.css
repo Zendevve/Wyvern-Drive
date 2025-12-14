@@ -361,3 +361,43 @@
 .webhook-pool-indicator.suboptimal .webhook-recommendation {
   color: rgb(234, 179, 8);
 }
+
+/* Storage Analytics Breakdown */
+.storage-analytics {
+  padding: 12px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  margin-top: 8px;
+  animation: slideDown 150ms ease-out;
+}
+
+.analytics-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.analytics-row:not(:last-child) {
+  border-bottom: 1px solid var(--border-default);
+}
+
+.analytics-label {
+  flex: 1;
+  color: var(--foreground);
+  text-transform: capitalize;
+}
+
+.analytics-value {
+  color: var(--foreground-muted);
+  font-family: var(--font-mono);
+}
+
+.analytics-percent {
+  width: 50px;
+  text-align: right;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}

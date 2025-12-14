@@ -290,6 +290,7 @@ export const useFileStore = create<FileStore>()(
               null, // TODO: Get parent ID from current path mapping
               {
                 encrypt: !!get().encryptionPassword,
+                compress: true,  // Enable gzip compression for compressible files
                 onProgress: (loaded, total) => {
                   set((state) => {
                     const newProgress = new Map(state.uploadProgress)

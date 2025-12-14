@@ -6,6 +6,7 @@ import { ContextMenu } from './ContextMenu'
 import { getFileIconName, formatSize, formatDate } from '../../lib/utils'
 import { isPreviewable, isImageFile, isVideoFile, getMimeType } from '../../lib/thumbnails'
 import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
+import { decompressData } from '../../lib/compression'
 import { Loader, Folder, File, FileText, Image, Music, Video, Archive, Code, Cog } from 'lucide-react'
 import './FileItem.css'
 
@@ -60,15 +61,20 @@ export function FileItem({ file, viewMode }: FileItemProps) {
         // Fetch chunks
         const fileParts: ArrayBuffer[] = []
         for (const chunk of chunks) {
-          const data = await fetchViaExtension(chunk.u)
+          let data = await fetchViaExtension(chunk.u)
 
+          // Decrypt first if needed
           if (wyvernFile.encrypted && decryptionKey && chunk.v) {
             const iv = new Uint8Array(chunk.v)
-            const decrypted = await decryptChunk(data, decryptionKey, iv)
-            fileParts.push(decrypted)
-          } else {
-            fileParts.push(data)
+            data = await decryptChunk(data, decryptionKey, iv)
           }
+
+          // Then decompress if chunk was compressed
+          if (chunk.c) {
+            data = await decompressData(data)
+          }
+
+          fileParts.push(data)
         }
 
         // Create blob URL

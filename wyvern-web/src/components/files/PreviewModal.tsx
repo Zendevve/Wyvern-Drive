@@ -7,6 +7,7 @@ import { useFileStore } from '../../stores/fileStore'
 import { useAudioPlayer } from '../../stores/audioPlayerStore'
 import { decryptChunk } from '../../lib/encryption'
 import { restoreEncryptionContext } from '../../lib/encryption'
+import { decompressData } from '../../lib/compression'
 import './PreviewModal.css'
 
 interface PreviewModalProps {
@@ -120,16 +121,20 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
         const fileParts: ArrayBuffer[] = []
 
         for (const chunk of chunks) {
-          const data = await fetchViaExtension(chunk.u)
+          let data = await fetchViaExtension(chunk.u)
 
-          // Decrypt if needed
+          // Decrypt first if needed
           if (file.encrypted && decryptionKey && chunk.v) {
             const iv = new Uint8Array(chunk.v)
-            const decrypted = await decryptChunk(data, decryptionKey, iv)
-            fileParts.push(decrypted)
-          } else {
-            fileParts.push(data)
+            data = await decryptChunk(data, decryptionKey, iv)
           }
+
+          // Then decompress if chunk was compressed
+          if (chunk.c) {
+            data = await decompressData(data)
+          }
+
+          fileParts.push(data)
         }
 
         // Create blob URL

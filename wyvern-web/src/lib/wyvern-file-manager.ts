@@ -35,6 +35,11 @@ import {
   encryptChunk,
   decryptChunk
 } from './encryption'
+import {
+  compressData,
+  decompressData,
+  isCompressibleFile
+} from './compression'
 import JSZip from 'jszip'
 
 // Supabase Edge Function API endpoint
@@ -338,9 +343,18 @@ export class WyvernFileManager {
       const end = Math.min(start + chunkSize, totalSize)
       const chunkBlob = file.slice(start, end)
       let chunkData = await chunkBlob.arrayBuffer()
+      let isCompressed = false
+
+      // Compress first (if enabled and file is compressible)
+      if (options?.compress && isCompressibleFile(file.name)) {
+        const originalSize = chunkData.byteLength
+        chunkData = await compressData(chunkData)
+        isCompressed = chunkData.byteLength < originalSize
+      }
 
       let iv: Uint8Array | undefined
 
+      // Then encrypt (if enabled)
       if (this.key && options?.encrypt) {
         const encrypted = await encryptChunk(chunkData, this.key)
         chunkData = encrypted.data
@@ -395,7 +409,8 @@ export class WyvernFileManager {
         i: index,              // index
         u: attachmentUrl,      // url
         s: chunkBuffer.byteLength,  // size
-        v: iv ? Array.from(iv) : undefined  // iv (optional)
+        v: iv ? Array.from(iv) : undefined,  // iv (optional)
+        c: isCompressed || undefined  // compressed flag (only if true)
       }
 
       uploadedBytes += chunkBlob.size
@@ -539,11 +554,16 @@ export class WyvernFileManager {
         // Fetch via extension to bypass CORS
         let data = await this.fetchViaExtension(chunk.u)
 
-        // Decrypt if needed
+        // Decrypt first if needed
         if (isEncrypted && decryptionKey) {
           if (!chunk.v) throw new Error('Missing IV for encrypted chunk')
           const iv = new Uint8Array(chunk.v)
           data = await decryptChunk(data, decryptionKey, iv)
+        }
+
+        // Then decompress if chunk was compressed
+        if (chunk.c) {
+          data = await decompressData(data)
         }
 
         fileParts[chunk.i] = data

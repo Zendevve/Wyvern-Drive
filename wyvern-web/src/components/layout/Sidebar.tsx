@@ -12,11 +12,33 @@ import {
   FileUp,
   FolderUp,
   Zap,
-  Settings
+  Settings,
+  Image,
+  Video,
+  Music,
+  FileText,
+  File
 } from 'lucide-react'
 import { useFileStore } from '../../stores/fileStore'
 import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import './Sidebar.css'
+
+// File type categories with colors
+const FILE_CATEGORIES: Record<string, { extensions: string[], color: string, icon: typeof Image }> = {
+  images: { extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic'], color: '#7c3aed', icon: Image },
+  videos: { extensions: ['mp4', 'webm', 'mkv', 'avi', 'mov', 'm4v', 'flv'], color: '#06b6d4', icon: Video },
+  audio: { extensions: ['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'opus'], color: '#10b981', icon: Music },
+  documents: { extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'xls', 'xlsx', 'ppt', 'pptx'], color: '#f59e0b', icon: FileText },
+  other: { extensions: [], color: '#6b7280', icon: File }
+}
+
+function getFileCategory(filename: string): keyof typeof FILE_CATEGORIES {
+  const ext = filename.split('.').pop()?.toLowerCase() || ''
+  for (const [category, config] of Object.entries(FILE_CATEGORIES)) {
+    if (config.extensions.includes(ext)) return category as keyof typeof FILE_CATEGORIES
+  }
+  return 'other'
+}
 
 // Helper to recursively calculate total size of all files
 function calculateTotalSize(items: Record<string, WyvernFile | WyvernFolder>): number {
@@ -31,6 +53,26 @@ function calculateTotalSize(items: Record<string, WyvernFile | WyvernFolder>): n
   return total
 }
 
+// Calculate storage by file type category
+function calculateStorageByCategory(items: Record<string, WyvernFile | WyvernFolder>): Record<string, number> {
+  const result: Record<string, number> = { images: 0, videos: 0, audio: 0, documents: 0, other: 0 }
+
+  function traverse(files: Record<string, WyvernFile | WyvernFolder>) {
+    for (const item of Object.values(files)) {
+      if (item.type === 'file') {
+        const file = item as WyvernFile
+        const category = getFileCategory(file.name)
+        result[category] += file.size || 0
+      } else if (item.type === 'directory' && (item as WyvernFolder).children) {
+        traverse((item as WyvernFolder).children)
+      }
+    }
+  }
+
+  traverse(items)
+  return result
+}
+
 function formatStorageSize(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -42,9 +84,13 @@ function formatStorageSize(bytes: number): string {
 export function Sidebar() {
   const { logout, uploadFiles, uploadFolder, files, getWebhookPoolStats, setActiveModal, isSyncing, isOffline } = useFileStore()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [showAnalytics, setShowAnalytics] = useState(false)
 
   // Calculate total storage used from all files
   const totalStorageUsed = useMemo(() => calculateTotalSize(files), [files])
+
+  // Calculate storage breakdown by file type
+  const storageByCategory = useMemo(() => calculateStorageByCategory(files), [files])
 
   // Get webhook pool stats for performance indicator
   const webhookStats = getWebhookPoolStats()
@@ -154,15 +200,54 @@ export function Sidebar() {
 
       {/* 4. Storage & User Profile */}
       <div className="sidebar-footer">
-        <div className="storage-meter">
+        <div className="storage-meter" onClick={() => setShowAnalytics(!showAnalytics)} style={{ cursor: 'pointer' }}>
           <div className="storage-text">
             <span>Storage</span>
             <span>{formatStorageSize(totalStorageUsed)} / ∞</span>
           </div>
-          <div className="meter-track unlimited">
-            <div className="meter-fill" style={{ width: '100%' }} />
+          {/* Segmented bar showing file type distribution */}
+          <div className="meter-track unlimited" style={{ display: 'flex', overflow: 'hidden' }}>
+            {totalStorageUsed > 0 && Object.entries(storageByCategory).map(([category, size]) => {
+              const percent = (size / totalStorageUsed) * 100
+              if (percent < 1) return null
+              return (
+                <div
+                  key={category}
+                  title={`${category}: ${formatStorageSize(size)}`}
+                  style={{
+                    width: `${percent}%`,
+                    backgroundColor: FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].color,
+                    height: '100%',
+                    transition: 'width 0.3s ease'
+                  }}
+                />
+              )
+            })}
+            {totalStorageUsed === 0 && <div className="meter-fill" style={{ width: '100%' }} />}
           </div>
         </div>
+
+        {/* Analytics Breakdown (collapsible) */}
+        {showAnalytics && totalStorageUsed > 0 && (
+          <div className="storage-analytics">
+            {Object.entries(storageByCategory)
+              .filter(([, size]) => size > 0)
+              .sort((a, b) => b[1] - a[1])
+              .map(([category, size]) => {
+                const CategoryIcon = FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].icon
+                const color = FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].color
+                const percent = ((size / totalStorageUsed) * 100).toFixed(1)
+                return (
+                  <div key={category} className="analytics-row">
+                    <CategoryIcon size={14} style={{ color }} />
+                    <span className="analytics-label">{category}</span>
+                    <span className="analytics-value">{formatStorageSize(size)}</span>
+                    <span className="analytics-percent" style={{ color }}>{percent}%</span>
+                  </div>
+                )
+              })}
+          </div>
+        )}
 
         {/* Connection Status Indicator */}
         <div className={`connection-indicator ${isOffline ? 'offline' : isSyncing ? 'syncing' : 'online'}`}>

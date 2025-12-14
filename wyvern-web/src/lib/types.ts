@@ -39,6 +39,7 @@ export interface FileVersion {
 
 export interface UploadOptions {
   encrypt?: boolean
+  compress?: boolean  // gzip compression before encryption
   password?: string
   onProgress?: (uploaded: number, total: number) => void
 }
@@ -60,6 +61,7 @@ export interface ChunkInfo {
   u: string       // url (Discord CDN)
   s: number       // size in bytes
   v?: number[]    // iv for encrypted chunks (Array for JSON serialization)
+  c?: boolean     // compressed (gzip) - only true if compressed
 }
 
 /**
