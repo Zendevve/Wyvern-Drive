@@ -100,21 +100,28 @@ export interface EncryptedChunk {
 
 /**
  * Discord server boost level - determines max attachment size
- * - none/level1: 8MB limit → 7.5MB chunks
- * - level2: 8MB limit → 7.5MB chunks
- * - level3: 25MB limit → 24MB chunks
+ *
+ * IMPORTANT: These limits apply to WEBHOOK uploads, not channel uploads!
+ * - Channel uploads: Level 2 = 50MB, Level 3 = 100MB
+ * - Webhook uploads: Level 0-2 = 8MB, Level 3 = 25MB
+ *
+ * So only Level 3 actually helps us!
  */
 export type ServerBoostLevel = 'none' | 'level1' | 'level2' | 'level3'
 
 /**
  * Get the optimal chunk size for a given server boost level
+ *
+ * Note: Level 2's 50MB boost only applies to regular uploads, not webhooks.
+ * Webhooks are capped at 8MB until Level 3 (which allows 25MB).
  */
 export function getChunkSizeForBoostLevel(level: ServerBoostLevel): number {
-  // Only Level 3 boosted servers have 25MB file limit
+  // Only Level 3 boosted servers have 25MB webhook limit
   if (level === 'level3') {
-    return 24 * 1024 * 1024 // 24MB
+    return 24 * 1024 * 1024 // 24MB (safe margin under 25MB)
   }
-  return 7.5 * 1024 * 1024 // 7.5MB for all other levels
+  // Level 0, 1, 2 all have 8MB webhook limit
+  return 7.5 * 1024 * 1024 // 7.5MB (safe margin under 8MB)
 }
 
 // Config - Performance optimized based on DDrive benchmarks
