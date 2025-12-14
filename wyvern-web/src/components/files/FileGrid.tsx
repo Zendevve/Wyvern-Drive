@@ -3,6 +3,7 @@ import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import { FileItem } from './FileItem'
 import { VirtualFileGrid } from './VirtualFileGrid'
 import { useFileStore } from '../../stores/fileStore'
+import { useFilteredFiles } from '../../hooks/useFilteredFiles'
 import './FileGrid.css'
 
 interface FileGridProps {
@@ -11,7 +12,11 @@ interface FileGridProps {
 }
 
 export function FileGrid({ files, viewMode }: FileGridProps) {
-  const items = Object.values(files)
+  // Use filtered/sorted files from hook
+  const { files: filteredFiles, hasFilter } = useFilteredFiles()
+
+  // Fall back to passed files if no filter (for backward compat)
+  const items = hasFilter ? filteredFiles : Object.values(files)
   const { clearSelection } = useFileStore.getState()
 
   // Use virtualized grid for large file counts (500+ items)
@@ -25,13 +30,7 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
   const [selectionBox, setSelectionBox] = useState<{ startX: number, startY: number, currentX: number, currentY: number } | null>(null)
   const didDrag = useRef(false)
 
-  // Sort: folders first, then by name
-  const sortedItems = items.sort((a, b) => {
-    if (a.type !== b.type) {
-      return a.type === 'directory' ? -1 : 1
-    }
-    return a.name.localeCompare(b.name)
-  })
+  // Items are already sorted by useFilteredFiles hook
 
   // Mouse handlers for drag selection
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -142,7 +141,7 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
       onMouseLeave={handleMouseUp}
       onClick={handleBackgroundClick}
     >
-      {sortedItems.map((item) => (
+      {items.map((item) => (
         <FileItem key={item.id} file={item} viewMode={viewMode} />
       ))}
 

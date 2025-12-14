@@ -15,6 +15,11 @@ export interface UploadInfo {
   unit: 'bytes' | 'files'  // bytes for single file, files for folder operations
 }
 
+// Sort and filter types
+export type SortBy = 'name' | 'size' | 'date' | 'type'
+export type SortOrder = 'asc' | 'desc'
+export type FileTypeFilter = 'all' | 'images' | 'videos' | 'audio' | 'documents'
+
 interface FileStore {
   // Auth
   webhookUrl: string | null  // @deprecated - kept for backward compatibility migration
@@ -40,6 +45,12 @@ interface FileStore {
   isOffline: boolean     // No network connection
   uploadProgress: Map<string, UploadInfo>
   isSettingsOpen: boolean
+
+  // Search, Sort & Filter
+  searchQuery: string
+  sortBy: SortBy
+  sortOrder: SortOrder
+  filterType: FileTypeFilter
 
   // Actions
   setWebhookUrl: (url: string) => void  // @deprecated - use setWebhookUrls
@@ -82,6 +93,13 @@ interface FileStore {
   restoreVersion: (fileId: string, versionId: string) => Promise<void>
   deleteVersion: (fileId: string, versionId: string) => Promise<void>
 
+  // Search, Sort & Filter Actions
+  setSearchQuery: (query: string) => void
+  setSortBy: (sortBy: SortBy) => void
+  setSortOrder: (order: SortOrder) => void
+  toggleSortOrder: () => void
+  setFilterType: (filter: FileTypeFilter) => void
+
   // Webhook Pool Stats (for UI indicators)
   getWebhookPoolStats: () => { count: number; isOptimal: boolean; recommendation: string | null } | null
 }
@@ -110,6 +128,12 @@ export const useFileStore = create<FileStore>()(
       activeFileId: null,
       previewFileId: null,
       isSettingsOpen: false,
+
+      // Search, Sort & Filter defaults
+      searchQuery: '',
+      sortBy: 'name' as SortBy,
+      sortOrder: 'asc' as SortOrder,
+      filterType: 'all' as FileTypeFilter,
 
       // Actions
       // @deprecated - use setWebhookUrls
@@ -720,7 +744,20 @@ export const useFileStore = create<FileStore>()(
           isOptimal: stats.isOptimal,
           recommendation: stats.recommendation
         }
-      }
+      },
+
+      // Search, Sort & Filter Actions
+      setSearchQuery: (query) => set({ searchQuery: query }),
+
+      setSortBy: (sortBy) => set({ sortBy }),
+
+      setSortOrder: (order) => set({ sortOrder: order }),
+
+      toggleSortOrder: () => set((state) => ({
+        sortOrder: state.sortOrder === 'asc' ? 'desc' : 'asc'
+      })),
+
+      setFilterType: (filter) => set({ filterType: filter })
 
     }),
     {
