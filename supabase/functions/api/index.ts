@@ -276,12 +276,28 @@ Deno.serve(async (req: Request) => {
     // POST /files/:userId - Create file or directory
     if (filesMatch && method === "POST") {
       const userId = filesMatch[1]
-      const body = await req.json()
+      let body
+      try {
+        body = await req.json()
+      } catch (parseError) {
+        console.error("[POST /files] Failed to parse JSON body:", parseError)
+        return json({ error: "Invalid JSON body" }, 400)
+      }
+
       const { parent_id, name, type, size, content, encrypted, encryption_salt } = body
       const supabase = getSupabase()
 
+      // Log payload size for debugging large file issues
+      const contentSize = content ? content.length : 0
+      console.log(`[POST /files] userId=${userId}, name=${name}, type=${type}, size=${size}, contentLength=${contentSize}`)
+
+      // Warn if content is very large (>500KB)
+      if (contentSize > 500 * 1024) {
+        console.warn(`[POST /files] Large content payload: ${(contentSize / 1024).toFixed(1)}KB for file: ${name}`)
+      }
+
       // Check for existing file collision
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from("files")
         .select("*")
         .eq("user_id", userId)
@@ -290,9 +306,14 @@ Deno.serve(async (req: Request) => {
         .eq("type", "file")
         .maybeSingle()
 
+      if (existingError) {
+        console.error("[POST /files] Error checking existing file:", existingError)
+        return json({ error: existingError.message }, 500)
+      }
+
       if (existing && type === "file") {
         // Handle versioning
-        const { data: lastVer } = await supabase
+        const { data: lastVer, error: verError } = await supabase
           .from("file_versions")
           .select("version_number")
           .eq("file_id", existing.id)
@@ -300,16 +321,25 @@ Deno.serve(async (req: Request) => {
           .limit(1)
           .maybeSingle()
 
+        if (verError) {
+          console.error("[POST /files] Error getting last version:", verError)
+        }
+
         const newVerNum = (lastVer?.version_number || 0) + 1
 
-        await supabase.from("file_versions").insert({
+        const { error: insertVerError } = await supabase.from("file_versions").insert({
           file_id: existing.id,
           version_number: newVerNum,
           content: existing.content || "[]",
           size: existing.size,
         })
 
-        await supabase
+        if (insertVerError) {
+          console.error("[POST /files] Error inserting version:", insertVerError)
+          return json({ error: `Failed to create version: ${insertVerError.message}` }, 500)
+        }
+
+        const { error: updateError } = await supabase
           .from("files")
           .update({
             size: size || 0,
@@ -320,6 +350,12 @@ Deno.serve(async (req: Request) => {
           })
           .eq("id", existing.id)
 
+        if (updateError) {
+          console.error("[POST /files] Error updating existing file:", updateError)
+          return json({ error: `Failed to update file: ${updateError.message}` }, 500)
+        }
+
+        console.log(`[POST /files] Updated existing file ${existing.id} to version ${newVerNum}`)
         return json(existing.id)
       } else {
         const { data, error } = await supabase
@@ -337,7 +373,12 @@ Deno.serve(async (req: Request) => {
           .select("id")
           .single()
 
-        if (error) return json({ error: error.message }, 500)
+        if (error) {
+          console.error("[POST /files] Error inserting new file:", error)
+          return json({ error: `Failed to create file: ${error.message}` }, 500)
+        }
+
+        console.log(`[POST /files] Created new file ${data.id}: ${name}`)
         return json(data.id)
       }
     }

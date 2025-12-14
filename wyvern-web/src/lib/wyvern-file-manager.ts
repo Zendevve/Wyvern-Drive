@@ -153,30 +153,49 @@ export class WyvernFileManager {
     parentId: number | null,
     content: string
   ): Promise<WyvernFile> {
+    const payload = {
+      name: file.name,
+      type: 'file',
+      size: file.size,
+      parent_id: parentId,
+      content, // JSON string of chunk info
+      encrypted: !!this.key,
+      encryption_salt: this.salt
+    }
+
+    console.log(`[WyvernFileManager] Creating file record: ${file.name}, content length: ${content.length}`)
+
     const res = await fetch(`${API_URL}/files/${this.userId}`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({
-        name: file.name,
-        type: 'file',
-        size: file.size,
-        parent_id: parentId,
-        content, // JSON string of message IDs
-        encrypted: !!this.key,
-        encryption_salt: this.salt
-      })
+      body: JSON.stringify(payload)
     })
 
-    if (!res.ok) throw new Error('Failed to create file record')
-    const id = await res.json()
+    if (!res.ok) {
+      let errorMessage = 'Failed to create file record'
+      try {
+        const errorBody = await res.json()
+        if (errorBody.error) {
+          errorMessage = errorBody.error
+        }
+      } catch {
+        // Response wasn't JSON
+        errorMessage = `Server error (${res.status}): ${res.statusText}`
+      }
+      console.error(`[WyvernFileManager] createFile failed:`, errorMessage)
+      throw new Error(errorMessage)
+    }
 
-    // Return optimistic file object (re-fetching is better but this update is immediate)
+    const id = await res.json()
+    console.log(`[WyvernFileManager] File record created with ID: ${id}`)
+
+    // Return optimistic file object
     return {
       id,
       name: file.name,
       type: 'file',
       size: file.size,
-      path: path, // Note: backend doesn't store full path, frontend constructs it
+      path: path,
       parent_id: parentId,
       content,
       encrypted: !!this.key,
