@@ -130,9 +130,9 @@ export const CONFIG = {
   CHUNK_SIZE_DEFAULT: 7.5 * 1024 * 1024, // 7.5MB - Discord webhooks limit is 8MB
   CHUNK_SIZE_NITRO: 24 * 1024 * 1024,    // 24MB - for Nitro/boosted servers with 25MB limit
 
-  // Parallelism settings (increased from 3 based on competitive analysis)
-  MAX_PARALLEL_UPLOADS: 5,               // DDrive uses 3-5 with multiple webhooks
-  MAX_PARALLEL_DOWNLOADS: 5,
+  // Parallelism settings - aggressive for maximum throughput
+  MAX_PARALLEL_UPLOADS: 8,               // Max concurrent uploads per webhook
+  MAX_PARALLEL_DOWNLOADS: 8,
 
   // Webhook pool settings
   MIN_WEBHOOKS_RECOMMENDED: 3,           // Minimum for good performance
@@ -143,9 +143,9 @@ export const CONFIG = {
   RETRY_DELAY_BASE: 1000, // ms - exponential backoff base
 
   // Dynamic concurrency thresholds
-  LARGE_FILE_THRESHOLD: 100 * 1024 * 1024, // 100MB - increase concurrency for large files
-  SMALL_FILE_CONCURRENCY: 3,              // Concurrency for files < threshold
-  LARGE_FILE_CONCURRENCY: 5,              // Concurrency for files >= threshold
+  LARGE_FILE_THRESHOLD: 50 * 1024 * 1024,  // 50MB - lower threshold to use high concurrency sooner
+  SMALL_FILE_CONCURRENCY: 4,               // Concurrency for files < threshold
+  LARGE_FILE_CONCURRENCY: 8,               // Concurrency for files >= threshold (per webhook batch)
 } as const
 
 export const FILE_DELIMITER = '/'

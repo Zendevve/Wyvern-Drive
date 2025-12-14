@@ -32,9 +32,12 @@ import {
 import {
   createEncryptionContext,
   restoreEncryptionContext,
-  encryptChunk,
   decryptChunk
 } from './encryption'
+import {
+  encryptWithWorker
+  // decryptWithWorker - available for future download optimization
+} from './crypto-pool'
 import {
   compressData,
   decompressData,
@@ -381,13 +384,14 @@ export class WyvernFileManager {
       uploadedBytes += (end - start)
     }
 
-    // Dynamic concurrency: use higher concurrency for large files with multiple webhooks
+    // Dynamic concurrency: aggressive parallelism for large files
     const baseConcurrency = totalSize >= CONFIG.LARGE_FILE_THRESHOLD
       ? CONFIG.LARGE_FILE_CONCURRENCY
       : CONFIG.SMALL_FILE_CONCURRENCY
-    // Scale by webhook count: more webhooks = can handle more parallel uploads
+    // Scale by webhook count: each webhook can handle full concurrency
+    // This maximizes throughput by spreading load across all webhooks
     const concurrency = Math.min(
-      baseConcurrency * Math.ceil(this.webhooks.length / 2),
+      baseConcurrency * this.webhooks.length,  // Full concurrency per webhook
       CONFIG.MAX_PARALLEL_UPLOADS * this.webhooks.length
     )
 
@@ -413,9 +417,9 @@ export class WyvernFileManager {
 
       let iv: Uint8Array | undefined
 
-      // Then encrypt (if enabled)
+      // Then encrypt (if enabled) - uses Web Worker for parallel encryption
       if (this.key && options?.encrypt) {
-        const encrypted = await encryptChunk(chunkData, this.key)
+        const encrypted = await encryptWithWorker(chunkData, this.key)
         chunkData = encrypted.data
         iv = encrypted.iv
       }
