@@ -75,6 +75,52 @@ function getDateKey(file: WyvernFile): string {
 }
 
 /**
+ * Extract first frame from video as thumbnail
+ */
+async function extractVideoFrame(videoUrl: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video')
+    video.crossOrigin = 'anonymous'
+    video.muted = true
+
+    video.onloadeddata = () => {
+      video.currentTime = 1 // Seek to 1 second for better thumbnail
+    }
+
+    video.onseeked = () => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = 200
+        canvas.height = 200
+
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve(null)
+          return
+        }
+
+        // Calculate cover fit
+        const scale = Math.max(canvas.width / video.videoWidth, canvas.height / video.videoHeight)
+        const x = (canvas.width - video.videoWidth * scale) / 2
+        const y = (canvas.height - video.videoHeight * scale) / 2
+
+        ctx.drawImage(video, x, y, video.videoWidth * scale, video.videoHeight * scale)
+        const thumbUrl = canvas.toDataURL('image/jpeg', 0.7)
+        resolve(thumbUrl)
+      } catch {
+        resolve(null)
+      }
+    }
+
+    video.onerror = () => resolve(null)
+    setTimeout(() => resolve(null), 10000)
+
+    video.src = videoUrl
+    video.load()
+  })
+}
+
+/**
  * PhotoThumbnail - Individual photo/video with lazy loading
  */
 function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => void }) {
@@ -120,8 +166,22 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
         }
 
         const blob = new Blob(fileParts, { type: getMimeType(photo.name) })
-        const url = URL.createObjectURL(blob)
-        setThumbnail(url)
+
+        if (isVideo) {
+          // Extract frame from video
+          const videoUrl = URL.createObjectURL(blob)
+          const thumbUrl = await extractVideoFrame(videoUrl)
+          URL.revokeObjectURL(videoUrl)
+          if (thumbUrl) {
+            setThumbnail(thumbUrl)
+          } else {
+            setError(true)
+          }
+        } else {
+          // Direct display for images
+          const url = URL.createObjectURL(blob)
+          setThumbnail(url)
+        }
       } catch (err) {
         console.error('Photo thumbnail failed:', err)
         setError(true)
@@ -133,7 +193,7 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
     loadThumbnail()
 
     return () => {
-      if (thumbnail) URL.revokeObjectURL(thumbnail)
+      if (thumbnail && !isVideo) URL.revokeObjectURL(thumbnail)
     }
   }, [photo.id, photo.content, encryptionPassword])
 
