@@ -1,3 +1,20 @@
+/**
+ * @fileoverview Wyvern File Manager - Core file operations for Wyvern Drive
+ *
+ * Handles:
+ * - File upload/download with chunking (7.5MB or 24MB based on boost level)
+ * - Client-side AES-256-GCM encryption
+ * - Parallel uploads with round-robin webhook distribution
+ * - Folder operations (create, move, delete, download as ZIP)
+ * - Version history management
+ * - Share link generation
+ *
+ * Architecture:
+ * - Files are split into chunks and uploaded to Discord via webhooks
+ * - Chunk metadata (URLs, IVs) stored in Supabase via Edge Function
+ * - Encryption is optional, uses password-derived keys with unique salts per file
+ */
+
 import {
   CONFIG,
   type WyvernFile,
@@ -20,13 +37,11 @@ import {
 } from './encryption'
 import JSZip from 'jszip'
 
-// API URL: Use Supabase Edge Function in production, Express in development
-// For Supabase: https://[project-ref].supabase.co/functions/v1/api
-// For Supabase: https://[project-ref].supabase.co/functions/v1/api
-// For Supabase: https://[project-ref].supabase.co/functions/v1/api
+// Supabase Edge Function API endpoint
 const API_URL = 'https://lrqnovltirjsoqfvtxxu.supabase.co/functions/v1/api'
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxycW5vdmx0aXJqc29xZnZ0eHh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NzQ0MjcsImV4cCI6MjA4MTE1MDQyN30.rpusoKvKGgWHofrM15aqWMh5F6A8yx78u_n2vgXxm1Q'
 
+/** Build headers for Supabase API requests */
 const getHeaders = (contentType: string | null = 'application/json') => {
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
@@ -38,6 +53,14 @@ const getHeaders = (contentType: string | null = 'application/json') => {
 }
 
 
+/**
+ * WyvernFileManager - Main class for file operations
+ *
+ * @example
+ * const manager = new WyvernFileManager('user123', ['https://discord.com/api/webhooks/...'])
+ * await manager.setPassword('mySecretPassword')
+ * const file = await manager.uploadFile(fileBlob, '/path/to/file', null, { encrypt: true })
+ */
 export class WyvernFileManager {
   private userId: string
   private webhooks: string[]  // Array of webhook URLs for parallel uploads
@@ -47,6 +70,7 @@ export class WyvernFileManager {
   private salt: string | null = null
   private password: string | null = null // Store password for restoring keys with different salts
   private boostLevel: ServerBoostLevel = 'none' // Server boost level for chunk sizing
+
 
   constructor(webhookUrls: string | string[], boostLevel: ServerBoostLevel = 'none') {
     // Support both single URL (backwards compat) and array
