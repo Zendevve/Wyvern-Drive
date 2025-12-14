@@ -40,6 +40,13 @@ import {
   decompressData,
   isCompressibleFile
 } from './compression'
+import {
+  generateUploadId,
+  savePendingUpload,
+  addUploadedChunk,
+  deletePendingUpload,
+  findPendingUpload
+} from './upload-state'
 import JSZip from 'jszip'
 
 // Supabase Edge Function API endpoint
@@ -323,9 +330,56 @@ export class WyvernFileManager {
     const totalSize = file.size
     const chunkSize = this.getChunkSize() // Dynamic based on server boost level
     const totalChunks = Math.ceil(totalSize / chunkSize)
-    const chunks: ChunkInfo[] = new Array(totalChunks)
 
+    // Check for existing pending upload (resume support)
+    let pendingUpload = await findPendingUpload(file.name, file.size)
+    let uploadId: string
+    let chunks: ChunkInfo[]
+    let alreadyUploadedIndices: Set<number>
+
+    if (pendingUpload && pendingUpload.totalChunks === totalChunks) {
+      // Resume existing upload
+      uploadId = pendingUpload.id
+      chunks = new Array(totalChunks)
+      alreadyUploadedIndices = new Set(pendingUpload.uploadedChunks.map(c => c.i))
+
+      // Populate already uploaded chunks
+      for (const chunk of pendingUpload.uploadedChunks) {
+        chunks[chunk.i] = chunk
+      }
+
+      console.log(`[WyvernFileManager] Resuming upload: ${alreadyUploadedIndices.size}/${totalChunks} chunks already uploaded`)
+    } else {
+      // New upload
+      uploadId = generateUploadId(file.name, file.size)
+      chunks = new Array(totalChunks)
+      alreadyUploadedIndices = new Set()
+
+      // Save initial pending state
+      await savePendingUpload({
+        id: uploadId,
+        fileName: file.name,
+        fileSize: file.size,
+        filePath: path,
+        parentId,
+        totalChunks,
+        uploadedChunks: [],
+        options: {
+          encrypt: !!options?.encrypt,
+          compress: !!options?.compress
+        },
+        createdAt: Date.now(),
+        lastUpdatedAt: Date.now()
+      })
+    }
+
+    // Calculate already uploaded bytes for progress
     let uploadedBytes = 0
+    for (const idx of alreadyUploadedIndices) {
+      const start = idx * chunkSize
+      const end = Math.min(start + chunkSize, totalSize)
+      uploadedBytes += (end - start)
+    }
 
     // Dynamic concurrency: use higher concurrency for large files with multiple webhooks
     const baseConcurrency = totalSize >= CONFIG.LARGE_FILE_THRESHOLD
@@ -339,6 +393,11 @@ export class WyvernFileManager {
 
     // Helper to upload a single chunk
     const uploadChunk = async (index: number): Promise<void> => {
+      // Skip if already uploaded (resume support)
+      if (alreadyUploadedIndices.has(index)) {
+        return
+      }
+
       const start = index * chunkSize
       const end = Math.min(start + chunkSize, totalSize)
       const chunkBlob = file.slice(start, end)
@@ -405,13 +464,17 @@ export class WyvernFileManager {
       if (!messageId || !attachmentUrl) throw new Error('Failed to upload chunk or get attachment URL')
 
       // Use compact format for chunk metadata (short keys)
-      chunks[index] = {
+      const chunkInfo: ChunkInfo = {
         i: index,              // index
         u: attachmentUrl,      // url
         s: chunkBuffer.byteLength,  // size
         v: iv ? Array.from(iv) : undefined,  // iv (optional)
         c: isCompressed || undefined  // compressed flag (only if true)
       }
+      chunks[index] = chunkInfo
+
+      // Persist chunk progress for resume support
+      await addUploadedChunk(uploadId, chunkInfo)
 
       uploadedBytes += chunkBlob.size
       options?.onProgress?.(uploadedBytes, totalSize)
@@ -425,6 +488,9 @@ export class WyvernFileManager {
       }
       await Promise.all(batchIndices.map(uploadChunk))
     }
+
+    // Clear pending upload state on success
+    await deletePendingUpload(uploadId)
 
     // Save metadata to server
     return this.createFile(path, file, parentId, JSON.stringify(chunks))
