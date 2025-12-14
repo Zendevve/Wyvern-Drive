@@ -43,23 +43,16 @@ function formatFileSize(bytes: number): string {
 }
 
 /**
- * Get file type icon/emoji for OG display
+ * Get file type label for OG display
  */
-function getFileEmoji(fileType: string): string {
-  if (fileType.startsWith("image/")) return "🖼️";
-  if (fileType.startsWith("video/")) return "🎬";
-  if (fileType.startsWith("audio/")) return "🎵";
-  if (fileType.includes("pdf")) return "📄";
-  if (fileType.includes("zip") || fileType.includes("rar")) return "📦";
-  return "📁";
-}
-
-/**
- * Determine if the file type supports inline preview
- */
-function isPreviewableImage(fileType: string): boolean {
-  const previewable = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-  return previewable.includes(fileType);
+function getFileTypeLabel(fileType: string): string {
+  if (fileType.startsWith("image/")) return "Image";
+  if (fileType.startsWith("video/")) return "Video";
+  if (fileType.startsWith("audio/")) return "Audio";
+  if (fileType.includes("pdf")) return "PDF";
+  if (fileType.includes("zip") || fileType.includes("rar")) return "Archive";
+  if (fileType.includes("text") || fileType.includes("document")) return "Document";
+  return "File";
 }
 
 export default async function handler(request: Request, context: Context) {
@@ -92,20 +85,20 @@ export default async function handler(request: Request, context: Context) {
       return generateOGResponse(url.href, {
         title: "Share Link - Wyvern Drive",
         description: "This share link may have expired or been removed.",
-        emoji: "⚠️",
+        fileTypeLabel: "File",
       });
     }
 
     const shareInfo: ShareInfo = await res.json();
 
     // Generate OG tags based on file info
-    const emoji = getFileEmoji(shareInfo.fileType);
+    const fileTypeLabel = getFileTypeLabel(shareInfo.fileType);
     const sizeStr = formatFileSize(shareInfo.fileSize);
 
     const ogData = {
-      title: `${emoji} ${shareInfo.fileName}`,
-      description: `${sizeStr} • ${shareInfo.downloadCount} downloads • Wyvern Drive`,
-      emoji,
+      title: shareInfo.fileName,
+      description: `${fileTypeLabel} | ${sizeStr} | ${shareInfo.downloadCount} downloads`,
+      fileTypeLabel,
       fileName: shareInfo.fileName,
       fileSize: sizeStr,
       fileType: shareInfo.fileType,
@@ -123,7 +116,7 @@ export default async function handler(request: Request, context: Context) {
 interface OGData {
   title: string;
   description: string;
-  emoji: string;
+  fileTypeLabel: string;
   fileName?: string;
   fileSize?: string;
   fileType?: string;
@@ -138,11 +131,11 @@ function generateOGResponse(pageUrl: string, data: OGData): Response {
   // Build description with extra info
   let fullDescription = data.description;
   if (data.passwordRequired) {
-    fullDescription += " 🔒 Password protected";
+    fullDescription += " | Password protected";
   }
   if (data.expiresAt) {
     const expiry = new Date(data.expiresAt);
-    fullDescription += ` • Expires ${expiry.toLocaleDateString()}`;
+    fullDescription += ` | Expires ${expiry.toLocaleDateString()}`;
   }
 
   // Generate HTML with OG meta tags
@@ -153,8 +146,8 @@ function generateOGResponse(pageUrl: string, data: OGData): Response {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- Primary Meta Tags -->
-  <title>${escapeHtml(data.title)}</title>
-  <meta name="title" content="${escapeHtml(data.title)}" />
+  <title>${escapeHtml(data.title)} - Wyvern Drive</title>
+  <meta name="title" content="${escapeHtml(data.title)} - Wyvern Drive" />
   <meta name="description" content="${escapeHtml(fullDescription)}" />
 
   <!-- Open Graph / Facebook -->
@@ -201,3 +194,4 @@ function escapeHtml(str: string): string {
 export const config = {
   path: "/share/*",
 };
+
