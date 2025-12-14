@@ -10,10 +10,10 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
-// Format progress info based on unit type
+// Format progress (loaded / total)
 function formatProgress(info: UploadInfo): string {
   if (info.unit === 'files') {
-    return `${info.loaded} / ${info.total} files`
+    return `${info.loaded}/${info.total} files`
   }
   return `${formatBytes(info.loaded)} / ${formatBytes(info.total)}`
 }
@@ -22,96 +22,26 @@ function formatProgress(info: UploadInfo): string {
 function formatPercent(info: UploadInfo): string {
   const percent = (info.loaded / info.total) * 100
   // For very large files (>1GB), show 2 decimal places
-  // For large files (>100MB), show 1 decimal place
-  // Otherwise show integer
   if (info.total > 1024 * 1024 * 1024) {
     return `${percent.toFixed(2)}%`
   }
+  // For large files (>100MB), show 1 decimal place
   if (info.total > 100 * 1024 * 1024) {
     return `${percent.toFixed(1)}%`
   }
   return `${Math.round(percent)}%`
 }
 
-// Store for EMA-smoothed speeds (smoother than raw rolling window)
-const smoothedSpeeds = new Map<string, number>()
-const lastUpdates = new Map<string, { timestamp: number; bytes: number }>()
+// TRUE AVERAGE SPEED: total_bytes_uploaded / total_seconds_elapsed
+// This is the ACTUAL throughput - no smoothing, no approximation
+function calculateTrueAverageSpeed(info: UploadInfo): number {
+  const elapsed = (Date.now() - info.startTime) / 1000 // seconds
 
-// Ultra-conservative EMA settings for accurate speed display
-// Alpha 0.05 = very slow response (5% new, 95% old) - takes ~20 samples to stabilize
-const EMA_ALPHA = 0.05
+  // Need at least 2 seconds of data for meaningful speed
+  if (elapsed < 2) return 0
 
-// Minimum 1 second between updates - prevents all burst spikes
-const MIN_UPDATE_INTERVAL_MS = 1000
-
-// Realistic speed caps based on typical connection speeds
-// Most home connections are 10-100 Mbps = 1.25-12.5 MB/s
-// Cap at 25 MB/s (200 Mbps) to filter out measurement artifacts
-const MAX_REALISTIC_SPEED = 25 * 1024 * 1024 // 25 MB/s
-
-// Add a speed sample and calculate current speed using EMA smoothing
-function updateSpeedSample(id: string, loaded: number): number {
-  const now = Date.now()
-  const lastUpdate = lastUpdates.get(id)
-  let currentSmoothed = smoothedSpeeds.get(id) || 0
-
-  if (!lastUpdate) {
-    // First sample - just store it
-    lastUpdates.set(id, { timestamp: now, bytes: loaded })
-    return 0
-  }
-
-  const timeDiff = now - lastUpdate.timestamp
-
-  // Don't update too frequently (prevents burst spikes)
-  if (timeDiff < MIN_UPDATE_INTERVAL_MS) {
-    return currentSmoothed
-  }
-
-  const bytesDiff = loaded - lastUpdate.bytes
-  // Instant speed for this interval
-  let instantSpeed = bytesDiff / (timeDiff / 1000) // bytes per second
-
-  // Cap instant speed to realistic maximum
-  instantSpeed = Math.min(instantSpeed, MAX_REALISTIC_SPEED)
-
-  // Ignore negative or zero speeds (can happen with progress reporting issues)
-  if (instantSpeed <= 0) {
-    return currentSmoothed
-  }
-
-  // Apply EMA smoothing
-  // newEMA = alpha * newValue + (1 - alpha) * oldEMA
-  if (currentSmoothed === 0) {
-    // First real speed calculation
-    currentSmoothed = instantSpeed
-  } else {
-    currentSmoothed = EMA_ALPHA * instantSpeed + (1 - EMA_ALPHA) * currentSmoothed
-  }
-
-  // Final sanity cap (already filtered at instant level, but double-check)
-  currentSmoothed = Math.min(currentSmoothed, MAX_REALISTIC_SPEED)
-
-  // Store updated values
-  lastUpdates.set(id, { timestamp: now, bytes: loaded })
-  smoothedSpeeds.set(id, currentSmoothed)
-
-  return currentSmoothed
-}
-
-// Cleanup function for completed transfers
-function cleanupSpeedData(activeIds: Set<string>) {
-  for (const id of smoothedSpeeds.keys()) {
-    if (!activeIds.has(id)) {
-      smoothedSpeeds.delete(id)
-      lastUpdates.delete(id)
-    }
-  }
-}
-
-// Get current speed from samples
-function getCurrentSpeed(id: string, loaded: number): number {
-  return updateSpeedSample(id, loaded)
+  // TRUE speed: total bytes transferred / total time
+  return info.loaded / elapsed
 }
 
 // Format speed for display
@@ -128,7 +58,7 @@ function formatSpeed(bytesPerSecond: number, unit: 'bytes' | 'files'): string {
   return `${(bytesPerSecond / (1024 * 1024)).toFixed(2)} MB/s`
 }
 
-// Calculate ETA based on current speed
+// Calculate ETA based on true average speed
 function calculateETA(remaining: number, bytesPerSecond: number): string {
   if (bytesPerSecond <= 0) return ''
 
@@ -156,19 +86,17 @@ function truncateName(name: string, maxLen = 25): string {
   return truncatedBase + '...' + ext
 }
 
-
-
 export function ProgressToasts() {
   const uploadProgress = useFileStore(state => state.uploadProgress)
 
-  // Trigger re-render every 250ms for smooth updates
+  // Trigger re-render every 500ms for smooth updates
   const intervalRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (uploadProgress.size > 0) {
       intervalRef.current = window.setInterval(() => {
-        // Force re-render by this component (state change)
-      }, 250)
+        // Force re-render to update speed/ETA
+      }, 500)
     }
     return () => {
       if (intervalRef.current) {
@@ -179,18 +107,13 @@ export function ProgressToasts() {
   }, [uploadProgress.size])
 
   if (uploadProgress.size === 0) {
-    // Cleanup all samples when no active transfers
-    smoothedSpeeds.clear()
-    lastUpdates.clear()
     return null
   }
 
-  // Cleanup samples for completed transfers
-  cleanupSpeedData(new Set(uploadProgress.keys()))
-
   // Convert map to array for rendering
   const items = Array.from(uploadProgress.entries()).map(([id, info]) => {
-    const currentSpeed = getCurrentSpeed(id, info.loaded)
+    // Calculate TRUE average speed from startTime
+    const currentSpeed = calculateTrueAverageSpeed(info)
     const remaining = info.total - info.loaded
     const eta = calculateETA(remaining, currentSpeed)
 
