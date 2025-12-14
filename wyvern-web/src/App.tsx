@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
-import { Search, Settings, Bell } from 'lucide-react'
+import { Settings, Bell } from 'lucide-react'
 import { FileManager } from './components/FileManager'
 import { PhotoTimeline } from './components/photos/PhotoTimeline'
 import { Sidebar } from './components/layout/Sidebar'
@@ -10,6 +10,7 @@ import { RenameModal } from './components/files/RenameModal'
 import { MoveModal } from './components/files/MoveModal'
 import { VersionHistoryModal } from './components/files/VersionHistoryModal'
 import { ProgressToasts } from './components/ui/ProgressToasts'
+import { GlobalSearch } from './components/ui/GlobalSearch'
 import { AudioPlayer } from './components/AudioPlayer'
 import { useFileStore } from './stores/fileStore'
 import './styles/App.css'
@@ -35,10 +36,7 @@ function AuthenticatedApp() {
       <Sidebar />
       <div className="app-body">
         <header className="app-header">
-          <div className="search-container">
-            <Search size={16} className="search-icon" />
-            <input type="text" placeholder="Search your files..." className="global-search-input" />
-          </div>
+          <GlobalSearch />
 
           <div className="header-actions">
             <button className="icon-btn" title="Settings"><Settings size={18} /></button>
