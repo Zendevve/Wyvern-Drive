@@ -28,12 +28,12 @@ import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import './Sidebar.css'
 
 // File type categories with colors
-const FILE_CATEGORIES: Record<string, { extensions: string[], color: string, icon: typeof Image }> = {
-  images: { extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic'], color: '#7c3aed', icon: Image },
-  videos: { extensions: ['mp4', 'webm', 'mkv', 'avi', 'mov', 'm4v', 'flv'], color: '#06b6d4', icon: Video },
-  audio: { extensions: ['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'opus'], color: '#10b981', icon: Music },
-  documents: { extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'xls', 'xlsx', 'ppt', 'pptx'], color: '#f59e0b', icon: FileText },
-  other: { extensions: [], color: '#6b7280', icon: File }
+const FILE_CATEGORIES: Record<string, { extensions: string[], colorVar: string, icon: typeof Image }> = {
+  images: { extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic'], colorVar: 'var(--color-category-images)', icon: Image },
+  videos: { extensions: ['mp4', 'webm', 'mkv', 'avi', 'mov', 'm4v', 'flv'], colorVar: 'var(--color-category-videos)', icon: Video },
+  audio: { extensions: ['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'opus'], colorVar: 'var(--color-category-audio)', icon: Music },
+  documents: { extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'xls', 'xlsx', 'ppt', 'pptx'], colorVar: 'var(--color-category-documents)', icon: FileText },
+  other: { extensions: [], colorVar: 'var(--color-category-other)', icon: File }
 }
 
 function getFileCategory(filename: string): keyof typeof FILE_CATEGORIES {
@@ -159,14 +159,17 @@ export function Sidebar() {
               <button
                 className={`new-button ${isMenuOpen ? 'active' : ''}`}
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
+                aria-label="Create new"
+                aria-haspopup="true"
+                aria-expanded={isMenuOpen}
               >
                 <Plus size={18} strokeWidth={2.5} />
                 <span>New</span>
               </button>
 
               {isMenuOpen && (
-                <div className="new-menu-dropdown">
-                  <button className="menu-item" onClick={() => fileInputRef.current?.click()}>
+                <div role="menu" aria-label="New creation options" className="new-menu-dropdown">
+                  <button role="menuitem" className="menu-item" onClick={() => fileInputRef.current?.click()}>
                     <FileUp size={16} />
                     <span>File upload</span>
                   </button>
@@ -258,7 +261,7 @@ export function Sidebar() {
                     title={`${category}: ${formatStorageSize(size)}`}
                     style={{
                       width: `${percent}%`,
-                      backgroundColor: FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].color,
+                      backgroundColor: FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].colorVar,
                       height: '100%',
                       transition: 'width 0.3s ease'
                     }}
@@ -277,7 +280,7 @@ export function Sidebar() {
                 .sort((a, b) => b[1] - a[1])
                 .map(([category, size]) => {
                   const CategoryIcon = FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].icon
-                  const color = FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].color
+                  const color = FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].colorVar
                   const percent = ((size / totalStorageUsed) * 100).toFixed(1)
                   return (
                     <div key={category} className="analytics-row">

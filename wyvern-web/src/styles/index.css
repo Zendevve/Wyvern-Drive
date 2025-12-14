@@ -56,6 +56,13 @@
   --accent-secondary: var(--accent-bright);
   --border-color: var(--border-default);
 
+  /* File Category Colors */
+  --color-category-images: #7c3aed;
+  --color-category-videos: #06b6d4;
+  --color-category-audio: #10b981;
+  --color-category-documents: #f59e0b;
+  --color-category-other: #6b7280;
+
   font-family: var(--font-primary);
   font-size: 14px;
   line-height: 1.5;

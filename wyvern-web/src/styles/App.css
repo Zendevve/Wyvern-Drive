@@ -90,7 +90,7 @@
   left: 12px;
   opacity: 0.5;
   font-size: 14px;
-  filter: grayscale(1);
+  filter: grayscale(0.5);
 }
 
 .header-actions {
@@ -111,7 +111,7 @@
   cursor: pointer;
   transition: all 0.2s;
   font-size: 16px;
-  filter: grayscale(1);
+  filter: grayscale(0.5);
 }
 
 .icon-btn:hover {
