@@ -19,7 +19,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://wyvern-drive.netlify.app/*"
+        "https://wyvern-drive.netlify.app/*",
+        "https://wyverndrive.netlify.app/*"
       ],
       "js": [
         "content.js"
