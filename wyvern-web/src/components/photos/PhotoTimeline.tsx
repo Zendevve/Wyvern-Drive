@@ -12,6 +12,7 @@ import { normalizeChunk } from '../../lib/types'
 import { isImageFile, getMimeType } from '../../lib/thumbnails'
 import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
+import { fetchViaExtension } from '../../lib/extension' // Import centralized utility
 import './PhotoTimeline.css'
 
 // Types
@@ -335,35 +336,4 @@ export function PhotoTimeline() {
   )
 }
 
-// Fetch via extension (same as FileItem)
-async function fetchViaExtension(url: string): Promise<ArrayBuffer> {
-  return new Promise((resolve, reject) => {
-    const requestId = Math.random().toString(36).substring(7)
 
-    const handleResponse = (event: MessageEvent) => {
-      if (event.source !== window) return
-      if (event.data.type === 'WYVERN_DOWNLOAD_RESPONSE' && event.data.id === requestId) {
-        window.removeEventListener('message', handleResponse)
-
-        if (event.data.error) {
-          reject(new Error(event.data.error))
-        } else if (event.data.data) {
-          fetch(event.data.data)
-            .then(res => res.arrayBuffer())
-            .then(resolve)
-            .catch(reject)
-        } else {
-          reject(new Error('Empty response'))
-        }
-      }
-    }
-
-    window.addEventListener('message', handleResponse)
-    window.postMessage({ type: 'WYVERN_DOWNLOAD_REQUEST', url, id: requestId }, '*')
-
-    setTimeout(() => {
-      window.removeEventListener('message', handleResponse)
-      reject(new Error('Thumbnail timeout'))
-    }, 15000)
-  })
-}

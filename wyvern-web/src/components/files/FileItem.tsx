@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, memo } from 'react'
 import type { WyvernFile, WyvernFolder, ChunkInfo, LegacyChunkInfo } from '../../lib/types'
 import { normalizeChunk } from '../../lib/types'
 import { useFileStore } from '../../stores/fileStore'
+import { fetchViaExtension } from '../../lib/extension' // Import centralized utility
 import { ContextMenu } from './ContextMenu'
 import { getFileIconName, formatSize, formatDate } from '../../lib/utils'
 import { isPreviewable, isImageFile, isVideoFile, getMimeType } from '../../lib/thumbnails'
@@ -305,38 +306,7 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
 // Memoized export - prevent re-renders when parent updates but props haven't changed
 export const FileItem = memo(FileItemComponent)
 
-// Fetch via extension to bypass CORS
-async function fetchViaExtension(url: string): Promise<ArrayBuffer> {
-  return new Promise((resolve, reject) => {
-    const requestId = Math.random().toString(36).substring(7)
 
-    const handleResponse = (event: MessageEvent) => {
-      if (event.source !== window) return
-      if (event.data.type === 'WYVERN_DOWNLOAD_RESPONSE' && event.data.id === requestId) {
-        window.removeEventListener('message', handleResponse)
-
-        if (event.data.error) {
-          reject(new Error(event.data.error))
-        } else if (event.data.data) {
-          fetch(event.data.data)
-            .then(res => res.arrayBuffer())
-            .then(resolve)
-            .catch(reject)
-        } else {
-          reject(new Error('Empty response'))
-        }
-      }
-    }
-
-    window.addEventListener('message', handleResponse)
-    window.postMessage({ type: 'WYVERN_DOWNLOAD_REQUEST', url, id: requestId }, '*')
-
-    setTimeout(() => {
-      window.removeEventListener('message', handleResponse)
-      reject(new Error('Thumbnail timeout'))
-    }, 15000)
-  })
-}
 
 // Extract first frame from video as thumbnail
 async function extractVideoFrame(videoUrl: string): Promise<string | null> {

@@ -8,6 +8,7 @@ import { useAudioPlayer } from '../../stores/audioPlayerStore'
 import { decryptChunk } from '../../lib/encryption'
 import { restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
+import { fetchViaExtension } from '../../lib/extension' // Import centralized utility
 import './PreviewModal.css'
 
 interface PreviewModalProps {
@@ -361,47 +362,6 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
       </div>
     </div>
   )
-}
-
-// Fetch via extension to bypass CORS
-async function fetchViaExtension(url: string): Promise<ArrayBuffer> {
-  return new Promise((resolve, reject) => {
-    const requestId = Math.random().toString(36).substring(7)
-
-    const handleResponse = (event: MessageEvent) => {
-      if (event.source !== window) return
-      if (event.data.type === 'WYVERN_DOWNLOAD_RESPONSE' && event.data.id === requestId) {
-        window.removeEventListener('message', handleResponse)
-
-        if (event.data.error) {
-          reject(new Error(event.data.error))
-        } else if (event.data.data) {
-          // Data is Data URL (base64)
-          fetch(event.data.data)
-            .then(res => res.arrayBuffer())
-            .then(resolve)
-            .catch(reject)
-        } else {
-          reject(new Error('Empty response from extension'))
-        }
-      }
-    }
-
-    window.addEventListener('message', handleResponse)
-
-    // Send request
-    window.postMessage({
-      type: 'WYVERN_DOWNLOAD_REQUEST',
-      url,
-      id: requestId
-    }, '*')
-
-    // Timeout
-    setTimeout(() => {
-      window.removeEventListener('message', handleResponse)
-      reject(new Error('Extension download timeout - is extension installed?'))
-    }, 60000)
-  })
 }
 
 function formatFileSize(bytes: number): string {

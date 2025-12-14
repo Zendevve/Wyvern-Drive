@@ -29,6 +29,7 @@ import {
   normalizeChunk,
   FILE_DELIMITER
 } from './types'
+import { fetchViaExtension } from './extension' // Import centralized utility
 import {
   createEncryptionContext,
   restoreEncryptionContext,
@@ -720,7 +721,7 @@ export class WyvernFileManager {
         if (!chunk.u) throw new Error('Missing chunk URL')
 
         // Fetch via extension to bypass CORS
-        let data = await this.fetchViaExtension(chunk.u)
+        let data = await fetchViaExtension(chunk.u)
 
         // Decrypt first if needed
         if (isEncrypted && decryptionKey) {
@@ -812,34 +813,48 @@ export class WyvernFileManager {
 
       await Promise.all(batch.map(async ({ file, relativePath }) => {
         try {
-          // Determine file mode (encrypted?)
-          // Assuming reuse downloadFile logic but return buffer instead of saving?
-          // Refactoring downloadFile to separate 'fetchContent' would be cleaner.
-          // But `downloadFile` does aggregation of chunks.
-
-          // Let's implement fetch content logic inline similar to downloadFile
           if (!file.content) return // Skip empty files?
 
           const chunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(file.content)
           const normalizedChunks = chunks.map(c => normalizeChunk(c))
           normalizedChunks.sort((a, b) => a.i - b.i)
 
-          // Fetch chunks
+          // Check encryption and restore key with file's salt
+          const isEncrypted = file.encrypted
+          let decryptionKey: CryptoKey | null = null
+
+          if (isEncrypted) {
+            if (!this.password) {
+              throw new Error('File is encrypted but no password provided')
+            }
+            if (!file.encryption_salt) {
+              throw new Error('File is encrypted but missing salt - file may be corrupted')
+            }
+            // Restore key using the file's original salt
+            decryptionKey = await this.restoreKeyForFile(file.encryption_salt)
+          }
+
           const fileParts: ArrayBuffer[] = new Array(normalizedChunks.length)
 
-          // Fetch chunks serial or parallel?
-          // Inside a batch of files, we are already parallel.
-          // Let's do serial chunks for simplicity within a file in ZIP mode to avoid overloading
-          // OR parallel chunks but with limit.
+          // Fetch chunks via extension
+          await Promise.all(normalizedChunks.map(async (chunk) => {
+            if (!chunk.u) throw new Error('Missing chunk URL')
 
-          for (const chunk of normalizedChunks) {
-            let data = await this.fetchViaExtension(chunk.u)
-            if (file.encrypted && this.key && chunk.v) {
+            let data = await fetchViaExtension(chunk.u)
+
+            // Decrypt first if needed
+            if (isEncrypted && decryptionKey) {
+              if (!chunk.v) throw new Error('Missing IV for encrypted chunk')
               const iv = new Uint8Array(chunk.v)
-              data = await decryptChunk(data, this.key, iv)
+              data = await decryptChunk(data, decryptionKey, iv)
+            }
+
+            // Then decompress if chunk was compressed
+            if (chunk.c) {
+              data = await decompressData(data)
             }
             fileParts[chunk.i] = data
-          }
+          }))
 
           const fileBlob = new Blob(fileParts)
           zip.file(relativePath, fileBlob)
@@ -870,45 +885,6 @@ export class WyvernFileManager {
 
   // --- Extension Interaction ---
 
-  // Helper to fetch via extension to bypass CORS
-  private async fetchViaExtension(url: string): Promise<ArrayBuffer> {
-    return new Promise((resolve, reject) => {
-      const requestId = Math.random().toString(36).substring(7)
 
-      const handleResponse = (event: MessageEvent) => {
-        if (event.source !== window) return
-        if (event.data.type === 'WYVERN_DOWNLOAD_RESPONSE' && event.data.id === requestId) {
-          window.removeEventListener('message', handleResponse)
-
-          if (event.data.error) {
-            reject(new Error(event.data.error))
-          } else if (event.data.data) {
-            // Data is Data URL (base64)
-            fetch(event.data.data)
-              .then(res => res.arrayBuffer())
-              .then(resolve)
-              .catch(reject)
-          } else {
-            reject(new Error('Empty response from extension'))
-          }
-        }
-      }
-
-      window.addEventListener('message', handleResponse)
-
-      // Send request
-      window.postMessage({
-        type: 'WYVERN_DOWNLOAD_REQUEST',
-        url,
-        id: requestId
-      }, '*')
-
-      // Timeout
-      setTimeout(() => {
-        window.removeEventListener('message', handleResponse)
-        reject(new Error('Extension download timeout - is extension installed?'))
-      }, 60000)
-    })
-  }
 
 }
