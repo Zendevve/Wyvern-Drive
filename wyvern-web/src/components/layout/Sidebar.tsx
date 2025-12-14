@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState, useMemo, useCallback } from 'react'
 import {
   Home,
   Cloud,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { useFileStore } from '../../stores/fileStore'
 import { PendingUploadsModal } from '../files/PendingUploads'
+import type { PendingUpload } from '../../lib/upload-state'
 import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import './Sidebar.css'
 
@@ -89,6 +90,9 @@ export function Sidebar() {
   const [showAnalytics, setShowAnalytics] = useState(false)
   const [showPendingUploads, setShowPendingUploads] = useState(false)
 
+  // Ref for resume file input
+  const resumeFileInputRef = useRef<HTMLInputElement>(null)
+
   // Calculate total storage used from all files
   const totalStorageUsed = useMemo(() => calculateTotalSize(files), [files])
 
@@ -97,6 +101,24 @@ export function Sidebar() {
 
   // Get webhook pool stats for performance indicator
   const webhookStats = getWebhookPoolStats()
+
+  // Handle resume upload - triggers file picker
+  const handleResumeUpload = useCallback((upload: PendingUpload) => {
+    // Show user a message about which file to select
+    alert(`Select the file "${upload.fileName}" to resume the upload from where it left off.`)
+    // Trigger file picker
+    resumeFileInputRef.current?.click()
+  }, [])
+
+  // Handle file selected for resume
+  const onResumeFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      // The uploadFiles function will automatically detect and resume pending uploads
+      await uploadFiles(e.target.files)
+    }
+    // Reset
+    if (resumeFileInputRef.current) resumeFileInputRef.current.value = ''
+  }, [uploadFiles])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
@@ -119,203 +141,212 @@ export function Sidebar() {
   }
 
   return (
-  <>
-    <aside className="sidebar">
-      {/* 1. App Logo / Home */}
-      <div className="sidebar-header">
-        <span className="app-logo">Wyvern</span>
-        <span className="app-badge">Drive</span>
-      </div>
+    <>
+      <aside className="sidebar">
+        {/* 1. App Logo / Home */}
+        <div className="sidebar-header">
+          <span className="app-logo">Wyvern</span>
+          <span className="app-badge">Drive</span>
+        </div>
 
-      <div className="sidebar-content">
-        {/* 2. Primary Action Button */}
-        <div className="action-section">
-          <div className="new-button-wrapper">
-            <button
-              className={`new-button ${isMenuOpen ? 'active' : ''}`}
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-            >
-              <Plus size={18} strokeWidth={2.5} />
-              <span>New</span>
+        <div className="sidebar-content">
+          {/* 2. Primary Action Button */}
+          <div className="action-section">
+            <div className="new-button-wrapper">
+              <button
+                className={`new-button ${isMenuOpen ? 'active' : ''}`}
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+              >
+                <Plus size={18} strokeWidth={2.5} />
+                <span>New</span>
+              </button>
+
+              {isMenuOpen && (
+                <div className="new-menu-dropdown">
+                  <button className="menu-item" onClick={() => fileInputRef.current?.click()}>
+                    <FileUp size={16} />
+                    <span>File upload</span>
+                  </button>
+                  <button className="menu-item" onClick={() => folderInputRef.current?.click()}>
+                    <FolderUp size={16} />
+                    <span>Folder upload</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Hidden Inputs */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            multiple
+            hidden
+            onChange={handleFileSelect}
+          />
+          <input
+            type="file"
+            ref={folderInputRef}
+            multiple
+            hidden
+            // @ts-ignore - webkitdirectory is non-standard but required
+            webkitdirectory=""
+            // @ts-ignore
+            directory=""
+            onChange={handleFolderSelect}
+          />
+
+          {/* 3. Navigation Links */}
+          <nav className="nav-section">
+            <div className="nav-label">Locations</div>
+            <button className="nav-item active">
+              <Home size={18} className="nav-icon" />
+              <span>Home Drive</span>
+            </button>
+            <button className="nav-item">
+              <Cloud size={18} className="nav-icon" />
+              <span>Shared with me</span>
             </button>
 
-            {isMenuOpen && (
-              <div className="new-menu-dropdown">
-                <button className="menu-item" onClick={() => fileInputRef.current?.click()}>
-                  <FileUp size={16} />
-                  <span>File upload</span>
-                </button>
-                <button className="menu-item" onClick={() => folderInputRef.current?.click()}>
-                  <FolderUp size={16} />
-                  <span>Folder upload</span>
-                </button>
-              </div>
-            )}
-          </div>
+            <button className="nav-item">
+              <Clock size={18} className="nav-icon" />
+              <span>Recent</span>
+            </button>
+            <button className="nav-item" onClick={() => setShowPendingUploads(true)}>
+              <Upload size={18} className="nav-icon" />
+              <span>Pending Uploads</span>
+            </button>
+            <button className="nav-item">
+              <Star size={18} className="nav-icon" />
+              <span>Starred</span>
+            </button>
+            <button className="nav-item">
+              <Trash2 size={18} className="nav-icon" />
+              <span>Trash</span>
+            </button>
+          </nav>
         </div>
 
-        {/* Hidden Inputs */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          multiple
-          hidden
-          onChange={handleFileSelect}
-        />
-        <input
-          type="file"
-          ref={folderInputRef}
-          multiple
-          hidden
-          // @ts-ignore - webkitdirectory is non-standard but required
-          webkitdirectory=""
-          // @ts-ignore
-          directory=""
-          onChange={handleFolderSelect}
-        />
-
-        {/* 3. Navigation Links */}
-        <nav className="nav-section">
-          <div className="nav-label">Locations</div>
-          <button className="nav-item active">
-            <Home size={18} className="nav-icon" />
-            <span>Home Drive</span>
-          </button>
-          <button className="nav-item">
-            <Cloud size={18} className="nav-icon" />
-            <span>Shared with me</span>
-          </button>
-
-          <button className="nav-item">
-            <Clock size={18} className="nav-icon" />
-            <span>Recent</span>
-          </button>
-          <button className="nav-item" onClick={() => setShowPendingUploads(true)}>
-            <Upload size={18} className="nav-icon" />
-            <span>Pending Uploads</span>
-          </button>
-          <button className="nav-item">
-            <Star size={18} className="nav-icon" />
-            <span>Starred</span>
-          </button>
-          <button className="nav-item">
-            <Trash2 size={18} className="nav-icon" />
-            <span>Trash</span>
-          </button>
-        </nav>
-      </div>
-
-      {/* 4. Storage & User Profile */}
-      <div className="sidebar-footer">
-        <div className="storage-meter" onClick={() => setShowAnalytics(!showAnalytics)} style={{ cursor: 'pointer' }}>
-          <div className="storage-text">
-            <span>Storage</span>
-            <span>{formatStorageSize(totalStorageUsed)} / ∞</span>
-          </div>
-          {/* Segmented bar showing file type distribution */}
-          <div className="meter-track unlimited" style={{ display: 'flex', overflow: 'hidden' }}>
-            {totalStorageUsed > 0 && Object.entries(storageByCategory).map(([category, size]) => {
-              const percent = (size / totalStorageUsed) * 100
-              if (percent < 1) return null
-              return (
-                <div
-                  key={category}
-                  title={`${category}: ${formatStorageSize(size)}`}
-                  style={{
-                    width: `${percent}%`,
-                    backgroundColor: FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].color,
-                    height: '100%',
-                    transition: 'width 0.3s ease'
-                  }}
-                />
-              )
-            })}
-            {totalStorageUsed === 0 && <div className="meter-fill" style={{ width: '100%' }} />}
-          </div>
-        </div>
-
-        {/* Analytics Breakdown (collapsible) */}
-        {showAnalytics && totalStorageUsed > 0 && (
-          <div className="storage-analytics">
-            {Object.entries(storageByCategory)
-              .filter(([, size]) => size > 0)
-              .sort((a, b) => b[1] - a[1])
-              .map(([category, size]) => {
-                const CategoryIcon = FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].icon
-                const color = FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].color
-                const percent = ((size / totalStorageUsed) * 100).toFixed(1)
+        {/* 4. Storage & User Profile */}
+        <div className="sidebar-footer">
+          <div className="storage-meter" onClick={() => setShowAnalytics(!showAnalytics)} style={{ cursor: 'pointer' }}>
+            <div className="storage-text">
+              <span>Storage</span>
+              <span>{formatStorageSize(totalStorageUsed)} / ∞</span>
+            </div>
+            {/* Segmented bar showing file type distribution */}
+            <div className="meter-track unlimited" style={{ display: 'flex', overflow: 'hidden' }}>
+              {totalStorageUsed > 0 && Object.entries(storageByCategory).map(([category, size]) => {
+                const percent = (size / totalStorageUsed) * 100
+                if (percent < 1) return null
                 return (
-                  <div key={category} className="analytics-row">
-                    <CategoryIcon size={14} style={{ color }} />
-                    <span className="analytics-label">{category}</span>
-                    <span className="analytics-value">{formatStorageSize(size)}</span>
-                    <span className="analytics-percent" style={{ color }}>{percent}%</span>
-                  </div>
+                  <div
+                    key={category}
+                    title={`${category}: ${formatStorageSize(size)}`}
+                    style={{
+                      width: `${percent}%`,
+                      backgroundColor: FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].color,
+                      height: '100%',
+                      transition: 'width 0.3s ease'
+                    }}
+                  />
                 )
               })}
-          </div>
-        )}
-
-        {/* Connection Status Indicator */}
-        <div className={`connection-indicator ${isOffline ? 'offline' : isSyncing ? 'syncing' : 'online'}`}>
-          {isOffline ? (
-            <>
-              <CloudOff size={14} />
-              <span>Offline Mode</span>
-            </>
-          ) : isSyncing ? (
-            <>
-              <RefreshCw size={14} className="spin" />
-              <span>Syncing...</span>
-            </>
-          ) : (
-            <>
-              <Cloud size={14} />
-              <span>Connected</span>
-            </>
-          )}
-        </div>
-
-        {/* Webhook Pool Performance Indicator */}
-        {webhookStats && (
-          <div className={`webhook-pool-indicator ${webhookStats.isOptimal ? 'optimal' : 'suboptimal'}`}>
-            <div className="webhook-pool-header">
-              <Zap size={14} className="webhook-icon" />
-              <span>Performance</span>
-              <span className="webhook-count">{webhookStats.count} webhook{webhookStats.count !== 1 ? 's' : ''}</span>
+              {totalStorageUsed === 0 && <div className="meter-fill" style={{ width: '100%' }} />}
             </div>
-            {webhookStats.recommendation && (
-              <div className="webhook-recommendation">
-                {webhookStats.recommendation}
-              </div>
+          </div>
+
+          {/* Analytics Breakdown (collapsible) */}
+          {showAnalytics && totalStorageUsed > 0 && (
+            <div className="storage-analytics">
+              {Object.entries(storageByCategory)
+                .filter(([, size]) => size > 0)
+                .sort((a, b) => b[1] - a[1])
+                .map(([category, size]) => {
+                  const CategoryIcon = FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].icon
+                  const color = FILE_CATEGORIES[category as keyof typeof FILE_CATEGORIES].color
+                  const percent = ((size / totalStorageUsed) * 100).toFixed(1)
+                  return (
+                    <div key={category} className="analytics-row">
+                      <CategoryIcon size={14} style={{ color }} />
+                      <span className="analytics-label">{category}</span>
+                      <span className="analytics-value">{formatStorageSize(size)}</span>
+                      <span className="analytics-percent" style={{ color }}>{percent}%</span>
+                    </div>
+                  )
+                })}
+            </div>
+          )}
+
+          {/* Connection Status Indicator */}
+          <div className={`connection-indicator ${isOffline ? 'offline' : isSyncing ? 'syncing' : 'online'}`}>
+            {isOffline ? (
+              <>
+                <CloudOff size={14} />
+                <span>Offline Mode</span>
+              </>
+            ) : isSyncing ? (
+              <>
+                <RefreshCw size={14} className="spin" />
+                <span>Syncing...</span>
+              </>
+            ) : (
+              <>
+                <Cloud size={14} />
+                <span>Connected</span>
+              </>
             )}
           </div>
-        )}
 
-        <div className="user-profile">
-          <div className="user-avatar" />
-          <div className="user-info">
-            <span className="username">User1234</span>
+          {/* Webhook Pool Performance Indicator */}
+          {webhookStats && (
+            <div className={`webhook-pool-indicator ${webhookStats.isOptimal ? 'optimal' : 'suboptimal'}`}>
+              <div className="webhook-pool-header">
+                <Zap size={14} className="webhook-icon" />
+                <span>Performance</span>
+                <span className="webhook-count">{webhookStats.count} webhook{webhookStats.count !== 1 ? 's' : ''}</span>
+              </div>
+              {webhookStats.recommendation && (
+                <div className="webhook-recommendation">
+                  {webhookStats.recommendation}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="user-profile">
+            <div className="user-avatar" />
+            <div className="user-info">
+              <span className="username">User1234</span>
+            </div>
+            <button
+              onClick={() => setActiveModal('settings')}
+              className="settings-btn"
+              title="Settings"
+            >
+              <Settings size={16} />
+            </button>
+            <button onClick={logout} className="logout-btn" title="Logout">
+              <LogOut size={16} />
+            </button>
           </div>
-          <button
-            onClick={() => setActiveModal('settings')}
-            className="settings-btn"
-            title="Settings"
-          >
-            <Settings size={16} />
-          </button>
-          <button onClick={logout} className="logout-btn" title="Logout">
-            <LogOut size={16} />
-          </button>
         </div>
-      </div>
-    </aside>
+      </aside>
 
-    {/* Pending Uploads Modal */}
-    <PendingUploadsModal
-      isOpen={showPendingUploads}
-      onClose={() => setShowPendingUploads(false)}
-    />
-  </>
+      {/* Hidden file input for resume uploads */}
+      <input
+        ref={resumeFileInputRef}
+        type="file"
+        style={{ display: 'none' }}
+        onChange={onResumeFileChange}
+      />
+
+      {/* Pending Uploads Modal */}
+      <PendingUploadsModal
+        isOpen={showPendingUploads}
+        onClose={() => setShowPendingUploads(false)}
+        onResumeUpload={handleResumeUpload}
+      />
+    </>
   )
 }

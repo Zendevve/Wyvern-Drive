@@ -37,12 +37,17 @@ function formatPercent(info: UploadInfo): string {
 const smoothedSpeeds = new Map<string, number>()
 const lastUpdates = new Map<string, { timestamp: number; bytes: number }>()
 
-// EMA smoothing factor (lower = smoother/slower to respond, higher = more reactive)
-// 0.15 gives a nice balance - responds to changes but doesn't spike
-const EMA_ALPHA = 0.15
+// Ultra-conservative EMA settings for accurate speed display
+// Alpha 0.05 = very slow response (5% new, 95% old) - takes ~20 samples to stabilize
+const EMA_ALPHA = 0.05
 
-// Minimum time between speed updates (prevents micro-bursts from spiking)
-const MIN_UPDATE_INTERVAL_MS = 500
+// Minimum 1 second between updates - prevents all burst spikes
+const MIN_UPDATE_INTERVAL_MS = 1000
+
+// Realistic speed caps based on typical connection speeds
+// Most home connections are 10-100 Mbps = 1.25-12.5 MB/s
+// Cap at 25 MB/s (200 Mbps) to filter out measurement artifacts
+const MAX_REALISTIC_SPEED = 25 * 1024 * 1024 // 25 MB/s
 
 // Add a speed sample and calculate current speed using EMA smoothing
 function updateSpeedSample(id: string, loaded: number): number {
@@ -64,7 +69,16 @@ function updateSpeedSample(id: string, loaded: number): number {
   }
 
   const bytesDiff = loaded - lastUpdate.bytes
-  const instantSpeed = bytesDiff / (timeDiff / 1000) // bytes per second
+  // Instant speed for this interval
+  let instantSpeed = bytesDiff / (timeDiff / 1000) // bytes per second
+
+  // Cap instant speed to realistic maximum
+  instantSpeed = Math.min(instantSpeed, MAX_REALISTIC_SPEED)
+
+  // Ignore negative or zero speeds (can happen with progress reporting issues)
+  if (instantSpeed <= 0) {
+    return currentSmoothed
+  }
 
   // Apply EMA smoothing
   // newEMA = alpha * newValue + (1 - alpha) * oldEMA
@@ -75,9 +89,8 @@ function updateSpeedSample(id: string, loaded: number): number {
     currentSmoothed = EMA_ALPHA * instantSpeed + (1 - EMA_ALPHA) * currentSmoothed
   }
 
-  // Sanity check: cap at reasonable max (1 Gbps = 125 MB/s)
-  const MAX_REASONABLE_SPEED = 125 * 1024 * 1024 // 125 MB/s
-  currentSmoothed = Math.min(currentSmoothed, MAX_REASONABLE_SPEED)
+  // Final sanity cap (already filtered at instant level, but double-check)
+  currentSmoothed = Math.min(currentSmoothed, MAX_REALISTIC_SPEED)
 
   // Store updated values
   lastUpdates.set(id, { timestamp: now, bytes: loaded })
