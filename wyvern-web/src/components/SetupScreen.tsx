@@ -160,7 +160,7 @@ export function SetupScreen() {
                       ? `${validWebhooks.length} webhook${validWebhooks.length > 1 ? 's' : ''} — Add ${3 - validWebhooks.length} more for faster uploads`
                       : validWebhooks.length < 5
                         ? `${validWebhooks.length} webhooks — Good! Add ${5 - validWebhooks.length} more for optimal speed`
-                        : `${validWebhooks.length} webhooks — Optimal configuration! 🚀`
+                        : `${validWebhooks.length} webhooks — Optimal configuration!`
                   }
                 </span>
               </div>

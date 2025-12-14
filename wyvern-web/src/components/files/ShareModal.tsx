@@ -115,10 +115,9 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
                   {copied ? <Check size={16} /> : <Copy size={16} />}
                 </button>
               </div>
-
               {password && (
                 <p className="password-note">
-                  🔒 Password protected: <code>{password}</code>
+                  <Lock size={14} /> Password protected: <code>{password}</code>
                 </p>
               )}
 

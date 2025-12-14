@@ -122,7 +122,7 @@ export function SettingsModal() {
                     ? `${validWebhooks.length} webhook${validWebhooks.length > 1 ? 's' : ''} — Add ${3 - validWebhooks.length} more for faster uploads`
                     : validWebhooks.length < 5
                       ? `${validWebhooks.length} webhooks — Good! Add ${5 - validWebhooks.length} more for optimal speed`
-                      : `${validWebhooks.length} webhooks — Optimal configuration! 🚀`
+                      : `${validWebhooks.length} webhooks — Optimal configuration!`
                 }
               </span>
             </div>
@@ -130,7 +130,7 @@ export function SettingsModal() {
             {/* Pro Tips Collapsible */}
             <details className="webhook-pro-tips">
               <summary>
-                <span className="pro-tips-label">💡 Pro Tips: Maximize Upload Speed</span>
+                <span className="pro-tips-label">Pro Tips: Maximize Upload Speed</span>
               </summary>
               <div className="pro-tips-content">
                 <div className="pro-tip-item">
@@ -180,7 +180,7 @@ export function SettingsModal() {
               <option value="none">No Boost (8MB limit)</option>
               <option value="level1">Level 1 (8MB limit)</option>
               <option value="level2">Level 2 (8MB limit)</option>
-              <option value="level3">Level 3 (25MB limit) ⚡</option>
+              <option value="level3">Level 3 (25MB limit)</option>
             </select>
 
             <div className="webhook-tip">

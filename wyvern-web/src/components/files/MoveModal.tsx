@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Folder, Home } from 'lucide-react'
 import { useFileStore } from '../../stores/fileStore'
 import './MoveModal.css'
 
@@ -30,7 +31,7 @@ export function MoveModal() {
             style={{ paddingLeft: `${depth * 20 + 12}px` }}
             onClick={() => setSelectedFolderId(folder.id)}
           >
-            📁 {folder.name}
+            <Folder size={16} /> {folder.name}
           </div>
         )
         nodes.push(...buildTree(folder.id, depth + 1))
@@ -56,7 +57,7 @@ export function MoveModal() {
             className={`folder-item ${selectedFolderId === null ? 'selected' : ''}`}
             onClick={() => setSelectedFolderId(null)}
           >
-            🏠 Root
+            <Home size={16} /> Root
           </div>
           {buildTree(null, 0)}
         </div>

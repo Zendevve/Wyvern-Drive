@@ -1,4 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react'
+import { Download } from 'lucide-react'
 import './FileDropZone.css'
 
 interface FileDropZoneProps {
@@ -98,7 +99,7 @@ export function FileDropZone({ onDrop, children }: FileDropZoneProps) {
       {isDragging && (
         <div className="dropzone-overlay">
           <div className="dropzone-content">
-            <span className="dropzone-icon">📥</span>
+            <Download size={32} className="dropzone-icon" />
             <h3>Drop files here</h3>
             <p>Release to upload</p>
           </div>

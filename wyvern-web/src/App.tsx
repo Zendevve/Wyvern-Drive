@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
+import { Search, Settings, Bell } from 'lucide-react'
 import { FileManager } from './components/FileManager'
 import { PhotoTimeline } from './components/photos/PhotoTimeline'
 import { Sidebar } from './components/layout/Sidebar'
@@ -35,13 +36,13 @@ function AuthenticatedApp() {
       <div className="app-body">
         <header className="app-header">
           <div className="search-container">
-            <span className="search-icon">🔍</span>
+            <Search size={16} className="search-icon" />
             <input type="text" placeholder="Search your files..." className="global-search-input" />
           </div>
 
           <div className="header-actions">
-            <button className="icon-btn" title="Settings">⚙️</button>
-            <button className="icon-btn" title="Notifications">🔔</button>
+            <button className="icon-btn" title="Settings"><Settings size={18} /></button>
+            <button className="icon-btn" title="Notifications"><Bell size={18} /></button>
           </div>
         </header>
 

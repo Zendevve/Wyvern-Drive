@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, Loader, RotateCcw } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, Loader, RotateCcw, Music, FileText, AlertCircle } from 'lucide-react'
 import type { WyvernFile, ChunkInfo, LegacyChunkInfo } from '../../lib/types'
 import { normalizeChunk } from '../../lib/types'
 import { isImageFile, isVideoFile, isAudioFile, getMimeType } from '../../lib/thumbnails'
@@ -290,7 +290,7 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
             </div>
           ) : error ? (
             <div className="preview-message error">
-              <p>❌ Preview failed</p>
+              <p><AlertCircle size={24} /> Preview failed</p>
               <p>{error}</p>
               <button className="download-btn" onClick={handleDownload}>
                 <Download size={16} /> Download Instead
@@ -330,7 +330,7 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
             </div>
           ) : isAudio && previewUrl ? (
             <div className="audio-player-container">
-              <div className="audio-icon">🎵</div>
+              <Music size={48} className="audio-icon-svg" />
               <p className="audio-filename">{file.name}</p>
               <p className="audio-hint">Playing in persistent player below</p>
               <button className="download-btn" onClick={onClose}>
@@ -344,7 +344,7 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
             </div>
           ) : (
             <div className="preview-message">
-              <p>📄 File Preview</p>
+              <p><FileText size={24} /> File Preview</p>
               <p>{file.name}</p>
               <button className="download-btn" onClick={handleDownload}>
                 <Download size={16} /> Download File
