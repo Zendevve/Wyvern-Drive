@@ -57,7 +57,7 @@ function formatDateLabel(dateStr: string): string {
 }
 
 /**
- * Get date key from file (YYYY-MM-DD)
+ * Get date key from file (YYYY-MM-DD in local time)
  */
 function getDateKey(file: WyvernFile): string {
   // Use updated_at or created_at as fallback
@@ -67,7 +67,11 @@ function getDateKey(file: WyvernFile): string {
   const date = new Date(dateStr)
   if (isNaN(date.getTime())) return 'Unknown'
 
-  return date.toISOString().split('T')[0]
+  // Use local time, not UTC, to match formatDateLabel behavior
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 /**

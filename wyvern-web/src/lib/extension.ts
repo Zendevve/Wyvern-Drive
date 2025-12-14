@@ -1,17 +1,54 @@
 /**
  * Extension Detection - Checks if the Wyvern Drive browser extension is active
+ * Uses active probing to avoid race conditions with content script loading
  */
 
 let extensionReady = false
+let probeInProgress = false
 
-// Listen for the extension's ready signal
+// Listen for the extension's ready signal (covers fast extension load)
 window.addEventListener('message', (event) => {
   if (event.source !== window) return
-  if (event.data.type === 'WYVERN_EXTENSION_READY') {
+  if (event.data.type === 'WYVERN_EXTENSION_READY' || event.data.type === 'WYVERN_PONG') {
     extensionReady = true
     console.log('[Wyvern] Extension detected and ready')
   }
 })
+
+/**
+ * Actively probe for the extension (sends ping, waits for pong)
+ */
+async function probeExtension(timeoutMs: number = 1000): Promise<boolean> {
+  if (extensionReady) return true
+  if (probeInProgress) {
+    // Wait for existing probe
+    await new Promise(resolve => setTimeout(resolve, timeoutMs))
+    return extensionReady
+  }
+
+  probeInProgress = true
+
+  return new Promise((resolve) => {
+    const handlePong = (event: MessageEvent) => {
+      if (event.source !== window) return
+      if (event.data.type === 'WYVERN_PONG') {
+        extensionReady = true
+        window.removeEventListener('message', handlePong)
+        probeInProgress = false
+        resolve(true)
+      }
+    }
+
+    window.addEventListener('message', handlePong)
+    window.postMessage({ type: 'WYVERN_PING' }, '*')
+
+    setTimeout(() => {
+      window.removeEventListener('message', handlePong)
+      probeInProgress = false
+      resolve(extensionReady)
+    }, timeoutMs)
+  })
+}
 
 /**
  * Check if the extension is available
@@ -22,23 +59,21 @@ export function isExtensionAvailable(): boolean {
 
 /**
  * Wait for extension to be ready (with timeout)
+ * Now actively probes the extension instead of passively waiting
  */
 export async function waitForExtension(timeoutMs: number = 3000): Promise<boolean> {
   if (extensionReady) return true
 
-  return new Promise((resolve) => {
-    const checkInterval = setInterval(() => {
-      if (extensionReady) {
-        clearInterval(checkInterval)
-        resolve(true)
-      }
-    }, 100)
+  // Try probing multiple times
+  const probeInterval = 500
+  const attempts = Math.ceil(timeoutMs / probeInterval)
 
-    setTimeout(() => {
-      clearInterval(checkInterval)
-      resolve(extensionReady)
-    }, timeoutMs)
-  })
+  for (let i = 0; i < attempts; i++) {
+    const found = await probeExtension(probeInterval)
+    if (found) return true
+  }
+
+  return extensionReady
 }
 
 /**
