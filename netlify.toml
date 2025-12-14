@@ -5,7 +5,16 @@
   command = "npm run build"
   publish = "dist"
 
+# Edge Functions
+[edge_functions]
+  included_files = ["netlify/edge-functions/**"]
+
+[[edge_functions]]
+  path = "/share/*"
+  function = "og-share"
+
 # SPA routing - redirect all routes to index.html
+# Note: Edge function runs BEFORE this redirect for /share/* paths
 [[redirects]]
   from = "/*"
   to = "/index.html"
@@ -16,3 +25,4 @@
 
 [build.environment]
   NODE_VERSION = "20"
+
