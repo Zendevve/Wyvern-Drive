@@ -170,7 +170,9 @@ export const useFileStore = create<FileStore>()(
         // Reinitialize manager with new webhooks
         console.log('[FileStore] Updating webhooks and reinitializing manager')
         const { serverBoostLevel } = get()
-        const manager = await WyvernFileManager.create(validUrls, serverBoostLevel)
+        // IMPORTANT: Using createSync for backward compatibility with existing userIds
+        // TODO: Migrate to create() after implementing userId migration
+        const manager = WyvernFileManager.createSync(validUrls, serverBoostLevel)
         if (encryptionPassword) {
           await manager.setPassword(encryptionPassword)
         }
@@ -203,7 +205,9 @@ export const useFileStore = create<FileStore>()(
         if (urls.length === 0) return
 
         console.log('[FileStore] Initializing manager with', urls.length, 'webhook(s). Boost:', serverBoostLevel, 'PW present:', !!encryptionPassword)
-        const manager = await WyvernFileManager.create(urls, serverBoostLevel)
+        // IMPORTANT: Using createSync for backward compatibility with existing userIds
+        // TODO: Migrate to create() after implementing userId migration
+        const manager = WyvernFileManager.createSync(urls, serverBoostLevel)
         if (encryptionPassword) {
           await manager.setPassword(encryptionPassword)
         }
