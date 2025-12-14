@@ -17,9 +17,11 @@ import {
   Video,
   Music,
   FileText,
-  File
+  File,
+  Upload
 } from 'lucide-react'
 import { useFileStore } from '../../stores/fileStore'
+import { PendingUploadsModal } from '../files/PendingUploads'
 import type { WyvernFile, WyvernFolder } from '../../lib/types'
 import './Sidebar.css'
 
@@ -85,6 +87,7 @@ export function Sidebar() {
   const { logout, uploadFiles, uploadFolder, files, getWebhookPoolStats, setActiveModal, isSyncing, isOffline } = useFileStore()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [showAnalytics, setShowAnalytics] = useState(false)
+  const [showPendingUploads, setShowPendingUploads] = useState(false)
 
   // Calculate total storage used from all files
   const totalStorageUsed = useMemo(() => calculateTotalSize(files), [files])
@@ -116,6 +119,7 @@ export function Sidebar() {
   }
 
   return (
+  <>
     <aside className="sidebar">
       {/* 1. App Logo / Home */}
       <div className="sidebar-header">
@@ -182,10 +186,13 @@ export function Sidebar() {
             <span>Shared with me</span>
           </button>
 
-          <div className="nav-label mt-4">Smart Views</div>
           <button className="nav-item">
             <Clock size={18} className="nav-icon" />
             <span>Recent</span>
+          </button>
+          <button className="nav-item" onClick={() => setShowPendingUploads(true)}>
+            <Upload size={18} className="nav-icon" />
+            <span>Pending Uploads</span>
           </button>
           <button className="nav-item">
             <Star size={18} className="nav-icon" />
@@ -303,5 +310,12 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+
+    {/* Pending Uploads Modal */}
+    <PendingUploadsModal
+      isOpen={showPendingUploads}
+      onClose={() => setShowPendingUploads(false)}
+    />
+  </>
   )
 }
