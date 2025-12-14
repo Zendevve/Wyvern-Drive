@@ -1,4 +1,5 @@
 import { useRef, useState, useMemo, useCallback } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Home,
   Cloud,
@@ -85,6 +86,8 @@ function formatStorageSize(bytes: number): string {
 }
 
 export function Sidebar() {
+  const navigate = useNavigate()
+  const location = useLocation()
   const { logout, uploadFiles, uploadFolder, files, getWebhookPoolStats, setActiveModal, isSyncing, isOffline } = useFileStore()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [showAnalytics, setShowAnalytics] = useState(false)
@@ -199,9 +202,19 @@ export function Sidebar() {
           {/* 3. Navigation Links */}
           <nav className="nav-section">
             <div className="nav-label">Locations</div>
-            <button className="nav-item active">
+            <button
+              className={`nav-item ${location.pathname === '/' ? 'active' : ''}`}
+              onClick={() => navigate('/')}
+            >
               <Home size={18} className="nav-icon" />
               <span>Home Drive</span>
+            </button>
+            <button
+              className={`nav-item ${location.pathname === '/photos' ? 'active' : ''}`}
+              onClick={() => navigate('/photos')}
+            >
+              <Image size={18} className="nav-icon" />
+              <span>Photos</span>
             </button>
             <button className="nav-item">
               <Cloud size={18} className="nav-icon" />

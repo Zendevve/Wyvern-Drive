@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { FileManager } from './components/FileManager'
+import { PhotoTimeline } from './components/photos/PhotoTimeline'
 import { Sidebar } from './components/layout/Sidebar'
 import { SetupScreen } from './components/SetupScreen'
 import { ShareView } from './components/ShareView'
@@ -45,7 +46,10 @@ function AuthenticatedApp() {
         </header>
 
         <main className="main-content">
-          <FileManager />
+          <Routes>
+            <Route path="/" element={<FileManager />} />
+            <Route path="/photos" element={<PhotoTimeline />} />
+          </Routes>
         </main>
       </div>
 
@@ -58,6 +62,7 @@ function AuthenticatedApp() {
     </div>
   )
 }
+
 
 function App() {
   return (
