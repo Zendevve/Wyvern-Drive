@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useFileStore } from '../stores/fileStore'
 import { Shield, Zap, Lock, Globe, Loader2, Link, Key, Plus, Minus } from 'lucide-react'
 import './SetupScreen.css'
+
+// LocalStorage key for persisting webhooks across sessions
+const SAVED_WEBHOOKS_KEY = 'wyvern-saved-webhooks'
 
 export function SetupScreen() {
   const { setWebhookUrls, setEncryptionPassword, isLoading } = useFileStore()
@@ -9,6 +12,21 @@ export function SetupScreen() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [useEncryption, setUseEncryption] = useState(false)
+
+  // Load saved webhooks from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(SAVED_WEBHOOKS_KEY)
+    if (saved) {
+      try {
+        const savedWebhooks = JSON.parse(saved)
+        if (Array.isArray(savedWebhooks) && savedWebhooks.length > 0) {
+          setWebhooks(savedWebhooks)
+        }
+      } catch {
+        // Ignore invalid JSON
+      }
+    }
+  }, [])
 
   const addWebhook = () => {
     setWebhooks([...webhooks, ''])
@@ -30,6 +48,9 @@ export function SetupScreen() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
+
+    // Save webhooks to localStorage for persistence across logout/re-login
+    localStorage.setItem(SAVED_WEBHOOKS_KEY, JSON.stringify(validWebhooks))
 
     if (useEncryption && password) {
       setEncryptionPassword(password)
