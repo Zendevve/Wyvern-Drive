@@ -6,10 +6,10 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useFileStore } from '../../stores/fileStore'
-import { Calendar, Image as ImageIcon, Loader } from 'lucide-react'
+import { Calendar, Image as ImageIcon, Loader, Video } from 'lucide-react'
 import type { WyvernFile, ChunkInfo, LegacyChunkInfo } from '../../lib/types'
 import { normalizeChunk } from '../../lib/types'
-import { isImageFile, getMimeType } from '../../lib/thumbnails'
+import { isImageFile, isVideoFile, getMimeType } from '../../lib/thumbnails'
 import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
 import { fetchViaExtension } from '../../lib/extension' // Import centralized utility
@@ -75,7 +75,7 @@ function getDateKey(file: WyvernFile): string {
 }
 
 /**
- * PhotoThumbnail - Individual photo with lazy loading
+ * PhotoThumbnail - Individual photo/video with lazy loading
  */
 function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => void }) {
   const [thumbnail, setThumbnail] = useState<string | null>(null)
@@ -84,6 +84,7 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
   const { encryptionPassword, selectedIds, toggleSelection } = useFileStore()
 
   const isSelected = selectedIds.has(String(photo.id))
+  const isVideo = isVideoFile(photo.name)
 
   useEffect(() => {
     if (thumbnail || !photo.content) return
@@ -147,7 +148,7 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
 
   return (
     <div
-      className={`photo-thumbnail ${isSelected ? 'selected' : ''}`}
+      className={`photo-thumbnail ${isSelected ? 'selected' : ''} ${isVideo ? 'is-video' : ''}`}
       onClick={handleClick}
     >
       {isLoading ? (
@@ -155,7 +156,10 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
           <Loader size={20} className="spinner" />
         </div>
       ) : thumbnail ? (
-        <img src={thumbnail} alt={photo.name} loading="lazy" />
+        <>
+          <img src={thumbnail} alt={photo.name} loading="lazy" />
+          {isVideo && <div className="video-badge"><Video size={16} /></div>}
+        </>
       ) : error ? (
         <div className="photo-error">
           <ImageIcon size={24} />
@@ -177,10 +181,10 @@ export function PhotoTimeline() {
   const { files, setPreviewFile, loadFiles, isLoading } = useFileStore()
   const parentRef = useRef<HTMLDivElement>(null)
 
-  // Filter to only image files
-  const imageFiles = useMemo(() => {
+  // Filter to images and videos (media files)
+  const mediaFiles = useMemo(() => {
     return Object.values(files)
-      .filter((f): f is WyvernFile => f.type === 'file' && isImageFile(f.name))
+      .filter((f): f is WyvernFile => f.type === 'file' && (isImageFile(f.name) || isVideoFile(f.name)))
       .sort((a, b) => {
         const dateA = new Date(a.updated_at || a.created_at || 0).getTime()
         const dateB = new Date(b.updated_at || b.created_at || 0).getTime()
@@ -192,7 +196,7 @@ export function PhotoTimeline() {
   const photoGroups = useMemo(() => {
     const groups: Map<string, WyvernFile[]> = new Map()
 
-    imageFiles.forEach(photo => {
+    mediaFiles.forEach(photo => {
       const key = getDateKey(photo)
       const existing = groups.get(key) || []
       existing.push(photo)
@@ -207,7 +211,7 @@ export function PhotoTimeline() {
         label: formatDateLabel(date),
         photos
       }))
-  }, [imageFiles])
+  }, [mediaFiles])
 
   // Build virtualized rows (headers + photo rows)
   const rows = useMemo((): TimelineRow[] => {
@@ -252,7 +256,7 @@ export function PhotoTimeline() {
   }, [])
 
   // Stats
-  const totalPhotos = imageFiles.length
+  const totalPhotos = mediaFiles.length
 
   return (
     <div className="photo-timeline">

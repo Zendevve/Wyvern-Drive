@@ -269,11 +269,12 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
         onKeyDown={handleKeyDown}
       >
         {/* Thumbnail or Icon */}
-        {viewMode === 'grid' && isImage && thumbnail ? (
-          <div className="file-thumbnail">
+        {viewMode === 'grid' && (isImage || isVideo) && thumbnail ? (
+          <div className={`file-thumbnail ${isVideo ? 'video-thumb' : ''}`}>
             <img src={thumbnail} alt={file.name} />
+            {isVideo && <div className="video-overlay"><Video size={24} /></div>}
           </div>
-        ) : viewMode === 'grid' && isImage && isLoadingThumb ? (
+        ) : viewMode === 'grid' && (isImage || isVideo) && isLoadingThumb ? (
           <div className="file-thumbnail loading">
             <Loader size={24} className="spinner" />
           </div>
