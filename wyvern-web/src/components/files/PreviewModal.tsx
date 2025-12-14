@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, Loader, RotateCcw } from 'lucide-react'
-import type { WyvernFile, ChunkInfo } from '../../lib/types'
+import type { WyvernFile, ChunkInfo, LegacyChunkInfo } from '../../lib/types'
+import { normalizeChunk } from '../../lib/types'
 import { isImageFile, isVideoFile, isAudioFile, getMimeType } from '../../lib/thumbnails'
 import { useFileStore } from '../../stores/fileStore'
 import { useAudioPlayer } from '../../stores/audioPlayerStore'
@@ -100,8 +101,9 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
           throw new Error('No content data')
         }
 
-        const chunks: ChunkInfo[] = JSON.parse(file.content)
-        chunks.sort((a, b) => a.index - b.index)
+        const rawChunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(file.content)
+        const chunks = rawChunks.map(c => normalizeChunk(c))
+        chunks.sort((a, b) => a.i - b.i)
 
         // Get decryption key if encrypted
         let decryptionKey: CryptoKey | null = null
@@ -118,11 +120,11 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
         const fileParts: ArrayBuffer[] = []
 
         for (const chunk of chunks) {
-          const data = await fetchViaExtension(chunk.url)
+          const data = await fetchViaExtension(chunk.u)
 
           // Decrypt if needed
-          if (file.encrypted && decryptionKey && chunk.iv) {
-            const iv = new Uint8Array(chunk.iv)
+          if (file.encrypted && decryptionKey && chunk.v) {
+            const iv = new Uint8Array(chunk.v)
             const decrypted = await decryptChunk(data, decryptionKey, iv)
             fileParts.push(decrypted)
           } else {

@@ -5,9 +5,11 @@ import {
   type UploadOptions,
   type DownloadOptions,
   type ChunkInfo,
+  type LegacyChunkInfo,
   type FileVersion,
   type ServerBoostLevel,
   getChunkSizeForBoostLevel,
+  normalizeChunk,
   FILE_DELIMITER
 } from './types'
 import {
@@ -364,12 +366,12 @@ export class WyvernFileManager {
 
       if (!messageId || !attachmentUrl) throw new Error('Failed to upload chunk or get attachment URL')
 
+      // Use compact format for chunk metadata (short keys)
       chunks[index] = {
-        index,
-        messageId,
-        url: attachmentUrl,
-        size: chunkBuffer.byteLength,
-        iv: iv ? Array.from(iv) : undefined
+        i: index,              // index
+        u: attachmentUrl,      // url
+        s: chunkBuffer.byteLength,  // size
+        v: iv ? Array.from(iv) : undefined  // iv (optional)
       }
 
       uploadedBytes += chunkBlob.size
@@ -478,8 +480,9 @@ export class WyvernFileManager {
 
     if (!Array.isArray(chunks)) throw new Error('Invalid chunk data')
 
-    // Sort chunks by index
-    chunks.sort((a, b) => a.index - b.index)
+    // Sort chunks by index (normalize first for backward compat)
+    const normalizedChunks = chunks.map((c: ChunkInfo | LegacyChunkInfo) => normalizeChunk(c))
+    normalizedChunks.sort((a, b) => a.i - b.i)
 
     // Check encryption and restore key with file's salt
     const isEncrypted = file.encrypted
@@ -497,30 +500,30 @@ export class WyvernFileManager {
     }
 
     // Prepare for download aggregation
-    const fileParts: ArrayBuffer[] = new Array(chunks.length)
+    const fileParts: ArrayBuffer[] = new Array(normalizedChunks.length)
     let downloadedBytes = 0
-    const totalSize = chunks.reduce((acc, c) => acc + c.size, 0) // Encrypted size
+    const totalSize = normalizedChunks.reduce((acc, c) => acc + c.s, 0) // Encrypted size
 
     // Process chunks in parallel batches
     const batchSize = CONFIG.MAX_PARALLEL_DOWNLOADS
-    for (let i = 0; i < chunks.length; i += batchSize) {
-      const batch = chunks.slice(i, i + batchSize)
+    for (let i = 0; i < normalizedChunks.length; i += batchSize) {
+      const batch = normalizedChunks.slice(i, i + batchSize)
 
       await Promise.all(batch.map(async (chunk) => {
-        if (!chunk.url) throw new Error('Missing chunk URL')
+        if (!chunk.u) throw new Error('Missing chunk URL')
 
         // Fetch via extension to bypass CORS
-        let data = await this.fetchViaExtension(chunk.url)
+        let data = await this.fetchViaExtension(chunk.u)
 
         // Decrypt if needed
         if (isEncrypted && decryptionKey) {
-          if (!chunk.iv) throw new Error('Missing IV for encrypted chunk')
-          const iv = new Uint8Array(chunk.iv)
+          if (!chunk.v) throw new Error('Missing IV for encrypted chunk')
+          const iv = new Uint8Array(chunk.v)
           data = await decryptChunk(data, decryptionKey, iv)
         }
 
-        fileParts[chunk.index] = data
-        downloadedBytes += chunk.size
+        fileParts[chunk.i] = data
+        downloadedBytes += chunk.s
         options?.onProgress?.(downloadedBytes, totalSize)
       }))
     }
@@ -605,24 +608,25 @@ export class WyvernFileManager {
           // Let's implement fetch content logic inline similar to downloadFile
           if (!file.content) return // Skip empty files?
 
-          const chunks: ChunkInfo[] = JSON.parse(file.content)
-          chunks.sort((a, b) => a.index - b.index)
+          const chunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(file.content)
+          const normalizedChunks = chunks.map(c => normalizeChunk(c))
+          normalizedChunks.sort((a, b) => a.i - b.i)
 
           // Fetch chunks
-          const fileParts: ArrayBuffer[] = new Array(chunks.length)
+          const fileParts: ArrayBuffer[] = new Array(normalizedChunks.length)
 
           // Fetch chunks serial or parallel?
           // Inside a batch of files, we are already parallel.
           // Let's do serial chunks for simplicity within a file in ZIP mode to avoid overloading
           // OR parallel chunks but with limit.
 
-          for (const chunk of chunks) {
-            let data = await this.fetchViaExtension(chunk.url)
-            if (file.encrypted && this.key && chunk.iv) {
-              const iv = new Uint8Array(chunk.iv)
+          for (const chunk of normalizedChunks) {
+            let data = await this.fetchViaExtension(chunk.u)
+            if (file.encrypted && this.key && chunk.v) {
+              const iv = new Uint8Array(chunk.v)
               data = await decryptChunk(data, this.key, iv)
             }
-            fileParts[chunk.index] = data
+            fileParts[chunk.i] = data
           }
 
           const fileBlob = new Blob(fileParts)

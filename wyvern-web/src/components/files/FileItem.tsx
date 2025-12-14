@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import type { WyvernFile, WyvernFolder, ChunkInfo } from '../../lib/types'
+import type { WyvernFile, WyvernFolder, ChunkInfo, LegacyChunkInfo } from '../../lib/types'
+import { normalizeChunk } from '../../lib/types'
 import { useFileStore } from '../../stores/fileStore'
 import { ContextMenu } from './ContextMenu'
 import { getFileIconName, formatSize, formatDate } from '../../lib/utils'
@@ -44,8 +45,9 @@ export function FileItem({ file, viewMode }: FileItemProps) {
     const loadThumbnail = async () => {
       setIsLoadingThumb(true)
       try {
-        const chunks: ChunkInfo[] = JSON.parse(wyvernFile.content)
-        chunks.sort((a, b) => a.index - b.index)
+        const rawChunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(wyvernFile.content)
+        const chunks = rawChunks.map(c => normalizeChunk(c))
+        chunks.sort((a, b) => a.i - b.i)
 
         // Get decryption key if encrypted
         let decryptionKey: CryptoKey | null = null
@@ -58,10 +60,10 @@ export function FileItem({ file, viewMode }: FileItemProps) {
         // Fetch chunks
         const fileParts: ArrayBuffer[] = []
         for (const chunk of chunks) {
-          const data = await fetchViaExtension(chunk.url)
+          const data = await fetchViaExtension(chunk.u)
 
-          if (wyvernFile.encrypted && decryptionKey && chunk.iv) {
-            const iv = new Uint8Array(chunk.iv)
+          if (wyvernFile.encrypted && decryptionKey && chunk.v) {
+            const iv = new Uint8Array(chunk.v)
             const decrypted = await decryptChunk(data, decryptionKey, iv)
             fileParts.push(decrypted)
           } else {
