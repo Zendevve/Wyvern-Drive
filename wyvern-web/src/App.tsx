@@ -11,6 +11,8 @@ import { MoveModal } from './components/files/MoveModal'
 import { VersionHistoryModal } from './components/files/VersionHistoryModal'
 import { ProgressToasts } from './components/ui/ProgressToasts'
 import { GlobalSearch } from './components/ui/GlobalSearch'
+import { OfflineIndicator } from './components/ui/OfflineIndicator'
+import { InstallPrompt, UpdatePrompt } from './components/ui/PWAPrompts'
 import { AudioPlayer } from './components/AudioPlayer'
 import { useFileStore } from './stores/fileStore'
 import './styles/App.css'
@@ -58,6 +60,11 @@ function AuthenticatedApp() {
       <VersionHistoryModal />
       <ProgressToasts />
       <AudioPlayer />
+
+      {/* PWA Components */}
+      <OfflineIndicator />
+      <InstallPrompt />
+      <UpdatePrompt />
     </div>
   )
 }
