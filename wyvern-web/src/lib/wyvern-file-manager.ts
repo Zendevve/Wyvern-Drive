@@ -512,17 +512,20 @@ export class WyvernFileManager {
             if (data.attachments && data.attachments.length > 0) {
               attachmentUrl = data.attachments[0].url
             }
+          } else if (res.status === 429) {
+            // Rate limit - wait and retry (don't count against attempt limit)
+            const retryAfter = parseInt(res.headers.get('Retry-After') || '2') * 1000
+            console.warn(`[Upload] Rate limited, waiting ${retryAfter}ms before retry...`)
+            await new Promise(r => setTimeout(r, retryAfter + 500)) // Add 500ms buffer
+            continue // Retry without incrementing attempts
           } else {
-            // Rate limit handling
-            if (res.status === 429) {
-              const retryAfter = parseInt(res.headers.get('Retry-After') || '1') * 1000
-              await new Promise(r => setTimeout(r, retryAfter))
-            }
             throw new Error(`Discord upload failed: ${res.status}`)
           }
         } catch (e) {
           attempts++
-          await new Promise(r => setTimeout(r, CONFIG.RETRY_DELAY_BASE * Math.pow(2, attempts)))
+          const backoffDelay = CONFIG.RETRY_DELAY_BASE * Math.pow(2, attempts)
+          console.warn(`[Upload] Chunk ${index} attempt ${attempts}/${CONFIG.RETRY_ATTEMPTS} failed, waiting ${backoffDelay}ms...`)
+          await new Promise(r => setTimeout(r, backoffDelay))
           if (attempts === CONFIG.RETRY_ATTEMPTS) throw e
         }
       }
