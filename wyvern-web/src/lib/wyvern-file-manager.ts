@@ -86,16 +86,32 @@ export class WyvernFileManager {
   private password: string | null = null // Store password for restoring keys with different salts
   private boostLevel: ServerBoostLevel = 'none' // Server boost level for chunk sizing
 
-
-  constructor(webhookUrls: string | string[], boostLevel: ServerBoostLevel = 'none') {
-    // Support both single URL (backwards compat) and array
-    this.webhooks = Array.isArray(webhookUrls) ? webhookUrls : [webhookUrls]
-    // Initialize upload counters for each webhook
+  // Private constructor - use create() factory method instead
+  private constructor(webhookUrls: string[], userId: string, boostLevel: ServerBoostLevel = 'none') {
+    this.webhooks = webhookUrls
     this.webhookUploadCounts = new Array(this.webhooks.length).fill(0)
-    // Simple hash of first webhook URL as userId
-    this.userId = this.hashUrl(this.webhooks[0])
-    // Store boost level for dynamic chunk sizing
+    this.userId = userId
     this.boostLevel = boostLevel
+  }
+
+  /**
+   * Factory method to create WyvernFileManager with secure userId hash
+   */
+  static async create(webhookUrls: string | string[], boostLevel: ServerBoostLevel = 'none'): Promise<WyvernFileManager> {
+    const urls = Array.isArray(webhookUrls) ? webhookUrls : [webhookUrls]
+    const userId = await WyvernFileManager.hashUrlSecure(urls[0])
+    return new WyvernFileManager(urls, userId, boostLevel)
+  }
+
+  /**
+   * Synchronous constructor for backward compatibility
+   * Uses weak hash - prefer create() for new code
+   * @deprecated Use WyvernFileManager.create() instead
+   */
+  static createSync(webhookUrls: string | string[], boostLevel: ServerBoostLevel = 'none'): WyvernFileManager {
+    const urls = Array.isArray(webhookUrls) ? webhookUrls : [webhookUrls]
+    const userId = WyvernFileManager.hashUrlWeak(urls[0])
+    return new WyvernFileManager(urls, userId, boostLevel)
   }
 
   // Get current chunk size based on server boost level
@@ -157,7 +173,21 @@ export class WyvernFileManager {
     return restoreEncryptionContext(this.password, fileSalt)
   }
 
-  private hashUrl(url: string): string {
+  /**
+   * SECURITY: SHA-256 hash for secure userId generation
+   */
+  private static async hashUrlSecure(url: string): Promise<string> {
+    const encoder = new TextEncoder()
+    const data = encoder.encode(url)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
+  }
+
+  /**
+   * @deprecated Weak 32-bit hash - only for backward compatibility
+   */
+  private static hashUrlWeak(url: string): string {
     let hash = 0
     for (let i = 0; i < url.length; i++) {
       const char = url.charCodeAt(i)

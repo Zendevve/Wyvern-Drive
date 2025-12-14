@@ -11,14 +11,40 @@ function getSupabase() {
   )
 }
 
-// CORS headers
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+// Allowed origins for CORS
+const ALLOWED_ORIGINS = [
+  "https://wyvern-drive.netlify.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:5173"
+]
+
+// Get CORS headers with origin validation
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  }
+}
+
+// Allowed fields for file updates (security: prevent arbitrary field modification)
+const ALLOWED_UPDATE_FIELDS = ['name', 'parent_id']
+
+// SHA-256 hash for password (secure, unlike base64)
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(password)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
 Deno.serve(async (req: Request) => {
+  const origin = req.headers.get("Origin")
+  const corsHeaders = getCorsHeaders(origin)
+
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders })
@@ -387,10 +413,22 @@ Deno.serve(async (req: Request) => {
     const updateMatch = path.match(/^\/files\/([^\/]+)\/(\d+)\/update$/)
     if (updateMatch && method === "POST") {
       const [, userId, id] = updateMatch
-      const updates = await req.json()
+      const rawUpdates = await req.json()
       const supabase = getSupabase()
 
+      // SECURITY: Only allow whitelisted fields to be updated
+      const updates: Record<string, unknown> = {}
+      for (const field of ALLOWED_UPDATE_FIELDS) {
+        if (field in rawUpdates) {
+          updates[field] = rawUpdates[field]
+        }
+      }
       updates.updated_at = new Date().toISOString()
+
+      if (Object.keys(updates).length === 1) {
+        // Only updated_at, no valid fields provided
+        return json({ error: "No valid fields to update" }, 400)
+      }
 
       const { error } = await supabase
         .from("files")
@@ -515,6 +553,16 @@ Deno.serve(async (req: Request) => {
       const [, userId, fileId, versionId] = restoreMatch
       const supabase = getSupabase()
 
+      // SECURITY: Verify file belongs to user before allowing version restore
+      const { data: file } = await supabase
+        .from("files")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("id", fileId)
+        .maybeSingle()
+
+      if (!file) return json({ error: "File not found or access denied" }, 404)
+
       const { data: version } = await supabase
         .from("file_versions")
         .select("*")
@@ -598,8 +646,8 @@ Deno.serve(async (req: Request) => {
           }
         }
         if (body.password) {
-          // Simple hash for demo - use proper hashing in production
-          passwordHash = btoa(body.password)
+          // SECURITY: Use SHA-256 hash instead of base64 encoding
+          passwordHash = await hashPassword(body.password)
         }
       } catch {
         // No body is fine
@@ -685,7 +733,9 @@ Deno.serve(async (req: Request) => {
       // Check password
       const providedPassword = url.searchParams.get("password")
       if (share.password_hash) {
-        if (!providedPassword || btoa(providedPassword) !== share.password_hash) {
+        // SECURITY: Use SHA-256 hash comparison
+        const providedHash = providedPassword ? await hashPassword(providedPassword) : null
+        if (!providedHash || providedHash !== share.password_hash) {
           return json({ error: "Password required", passwordRequired: true }, 401)
         }
       }

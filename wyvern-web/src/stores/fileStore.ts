@@ -170,7 +170,7 @@ export const useFileStore = create<FileStore>()(
         // Reinitialize manager with new webhooks
         console.log('[FileStore] Updating webhooks and reinitializing manager')
         const { serverBoostLevel } = get()
-        const manager = new WyvernFileManager(validUrls, serverBoostLevel)
+        const manager = await WyvernFileManager.create(validUrls, serverBoostLevel)
         if (encryptionPassword) {
           await manager.setPassword(encryptionPassword)
         }
@@ -203,7 +203,7 @@ export const useFileStore = create<FileStore>()(
         if (urls.length === 0) return
 
         console.log('[FileStore] Initializing manager with', urls.length, 'webhook(s). Boost:', serverBoostLevel, 'PW present:', !!encryptionPassword)
-        const manager = new WyvernFileManager(urls, serverBoostLevel)
+        const manager = await WyvernFileManager.create(urls, serverBoostLevel)
         if (encryptionPassword) {
           await manager.setPassword(encryptionPassword)
         }
@@ -776,10 +776,8 @@ export const useFileStore = create<FileStore>()(
         userId: state.userId,
         isAuthenticated: state.isAuthenticated,
         serverBoostLevel: state.serverBoostLevel,  // Persist boost level setting
-        // Don't persist sensitive password if possible, but setup screen asks for it.
-        // For MVP we persist it or ask user to re-enter?
-        // Let's persist for convenience but exclude manager instance
-        encryptionPassword: state.encryptionPassword,
+        // SECURITY: encryptionPassword is intentionally NOT persisted
+        // User must re-enter password on each session to decrypt files
       }),
     }
   )
