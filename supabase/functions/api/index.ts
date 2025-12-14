@@ -41,6 +41,26 @@ async function hashPassword(password: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
+// Old 32-bit userId hash (for migration from legacy)
+function hashUrlWeak(url: string): string {
+  let hash = 0
+  for (let i = 0; i < url.length; i++) {
+    const char = url.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash
+  }
+  return Math.abs(hash).toString(16)
+}
+
+// New SHA-256 userId hash (secure)
+async function hashUrlSecure(url: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(url)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16)
+}
+
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("Origin")
   const corsHeaders = getCorsHeaders(origin)
@@ -84,6 +104,81 @@ Deno.serve(async (req: Request) => {
     // Health check
     if (path === "/health") {
       return json({ status: "ok", name: "Wyvern Drive API" })
+    }
+
+    // POST /migrate - Migrate userId from old 32-bit hash to new SHA-256
+    if (path === "/migrate" && method === "POST") {
+      const { webhookUrl } = await req.json()
+      if (!webhookUrl) {
+        return json({ error: "webhookUrl is required" }, 400)
+      }
+
+      const oldUserId = hashUrlWeak(webhookUrl)
+      const newUserId = await hashUrlSecure(webhookUrl)
+
+      if (oldUserId === newUserId) {
+        return json({ message: "No migration needed", oldUserId, newUserId })
+      }
+
+      const supabase = getSupabase()
+
+      // Check if old userId has files
+      const { data: existingFiles, error: checkError } = await supabase
+        .from("files")
+        .select("id")
+        .eq("user_id", oldUserId)
+        .limit(1)
+
+      if (checkError) {
+        return json({ error: checkError.message }, 500)
+      }
+
+      if (!existingFiles || existingFiles.length === 0) {
+        // Check if new userId already has files (already migrated)
+        const { data: newFiles } = await supabase
+          .from("files")
+          .select("id")
+          .eq("user_id", newUserId)
+          .limit(1)
+
+        if (newFiles && newFiles.length > 0) {
+          return json({ message: "Already migrated", oldUserId, newUserId })
+        }
+
+        return json({ message: "No files found for this webhook", oldUserId, newUserId })
+      }
+
+      // Migrate files
+      const { error: filesError, count: filesCount } = await supabase
+        .from("files")
+        .update({ user_id: newUserId })
+        .eq("user_id", oldUserId)
+
+      if (filesError) {
+        return json({ error: `Failed to migrate files: ${filesError.message}` }, 500)
+      }
+
+      // Migrate shares
+      const { error: sharesError, count: sharesCount } = await supabase
+        .from("shares")
+        .update({ user_id: newUserId })
+        .eq("user_id", oldUserId)
+
+      if (sharesError) {
+        console.error("Failed to migrate shares:", sharesError)
+        // Don't fail entirely, shares are less critical
+      }
+
+      console.log(`[MIGRATE] userId ${oldUserId} -> ${newUserId}: ${filesCount} files, ${sharesCount || 0} shares`)
+
+      return json({
+        success: true,
+        message: "Migration complete",
+        oldUserId,
+        newUserId,
+        migratedFiles: filesCount || 0,
+        migratedShares: sharesCount || 0
+      })
     }
 
     // GET /stream/:userId/:fileId - Range request streaming for video/audio

@@ -96,11 +96,43 @@ export class WyvernFileManager {
 
   /**
    * Factory method to create WyvernFileManager with secure userId hash
+   * Automatically migrates existing files from old hash to new hash
    */
   static async create(webhookUrls: string | string[], boostLevel: ServerBoostLevel = 'none'): Promise<WyvernFileManager> {
     const urls = Array.isArray(webhookUrls) ? webhookUrls : [webhookUrls]
+
+    // Migrate existing files to new userId before creating manager
+    await WyvernFileManager.migrateUserId(urls[0])
+
     const userId = await WyvernFileManager.hashUrlSecure(urls[0])
     return new WyvernFileManager(urls, userId, boostLevel)
+  }
+
+  /**
+   * Migrate files from old 32-bit hash userId to new SHA-256 userId
+   */
+  static async migrateUserId(webhookUrl: string): Promise<void> {
+    try {
+      console.log('[WyvernFileManager] Checking if userId migration is needed...')
+      const response = await fetch(`${API_URL}/migrate`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ webhookUrl })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          console.log(`[WyvernFileManager] Migration complete: ${result.migratedFiles} files, ${result.migratedShares} shares`)
+        } else {
+          console.log(`[WyvernFileManager] Migration status: ${result.message}`)
+        }
+      } else {
+        console.warn('[WyvernFileManager] Migration check failed:', await response.text())
+      }
+    } catch (error) {
+      console.warn('[WyvernFileManager] Migration check error (continuing with new hash):', error)
+    }
   }
 
   /**
