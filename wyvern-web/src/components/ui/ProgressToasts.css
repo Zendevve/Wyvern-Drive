@@ -11,12 +11,12 @@
 }
 
 .progress-toast {
-  width: 320px;
+  width: 340px;
   background: rgba(20, 20, 28, 0.95);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   animation: slideIn 0.3s ease-out;
 }
@@ -35,50 +35,73 @@
 
 .toast-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.toast-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent, #6366f1);
+  flex-shrink: 0;
 }
 
 .toast-title {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   color: white;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .toast-speed {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #22c55e;
   font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  flex-shrink: 0;
 }
 
 .toast-info {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.toast-progress {
+  flex: 1;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+}
+
+.toast-eta {
+  color: rgba(255, 255, 255, 0.7);
+  font-style: italic;
 }
 
 .toast-percent {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--accent, #6366f1);
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
 }
 
 .progress-bar-bg {
-  height: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
   background: linear-gradient(90deg, #6366f1, #8b5cf6);
-  border-radius: 4px;
+  border-radius: 3px;
   transition: width 0.15s ease-out;
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
 }

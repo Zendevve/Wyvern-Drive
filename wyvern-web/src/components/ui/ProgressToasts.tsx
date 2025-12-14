@@ -34,6 +34,36 @@ function calculateSpeed(info: UploadInfo): string {
   return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
 }
 
+// Calculate ETA
+function calculateETA(info: UploadInfo): string {
+  const elapsed = (Date.now() - info.startTime) / 1000 // seconds
+  if (elapsed < 2 || info.loaded === 0) return ''
+
+  const rate = info.loaded / elapsed
+  const remaining = info.total - info.loaded
+  const etaSeconds = remaining / rate
+
+  if (etaSeconds < 60) {
+    return `~${Math.ceil(etaSeconds)}s left`
+  }
+  if (etaSeconds < 3600) {
+    const mins = Math.ceil(etaSeconds / 60)
+    return `~${mins}m left`
+  }
+  const hours = Math.floor(etaSeconds / 3600)
+  const mins = Math.ceil((etaSeconds % 3600) / 60)
+  return `~${hours}h ${mins}m left`
+}
+
+// Truncate file name for display
+function truncateName(name: string, maxLen = 25): string {
+  if (name.length <= maxLen) return name
+  const ext = name.includes('.') ? '.' + name.split('.').pop() : ''
+  const baseName = name.slice(0, name.length - ext.length)
+  const truncatedBase = baseName.slice(0, maxLen - ext.length - 3)
+  return truncatedBase + '...' + ext
+}
+
 export function ProgressToasts() {
   const uploadProgress = useFileStore(state => state.uploadProgress)
 
@@ -43,7 +73,7 @@ export function ProgressToasts() {
   const items = Array.from(uploadProgress.entries()).map(([id, info]) => ({
     id,
     info,
-    label: info.type === 'download' ? 'Downloading' : 'Uploading'
+    label: info.type === 'download' ? '↓' : '↑'
   }))
 
   return (
@@ -51,11 +81,15 @@ export function ProgressToasts() {
       {items.map(item => (
         <div key={item.id} className="progress-toast">
           <div className="toast-header">
-            <span className="toast-title">{item.label}...</span>
+            <span className="toast-label">{item.label}</span>
+            <span className="toast-title" title={item.info.fileName}>
+              {truncateName(item.info.fileName)}
+            </span>
             <span className="toast-speed">{calculateSpeed(item.info)}</span>
           </div>
           <div className="toast-info">
-            <span>{formatProgress(item.info)}</span>
+            <span className="toast-progress">{formatProgress(item.info)}</span>
+            <span className="toast-eta">{calculateETA(item.info)}</span>
             <span className="toast-percent">{Math.round(item.info.percent)}%</span>
           </div>
           <div className="progress-bar-bg">
@@ -69,3 +103,4 @@ export function ProgressToasts() {
     </div>
   )
 }
+

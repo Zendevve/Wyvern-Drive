@@ -6,6 +6,7 @@ import { cacheFileTree, getCachedFileTree, clearUserCache, isOnline } from '../l
 
 // Progress tracking with speed info
 export interface UploadInfo {
+  fileName: string   // Name of file being transferred
   percent: number
   loaded: number
   total: number
@@ -273,6 +274,7 @@ export const useFileStore = create<FileStore>()(
           set((state) => {
             const newProgress = new Map(state.uploadProgress)
             newProgress.set(tempId, {
+              fileName: file.name,
               percent: 0,
               loaded: 0,
               total: file.size,
@@ -295,6 +297,7 @@ export const useFileStore = create<FileStore>()(
                   set((state) => {
                     const newProgress = new Map(state.uploadProgress)
                     newProgress.set(tempId, {
+                      fileName: file.name,
                       percent: (loaded / total) * 100,
                       loaded,
                       total,
@@ -343,6 +346,7 @@ export const useFileStore = create<FileStore>()(
         set((state) => {
           const newProgress = new Map(state.uploadProgress)
           newProgress.set(tempId, {
+            fileName: 'Folder upload',
             percent: 0,
             loaded: 0,
             total: totalFiles,
@@ -360,6 +364,7 @@ export const useFileStore = create<FileStore>()(
               set((state) => {
                 const newProgress = new Map(state.uploadProgress)
                 newProgress.set(tempId, {
+                  fileName: 'Folder upload',
                   percent: (loaded / total) * 100,
                   loaded,
                   total,
@@ -418,6 +423,7 @@ export const useFileStore = create<FileStore>()(
         set((state) => {
           const newProgress = new Map(state.uploadProgress)
           newProgress.set(tempId, {
+            fileName: file.name,
             percent: 0,
             loaded: 0,
             total: fileSize,
@@ -434,6 +440,7 @@ export const useFileStore = create<FileStore>()(
               set((state) => {
                 const newProgress = new Map(state.uploadProgress)
                 newProgress.set(tempId, {
+                  fileName: file.name,
                   percent: (loaded / total) * 100,
                   loaded,
                   total,
@@ -473,9 +480,10 @@ export const useFileStore = create<FileStore>()(
         set((state) => {
           const newProgress = new Map(state.uploadProgress)
           newProgress.set(tempId, {
+            fileName: folder.name + '.zip',
             percent: 0,
             loaded: 0,
-            total: 100, // Folder tracks file count, not bytes
+            total: 100,
             startTime,
             type: 'download',
             unit: 'files'
@@ -489,6 +497,7 @@ export const useFileStore = create<FileStore>()(
               set((state) => {
                 const newProgress = new Map(state.uploadProgress)
                 newProgress.set(tempId, {
+                  fileName: folder.name + '.zip',
                   percent: (loaded / total) * 100,
                   loaded,
                   total,
