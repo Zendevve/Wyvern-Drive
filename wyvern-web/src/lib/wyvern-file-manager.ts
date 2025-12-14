@@ -484,13 +484,46 @@ export class WyvernFileManager {
       options?.onProgress?.(uploadedBytes, totalSize)
     }
 
-    // Process chunks in parallel batches with dynamic concurrency
-    for (let i = 0; i < totalChunks; i += concurrency) {
-      const batchIndices = []
-      for (let j = i; j < Math.min(i + concurrency, totalChunks); j++) {
-        batchIndices.push(j)
+    // Process chunks with streaming concurrency pool
+    // This starts uploading immediately and updates progress smoothly
+    // as each chunk completes, rather than waiting for entire batches
+    const uploadQueue = Array.from({ length: totalChunks }, (_, i) => i)
+    const inFlight = new Map<Promise<void>, number>() // Map promise to chunk index
+    const failedChunks: { index: number; error: Error }[] = []
+
+    const startUpload = (chunkIndex: number) => {
+      const uploadPromise = uploadChunk(chunkIndex)
+        .catch((error) => {
+          // Track failed chunks but don't throw yet
+          console.error(`[WyvernFileManager] Chunk ${chunkIndex} failed:`, error)
+          failedChunks.push({ index: chunkIndex, error })
+        })
+        .finally(() => {
+          inFlight.delete(uploadPromise)
+        })
+      inFlight.set(uploadPromise, chunkIndex)
+    }
+
+    // Fill initial batch
+    while (inFlight.size < concurrency && uploadQueue.length > 0) {
+      startUpload(uploadQueue.shift()!)
+    }
+
+    // Process until all done
+    while (inFlight.size > 0) {
+      // Wait for any one to complete
+      await Promise.race(inFlight.keys())
+
+      // Start new uploads to maintain concurrency
+      while (inFlight.size < concurrency && uploadQueue.length > 0) {
+        startUpload(uploadQueue.shift()!)
       }
-      await Promise.all(batchIndices.map(uploadChunk))
+    }
+
+    // If any chunks failed, throw error with details
+    if (failedChunks.length > 0) {
+      const failedIndices = failedChunks.map(c => c.index).join(', ')
+      throw new Error(`Upload failed for chunks: ${failedIndices}. Progress saved - resume by selecting the same file.`)
     }
 
     // Clear pending upload state on success

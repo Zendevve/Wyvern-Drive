@@ -126,6 +126,36 @@ export function SettingsModal() {
                 }
               </span>
             </div>
+
+            {/* Pro Tips Collapsible */}
+            <details className="webhook-pro-tips">
+              <summary>
+                <span className="pro-tips-label">💡 Pro Tips: Maximize Upload Speed</span>
+              </summary>
+              <div className="pro-tips-content">
+                <div className="pro-tip-item">
+                  <strong>Use Multiple Servers</strong>
+                  <p>Spread webhooks across 2-3 different Discord servers. Each server has independent rate limits, so you'll bypass single-server throttling.</p>
+                </div>
+                <div className="pro-tip-item">
+                  <strong>Optimal Setup</strong>
+                  <p>3-5 webhooks across 2-3 servers. Mix a Level 3 boosted server (24MB chunks) with regular servers for best results.</p>
+                </div>
+                <div className="pro-tip-item">
+                  <strong>Suggested Channel Names</strong>
+                  <p className="channel-names">
+                    <code>#wyvern-storage-1</code>
+                    <code>#wyvern-storage-2</code>
+                    <code>#wyvern-chunks</code>
+                    <code>#file-vault</code>
+                  </p>
+                </div>
+                <div className="pro-tip-item">
+                  <strong>Privacy Tip</strong>
+                  <p>Create channels in a private category. Set permissions so only you can view them.</p>
+                </div>
+              </div>
+            </details>
           </section>
 
           {/* Server Boost Level Section */}
