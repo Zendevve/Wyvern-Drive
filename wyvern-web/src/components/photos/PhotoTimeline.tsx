@@ -127,6 +127,7 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
   const [thumbnail, setThumbnail] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(false)
+  const thumbnailRef = useRef<string | null>(null) // For reliable cleanup
   const { encryptionPassword, selectedIds, toggleSelection } = useFileStore()
 
   const isSelected = selectedIds.has(String(photo.id))
@@ -173,6 +174,7 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
           const thumbUrl = await extractVideoFrame(videoUrl)
           URL.revokeObjectURL(videoUrl)
           if (thumbUrl) {
+            thumbnailRef.current = thumbUrl
             setThumbnail(thumbUrl)
           } else {
             setError(true)
@@ -180,6 +182,7 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
         } else {
           // Direct display for images
           const url = URL.createObjectURL(blob)
+          thumbnailRef.current = url
           setThumbnail(url)
         }
       } catch (err) {
@@ -192,8 +195,12 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
 
     loadThumbnail()
 
+    // Cleanup using ref for reliable URL revocation
     return () => {
-      if (thumbnail && !isVideo) URL.revokeObjectURL(thumbnail)
+      if (thumbnailRef.current && !isVideo) {
+        URL.revokeObjectURL(thumbnailRef.current)
+        thumbnailRef.current = null
+      }
     }
   }, [photo.id, photo.content, encryptionPassword])
 

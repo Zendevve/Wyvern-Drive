@@ -3,6 +3,18 @@
  * Handles CORS bypass for Discord attachment downloads
  */
 
+// Track ongoing operations to prevent service worker termination
+let activeOperations = 0
+
+// Keep service worker alive during operations
+function keepAlive() {
+  activeOperations++
+  // Chrome keeps service worker alive while there are pending promises
+  return () => {
+    activeOperations--
+  }
+}
+
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener(
   (request, sender, sendResponse) => {
@@ -18,6 +30,9 @@ chrome.runtime.onMessage.addListener(
       return true
     }
 
+    // Mark operation as active
+    const releaseKeepAlive = keepAlive()
+
     // Fetch the file and return as data URL
     fetch(url)
       .then(response => {
@@ -28,18 +43,22 @@ chrome.runtime.onMessage.addListener(
       })
       .then(blob => {
         // Convert blob to data URL for transfer
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          sendResponse({ data: reader.result })
-        }
-        reader.onerror = () => {
-          sendResponse({ error: 'Failed to read file' })
-        }
-        reader.readAsDataURL(blob)
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result)
+          reader.onerror = () => reject(new Error('Failed to read file'))
+          reader.readAsDataURL(blob)
+        })
+      })
+      .then(dataUrl => {
+        sendResponse({ data: dataUrl })
       })
       .catch(error => {
         console.error('Wyvern Drive fetch error:', error)
         sendResponse({ error: error.message })
+      })
+      .finally(() => {
+        releaseKeepAlive()
       })
 
     // Return true to indicate async response
@@ -49,3 +68,4 @@ chrome.runtime.onMessage.addListener(
 
 // Log when extension is loaded
 console.log('🐉 Wyvern Drive extension loaded')
+
