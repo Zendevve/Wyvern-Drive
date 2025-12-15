@@ -196,10 +196,12 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
     loadThumbnail()
 
     // Cleanup using ref for reliable URL revocation
+    // Delay revocation to prevent ERR_FILE_NOT_FOUND during React re-renders
     return () => {
-      if (thumbnailRef.current && !isVideo) {
-        URL.revokeObjectURL(thumbnailRef.current)
-        thumbnailRef.current = null
+      const urlToRevoke = thumbnailRef.current
+      thumbnailRef.current = null
+      if (urlToRevoke && !isVideo) {
+        setTimeout(() => URL.revokeObjectURL(urlToRevoke), 100)
       }
     }
   }, [photo.id, photo.content, encryptionPassword])

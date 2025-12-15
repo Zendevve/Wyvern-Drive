@@ -118,10 +118,12 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
     loadThumbnail()
 
     // Cleanup using ref for reliable URL revocation
+    // Delay revocation to prevent ERR_FILE_NOT_FOUND during React re-renders
     return () => {
-      if (thumbnailRef.current) {
-        URL.revokeObjectURL(thumbnailRef.current)
-        thumbnailRef.current = null
+      const urlToRevoke = thumbnailRef.current
+      thumbnailRef.current = null
+      if (urlToRevoke) {
+        setTimeout(() => URL.revokeObjectURL(urlToRevoke), 100)
       }
     }
   }, [file.id, viewMode, isImage, encryptionPassword])
