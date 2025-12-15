@@ -237,7 +237,11 @@ export const useFileStore = create<FileStore>()(
 
       loadFiles: async () => {
         const { fileManager, currentPath, userId } = get()
-        if (!fileManager || !userId) return
+        console.log('[FileStore] loadFiles called - fileManager:', !!fileManager, 'userId:', userId)
+        if (!fileManager || !userId) {
+          console.warn('[FileStore] loadFiles early return - missing fileManager or userId')
+          return
+        }
 
         // Helper to apply file tree to state
         const applyFileTree = (root: WyvernFolder) => {

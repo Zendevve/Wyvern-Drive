@@ -77,10 +77,12 @@ function AuthenticatedApp() {
   useEffect(() => {
     if (webhookUrls.length > 0 && !needsWebhookSetup && !isLoadingProfile) {
       initializeManager().then(() => {
-        loadFiles()
+        // IMPORTANT: Use getState() to get fresh state after initializeManager sets userId
+        // The captured loadFiles closure has old state
+        useFileStore.getState().loadFiles()
       })
     }
-  }, [webhookUrls, needsWebhookSetup, isLoadingProfile, initializeManager, loadFiles])
+  }, [webhookUrls, needsWebhookSetup, isLoadingProfile, initializeManager])
 
   // Listen for auth state changes
   useEffect(() => {
