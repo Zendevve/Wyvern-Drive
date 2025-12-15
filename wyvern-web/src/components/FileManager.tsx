@@ -72,7 +72,7 @@ export function FileManager() {
 
   // Get list of previewable files for navigation
   const previewableFiles = useMemo(() => {
-    return Object.values(files)
+    return Object.values(files || {})
       .filter(f => f.type === 'file' && isPreviewable(f.name))
       .map(f => f as WyvernFile)
   }, [files])

@@ -45,7 +45,8 @@ function getFileCategory(filename: string): keyof typeof FILE_CATEGORIES {
 }
 
 // Helper to recursively calculate total size of all files
-function calculateTotalSize(items: Record<string, WyvernFile | WyvernFolder>): number {
+function calculateTotalSize(items: Record<string, WyvernFile | WyvernFolder> | null | undefined): number {
+  if (!items) return 0
   let total = 0
   for (const item of Object.values(items)) {
     if (item.type === 'file') {
@@ -58,8 +59,9 @@ function calculateTotalSize(items: Record<string, WyvernFile | WyvernFolder>): n
 }
 
 // Calculate storage by file type category
-function calculateStorageByCategory(items: Record<string, WyvernFile | WyvernFolder>): Record<string, number> {
+function calculateStorageByCategory(items: Record<string, WyvernFile | WyvernFolder> | null | undefined): Record<string, number> {
   const result: Record<string, number> = { images: 0, videos: 0, audio: 0, documents: 0, other: 0 }
+  if (!items) return result
 
   function traverse(files: Record<string, WyvernFile | WyvernFolder>) {
     for (const item of Object.values(files)) {

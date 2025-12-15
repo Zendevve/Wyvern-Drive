@@ -62,7 +62,7 @@ export function GlobalSearch() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Convert files to array for search
-  const fileList = useMemo(() => Object.values(files), [files])
+  const fileList = useMemo(() => Object.values(files || {}), [files])
 
   // Create Fuse index
   const fuseIndex = useMemo(() => new Fuse(fileList, FUSE_OPTIONS), [fileList])

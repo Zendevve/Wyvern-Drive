@@ -162,8 +162,8 @@ export const useFileStore = create<FileStore>()(
       setWebhookUrl: (url) => set({
         webhookUrl: url,
         webhookUrls: [url],  // Migrate to array
-        isAuthenticated: true,
-        userId: url // Will be hashed by manager
+        isAuthenticated: true
+        // userId will be set by initializeManager with proper hash
       }),
 
       setWebhookUrls: (urls) => {
@@ -172,8 +172,8 @@ export const useFileStore = create<FileStore>()(
         set({
           webhookUrls: validUrls,
           webhookUrl: validUrls[0],  // Keep for backward compat
-          isAuthenticated: true,
-          userId: validUrls[0] // Will be hashed by manager
+          isAuthenticated: true
+          // userId will be set by initializeManager with proper hash
         })
       },
 
