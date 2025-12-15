@@ -164,7 +164,7 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
       return
     }
 
-    // Start new load
+    // Start new load - ONLY fetch first chunk for thumbnails to save memory
     const loadThumbnail = async (): Promise<string> => {
       const rawChunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(photo.content!)
       const chunks = rawChunks.map(c => normalizeChunk(c))
@@ -179,9 +179,12 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
       // Dynamic import to avoid circular dependency
       const { fetchViaExtension } = await import('../../lib/extension')
 
-      // Fetch chunks
+      // For thumbnails, only fetch first chunk (enough for preview)
+      // For videos, might need more chunks to extract a frame
+      const chunksToFetch = isVideo ? chunks.slice(0, 2) : chunks.slice(0, 1)
+
       const fileParts: ArrayBuffer[] = []
-      for (const chunk of chunks) {
+      for (const chunk of chunksToFetch) {
         let data = await fetchViaExtension(chunk.u)
 
         if (photo.encrypted && decryptionKey && chunk.v) {
@@ -196,19 +199,26 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
         fileParts.push(data)
       }
 
-      const blob = new Blob(fileParts, { type: getMimeType(photo.name) })
+      // Create partial blob - may be incomplete but enough for thumbnail
+      const mimeType = getMimeType(photo.name)
+      const blob = new Blob(fileParts, { type: mimeType })
 
       if (isVideo) {
-        // Extract frame from video
+        // Extract frame from video (partial data may work for some formats)
         const videoUrl = URL.createObjectURL(blob)
-        const thumbUrl = await extractVideoFrame(videoUrl)
-        URL.revokeObjectURL(videoUrl)
-        if (!thumbUrl) {
-          throw new Error('Failed to extract video frame')
+        try {
+          const thumbUrl = await extractVideoFrame(videoUrl)
+          URL.revokeObjectURL(videoUrl)
+          if (!thumbUrl) {
+            throw new Error('Failed to extract video frame')
+          }
+          return thumbUrl
+        } catch {
+          URL.revokeObjectURL(videoUrl)
+          throw new Error('Video frame extraction failed')
         }
-        return thumbUrl
       } else {
-        // Direct display for images
+        // Direct display for images - first chunk usually has enough data
         return URL.createObjectURL(blob)
       }
     }
