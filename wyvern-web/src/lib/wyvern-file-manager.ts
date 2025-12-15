@@ -595,6 +595,10 @@ export class WyvernFileManager {
     // Clear pending upload state on success
     await deletePendingUpload(uploadId)
 
+    // Report 100% progress BEFORE finalization to prevent stalling at 99%
+    // The finalization step (saving metadata to Supabase) can take some time
+    options?.onProgress?.(totalSize, totalSize)
+
     // Save metadata to server
     return this.createFile(path, file, parentId, JSON.stringify(chunks))
   }

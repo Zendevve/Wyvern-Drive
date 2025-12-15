@@ -10,14 +10,23 @@ export function SettingsModal() {
   const [webhooks, setWebhooks] = useState<string[]>([''])
   const [isSaving, setIsSaving] = useState(false)
 
+  const isOpen = activeModal === 'settings'
+
   // Initialize webhooks from store when modal opens
   useEffect(() => {
-    if (activeModal === 'settings') {
+    if (isOpen) {
       setWebhooks(webhookUrls.length > 0 ? [...webhookUrls] : [''])
     }
-  }, [activeModal, webhookUrls])
+  }, [isOpen, webhookUrls])
 
-  if (activeModal !== 'settings') return null
+  const handleClose = () => {
+    setActiveModal(null)
+  }
+
+  // Hooks must be called before any early returns
+  const focusTrapRef = useFocusTrap(isOpen, handleClose)
+
+  if (!isOpen) return null
 
   const webhookStats = getWebhookPoolStats()
 
@@ -49,12 +58,6 @@ export function SettingsModal() {
       setIsSaving(false)
     }
   }
-
-  const handleClose = () => {
-    setActiveModal(null)
-  }
-
-  const focusTrapRef = useFocusTrap(true, handleClose)
 
   return (
     <div className="settings-modal-overlay" onClick={handleClose}>
