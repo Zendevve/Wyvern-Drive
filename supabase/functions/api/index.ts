@@ -42,6 +42,105 @@ async function hashPassword(password: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
+// Extract Discord IDs from a CDN URL
+// URL format: https://cdn.discordapp.com/attachments/{channelId}/{messageId}/{filename}?...
+function extractDiscordIds(url: string): { channelId: string; messageId: string; filename: string } | null {
+  try {
+    const urlObj = new URL(url)
+    const pathParts = urlObj.pathname.split('/')
+    // /attachments/{channelId}/{messageId}/{filename}
+    if (pathParts.length >= 4 && pathParts[1] === 'attachments') {
+      return {
+        channelId: pathParts[2],
+        messageId: pathParts[3],
+        filename: pathParts[4] || 'chunk'
+      }
+    }
+  } catch {
+    // Invalid URL
+  }
+  return null
+}
+
+// Refresh Discord CDN URL by fetching fresh attachment URL from Discord API
+// Returns the fresh URL or null if refresh failed
+async function refreshDiscordUrl(
+  channelId: string,
+  messageId: string,
+  filename: string
+): Promise<string | null> {
+  const botToken = Deno.env.get("DISCORD_BOT_TOKEN")
+  if (!botToken) {
+    console.error("[refreshDiscordUrl] No DISCORD_BOT_TOKEN configured")
+    return null
+  }
+
+  try {
+    const response = await fetch(
+      `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
+      {
+        headers: {
+          'Authorization': `Bot ${botToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+
+    if (!response.ok) {
+      console.error(`[refreshDiscordUrl] Discord API error: ${response.status}`)
+      return null
+    }
+
+    const message = await response.json()
+
+    // Find matching attachment by filename
+    if (message.attachments && message.attachments.length > 0) {
+      // If filename matches, use that attachment; otherwise use first one
+      const attachment = message.attachments.find((a: { filename: string }) =>
+        a.filename === filename
+      ) || message.attachments[0]
+
+      return attachment.url
+    }
+
+    return null
+  } catch (e) {
+    console.error("[refreshDiscordUrl] Error:", e)
+    return null
+  }
+}
+
+// Try to get a valid URL for a chunk, refreshing if needed
+async function getValidChunkUrl(chunk: { url: string; channelId?: string; messageId?: string }): Promise<string | null> {
+  // First, try the stored URL directly
+  try {
+    const testResponse = await fetch(chunk.url, { method: 'HEAD' })
+    if (testResponse.ok) {
+      return chunk.url
+    }
+    console.log(`[getValidChunkUrl] Stored URL expired (${testResponse.status}), refreshing...`)
+  } catch {
+    console.log("[getValidChunkUrl] Stored URL fetch failed, trying refresh...")
+  }
+
+  // URL is expired or invalid, try to refresh
+  const ids = extractDiscordIds(chunk.url)
+  if (!ids) {
+    console.error("[getValidChunkUrl] Could not extract Discord IDs from URL")
+    return null
+  }
+
+  const freshUrl = await refreshDiscordUrl(ids.channelId, ids.messageId, ids.filename)
+  if (freshUrl) {
+    console.log("[getValidChunkUrl] Successfully refreshed Discord URL")
+    return freshUrl
+  }
+
+  // If no bot token or refresh failed, the URL cannot be recovered
+  console.error("[getValidChunkUrl] Could not refresh Discord URL - bot token may not be configured")
+  return null
+}
+
 // Old 32-bit userId hash (for migration from legacy)
 function hashUrlWeak(url: string): string {
   let hash = 0
@@ -707,16 +806,21 @@ Deno.serve(async (req: Request) => {
 
     // ===== SHARE LINKS =====
 
+    // Size threshold for Supabase Storage upload (5MB - conservative to manage storage costs)
+    const SHARE_STORAGE_THRESHOLD = 5 * 1024 * 1024
+    // Max share duration (7 days) to ensure cleanup
+    const MAX_SHARE_HOURS = 7 * 24 // 168 hours
+
     // POST /shares/:userId/:fileId - Create share link
     const createShareMatch = path.match(/^\/shares\/([^\/]+)\/(\d+)$/)
     if (createShareMatch && method === "POST") {
       const [, userId, fileId] = createShareMatch
       const supabase = getSupabase()
 
-      // Verify file exists and belongs to user
+      // Verify file exists and belongs to user (include size and content for storage decision)
       const { data: file } = await supabase
         .from("files")
-        .select("id, name, encrypted")
+        .select("id, name, size, content, encrypted")
         .eq("user_id", userId)
         .eq("id", fileId)
         .maybeSingle()
@@ -729,16 +833,16 @@ Deno.serve(async (req: Request) => {
       }
 
       // Parse options from body
-      let expiresAt: string | null = null
+      let expiresInHours = MAX_SHARE_HOURS // Default to max
       let passwordHash: string | null = null
 
       try {
         const body = await req.json()
         if (body.expiresIn) {
-          // expiresIn is in hours
-          const hours = parseInt(body.expiresIn)
+          // expiresIn is in hours - cap at max
+          const hours = Math.min(parseInt(body.expiresIn), MAX_SHARE_HOURS)
           if (hours > 0) {
-            expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
+            expiresInHours = hours
           }
         }
         if (body.password) {
@@ -746,18 +850,125 @@ Deno.serve(async (req: Request) => {
           passwordHash = await hashPassword(body.password)
         }
       } catch {
-        // No body is fine
+        // No body is fine - will use default max expiry
       }
 
-      // Create share
+      // Always set expiry (required for cleanup)
+      const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000).toISOString()
+
+      // Prepare share data
+      const shareData: {
+        file_id: number
+        user_id: string
+        expires_at: string | null
+        password_hash: string | null
+        file_size: number
+        storage_path: string | null
+      } = {
+        file_id: parseInt(fileId),
+        user_id: userId,
+        expires_at: expiresAt,
+        password_hash: passwordHash,
+        file_size: file.size || 0,
+        storage_path: null
+      }
+
+      // For small files, upload to Supabase Storage for permanent links
+      if (file.size && file.size < SHARE_STORAGE_THRESHOLD && file.content) {
+        try {
+          console.log(`[Share] File ${file.name} is ${(file.size / 1024 / 1024).toFixed(2)}MB, uploading to Storage...`)
+
+          // Parse chunks
+          interface RawChunk {
+            i?: number
+            u?: string
+            s?: number
+            index?: number
+            url?: string
+            size?: number
+          }
+
+          const rawChunks: RawChunk[] = JSON.parse(file.content)
+          const chunks = rawChunks.map((c: RawChunk) => ({
+            index: c.i ?? c.index ?? 0,
+            url: c.u ?? c.url ?? '',
+            size: c.s ?? c.size ?? 0
+          })).sort((a, b) => a.index - b.index)
+
+          // Fetch all chunks and combine
+          const parts: Uint8Array[] = []
+          for (const chunk of chunks) {
+            // Try to get valid URL (refresh if needed)
+            const validUrl = await getValidChunkUrl({ url: chunk.url })
+            if (!validUrl) {
+              console.error(`[Share] Could not get valid URL for chunk ${chunk.index}`)
+              throw new Error("Failed to access file content")
+            }
+
+            const response = await fetch(validUrl)
+            if (!response.ok) {
+              throw new Error(`Failed to fetch chunk ${chunk.index}: ${response.status}`)
+            }
+            const buffer = await response.arrayBuffer()
+            parts.push(new Uint8Array(buffer))
+          }
+
+          // Combine into single buffer
+          const totalSize = parts.reduce((sum, p) => sum + p.length, 0)
+          const combined = new Uint8Array(totalSize)
+          let offset = 0
+          for (const part of parts) {
+            combined.set(part, offset)
+            offset += part.length
+          }
+
+          // Generate a unique path for storage
+          const shareId = crypto.randomUUID()
+          const storagePath = `shares/${shareId}/${file.name}`
+
+          // Upload to Supabase Storage
+          const { error: uploadError } = await supabase.storage
+            .from("share-files")
+            .upload(storagePath, combined, {
+              contentType: "application/octet-stream",
+              upsert: false
+            })
+
+          if (uploadError) {
+            console.error("[Share] Storage upload error:", uploadError)
+            // Fall back to no storage (large file behavior)
+          } else {
+            console.log(`[Share] Uploaded to Storage: ${storagePath}`)
+            shareData.storage_path = storagePath
+
+            // Create share with pre-generated ID
+            const { error: insertError } = await supabase
+              .from("shares")
+              .insert({ ...shareData, id: shareId })
+
+            if (insertError) {
+              // Clean up uploaded file
+              await supabase.storage.from("share-files").remove([storagePath])
+              return json({ error: insertError.message }, 500)
+            }
+
+            return json({
+              id: shareId,
+              url: `/share/${shareId}`,
+              expiresAt,
+              storedInStorage: true
+            })
+          }
+        } catch (e) {
+          console.error("[Share] Error uploading to storage:", e)
+          // Continue with regular share (no storage)
+        }
+      }
+
+      // Create regular share (for large files or if storage upload failed)
       const { data: share, error } = await supabase
         .from("shares")
-        .insert({
-          file_id: parseInt(fileId),
-          user_id: userId,
-          expires_at: expiresAt,
-          password_hash: passwordHash
-        })
+        .insert(shareData)
         .select("id")
         .single()
 
@@ -766,7 +977,8 @@ Deno.serve(async (req: Request) => {
       return json({
         id: share.id,
         url: `/share/${share.id}`,
-        expiresAt
+        expiresAt,
+        storedInStorage: false
       })
     }
 
@@ -837,7 +1049,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const file = share.files
-      if (!file || !file.content) {
+      if (!file) {
         return json({ error: "File data not found" }, 404)
       }
 
@@ -846,24 +1058,6 @@ Deno.serve(async (req: Request) => {
         .from("shares")
         .update({ download_count: (share.download_count || 0) + 1 })
         .eq("id", shareId)
-
-      // Parse chunks and stream file
-      interface ChunkInfo {
-        index: number
-        url: string
-        size: number
-      }
-
-      let chunks: ChunkInfo[]
-      try {
-        chunks = JSON.parse(file.content)
-        chunks.sort((a: ChunkInfo, b: ChunkInfo) => a.index - b.index)
-      } catch {
-        return json({ error: "Invalid file data" }, 500)
-      }
-
-      // Calculate total size from metadata
-      const totalLength = chunks.reduce((sum, c) => sum + c.size, 0)
 
       // Determine content type
       const ext = file.name.split('.').pop()?.toLowerCase() || ''
@@ -875,13 +1069,114 @@ Deno.serve(async (req: Request) => {
       }
       const contentType = mimeTypes[ext] || 'application/octet-stream'
 
+      // CASE 1: File stored in Supabase Storage (small files < 25MB)
+      if (share.storage_path) {
+        console.log(`[Share Download] Serving from Storage: ${share.storage_path}`)
+
+        const { data: fileData, error: downloadError } = await supabase.storage
+          .from("share-files")
+          .download(share.storage_path)
+
+        if (downloadError || !fileData) {
+          console.error("[Share Download] Storage download error:", downloadError)
+          return json({ error: "Failed to download file from storage" }, 500)
+        }
+
+        const buffer = await fileData.arrayBuffer()
+
+        return new Response(buffer, {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": contentType,
+            "Content-Length": String(buffer.byteLength),
+            "Content-Disposition": `attachment; filename="${file.name}"`
+          }
+        })
+      }
+
+      // CASE 2: Large file without storage - requires extension
+      const SHARE_STORAGE_THRESHOLD = 5 * 1024 * 1024
+      if (share.file_size && share.file_size >= SHARE_STORAGE_THRESHOLD) {
+        console.log(`[Share Download] Large file (${(share.file_size / 1024 / 1024).toFixed(2)}MB) requires extension`)
+        return json({
+          error: "This file is too large for direct download",
+          requiresExtension: true,
+          fileSize: share.file_size,
+          fileName: file.name
+        }, 422)
+      }
+
+      // CASE 3: Legacy share or fallback - try Discord streaming
+      if (!file.content) {
+        return json({ error: "File content not available" }, 404)
+      }
+
+
+      // Parse chunks and stream file
+      // Support both short format (i, u, s) and legacy format (index, url, size)
+      interface RawChunk {
+        i?: number
+        u?: string
+        s?: number
+        index?: number
+        url?: string
+        size?: number
+      }
+
+      interface NormalizedChunk {
+        index: number
+        url: string
+        size: number
+      }
+
+      let rawChunks: RawChunk[]
+      try {
+        rawChunks = JSON.parse(file.content)
+      } catch {
+        return json({ error: "Invalid file data" }, 500)
+      }
+
+      // Normalize chunks to consistent format
+      const chunks: NormalizedChunk[] = rawChunks.map((c: RawChunk) => ({
+        index: c.i ?? c.index ?? 0,
+        url: c.u ?? c.url ?? '',
+        size: c.s ?? c.size ?? 0
+      }))
+      chunks.sort((a, b) => a.index - b.index)
+
+      // Calculate total size from metadata
+      const totalLength = chunks.reduce((sum, c) => sum + c.size, 0)
+
+      // Pre-validate first chunk URL to fail fast if refresh is needed but impossible
+      const testChunk = chunks[0]
+      if (testChunk) {
+        const validUrl = await getValidChunkUrl({ url: testChunk.url })
+        if (!validUrl) {
+          const hasBotToken = !!Deno.env.get("DISCORD_BOT_TOKEN")
+          if (!hasBotToken) {
+            return json({
+              error: "Share links require server configuration. Please contact the file owner.",
+              details: "Discord CDN URLs have expired and cannot be refreshed without a Discord bot token."
+            }, 503)
+          }
+          return json({ error: "Failed to access file content" }, 500)
+        }
+      }
+
       // Create a stream to serve chunks sequentially without buffering the whole file
       const stream = new ReadableStream({
         async start(controller) {
           try {
             for (const chunk of chunks) {
               try {
-                const response = await fetch(chunk.url)
+                // Get valid URL (refreshes if expired)
+                const validUrl = await getValidChunkUrl({ url: chunk.url })
+                if (!validUrl) {
+                  throw new Error(`Failed to get valid URL for chunk ${chunk.index}`)
+                }
+
+                const response = await fetch(validUrl)
                 if (!response.ok) throw new Error(`Chunk fetch failed: ${response.status}`)
 
                 if (!response.body) throw new Error("No body in chunk response")
@@ -948,6 +1243,61 @@ Deno.serve(async (req: Request) => {
 
       if (error) return json({ error: error.message }, 500)
       return json(shares || [])
+    }
+
+    // POST /cleanup/shares - Clean up expired shares and their storage files
+    // This should be called periodically (e.g., via Supabase cron or external scheduler)
+    if (path === "/cleanup/shares" && method === "POST") {
+      const supabase = getSupabase()
+
+      // Find expired shares that have storage files
+      const { data: expiredShares, error: findError } = await supabase
+        .from("shares")
+        .select("id, storage_path")
+        .lt("expires_at", new Date().toISOString())
+        .not("storage_path", "is", null)
+
+      if (findError) {
+        return json({ error: findError.message }, 500)
+      }
+
+      if (!expiredShares || expiredShares.length === 0) {
+        return json({ message: "No expired shares to clean up", cleaned: 0 })
+      }
+
+      console.log(`[Cleanup] Found ${expiredShares.length} expired shares with storage files`)
+
+      // Delete storage files
+      const storagePaths = expiredShares.map((s: { storage_path: string | null }) => s.storage_path).filter(Boolean) as string[]
+      if (storagePaths.length > 0) {
+        const { error: deleteStorageError } = await supabase.storage
+          .from("share-files")
+          .remove(storagePaths)
+
+        if (deleteStorageError) {
+          console.error("[Cleanup] Storage delete error:", deleteStorageError)
+          // Continue anyway to delete share records
+        } else {
+          console.log(`[Cleanup] Deleted ${storagePaths.length} storage files`)
+        }
+      }
+
+      // Delete expired share records (all expired, not just ones with storage)
+      const { error: deleteSharesError, count } = await supabase
+        .from("shares")
+        .delete()
+        .lt("expires_at", new Date().toISOString())
+
+      if (deleteSharesError) {
+        return json({ error: deleteSharesError.message }, 500)
+      }
+
+      console.log(`[Cleanup] Deleted ${count} expired share records`)
+      return json({
+        message: "Cleanup complete",
+        storageFilesDeleted: storagePaths.length,
+        shareRecordsDeleted: count || expiredShares.length
+      })
     }
 
     // Not found

@@ -97,6 +97,8 @@ export function ShareView() {
         const data = await res.json()
         if (data.passwordRequired) {
           setError('Incorrect password')
+        } else if (data.requiresExtension) {
+          setError('This file is too large for direct download. Please install the Wyvern Drive extension to download files over 5MB.')
         } else {
           setError(data.error || 'Download failed')
         }
