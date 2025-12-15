@@ -48,9 +48,10 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
   const iconName = isFolder ? 'Folder' : getFileIconName(file.name)
   const IconComponent = ICON_MAP[iconName] || File
 
-  // Load thumbnail for images and videos in grid view
+  // Load thumbnail for images only in grid view
+  // SKIP VIDEO THUMBNAILS - they're 20MB+ each and kill memory
   useEffect(() => {
-    if ((!isImage && !isVideo) || viewMode !== 'grid') return
+    if (!isImage || viewMode !== 'grid') return
 
     // Check cache first - instant display without network request
     const cachedUrl = getCachedThumbnail(String(file.id))
@@ -81,7 +82,7 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
       return
     }
 
-    // Start new load - ONLY fetch first chunk for thumbnails to save memory
+    // Start new load - ONLY fetch first chunk for image thumbnails
     const loadThumbnail = async (): Promise<string> => {
       const rawChunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(wyvernFile.content!)
       const chunks = rawChunks.map(c => normalizeChunk(c))
@@ -92,9 +93,8 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
         decryptionKey = await restoreEncryptionContext(encryptionPassword, wyvernFile.encryption_salt)
       }
 
-      // For thumbnails, only fetch first chunk (enough for preview)
-      // For videos, might need more chunks to extract a frame
-      const chunksToFetch = isVideo ? chunks.slice(0, 2) : chunks.slice(0, 1)
+      // For image thumbnails, only fetch first chunk (enough for preview)
+      const chunksToFetch = chunks.slice(0, 1)
 
       const fileParts: ArrayBuffer[] = []
       for (const chunk of chunksToFetch) {
@@ -113,23 +113,7 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
       }
 
       const blob = new Blob(fileParts, { type: getMimeType(wyvernFile.name) })
-
-      if (isImage) {
-        return URL.createObjectURL(blob)
-      } else if (isVideo) {
-        const videoUrl = URL.createObjectURL(blob)
-        try {
-          const thumbUrl = await extractVideoFrame(videoUrl)
-          URL.revokeObjectURL(videoUrl)
-          if (!thumbUrl) throw new Error('Failed to extract video frame')
-          return thumbUrl
-        } catch {
-          URL.revokeObjectURL(videoUrl)
-          throw new Error('Video frame extraction failed')
-        }
-      }
-
-      throw new Error('Not an image or video')
+      return URL.createObjectURL(blob)
     }
 
     setIsLoadingThumb(true)
@@ -349,48 +333,3 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
 
 // Memoized export - prevent re-renders when parent updates but props haven't changed
 export const FileItem = memo(FileItemComponent)
-
-
-
-// Extract first frame from video as thumbnail
-async function extractVideoFrame(videoUrl: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const video = document.createElement('video')
-    video.crossOrigin = 'anonymous'
-    video.muted = true
-
-    video.onloadeddata = () => {
-      video.currentTime = 1 // Seek to 1 second for better thumbnail
-    }
-
-    video.onseeked = () => {
-      try {
-        const canvas = document.createElement('canvas')
-        canvas.width = 200
-        canvas.height = 112 // 16:9 ratio
-
-        const ctx = canvas.getContext('2d')
-        if (!ctx) {
-          resolve(null)
-          return
-        }
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-        const thumbUrl = canvas.toDataURL('image/jpeg', 0.7)
-        resolve(thumbUrl)
-      } catch {
-        resolve(null)
-      }
-    }
-
-    video.onerror = () => {
-      resolve(null)
-    }
-
-    // Timeout for video loading
-    setTimeout(() => resolve(null), 10000)
-
-    video.src = videoUrl
-    video.load()
-  })
-}

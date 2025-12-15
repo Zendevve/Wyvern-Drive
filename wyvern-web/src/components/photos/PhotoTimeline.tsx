@@ -79,51 +79,6 @@ function getDateKey(file: WyvernFile): string {
   return `${year}-${month}-${day}`
 }
 
-/**
- * Extract first frame from video as thumbnail
- */
-async function extractVideoFrame(videoUrl: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const video = document.createElement('video')
-    video.crossOrigin = 'anonymous'
-    video.muted = true
-
-    video.onloadeddata = () => {
-      video.currentTime = 1 // Seek to 1 second for better thumbnail
-    }
-
-    video.onseeked = () => {
-      try {
-        const canvas = document.createElement('canvas')
-        canvas.width = 200
-        canvas.height = 200
-
-        const ctx = canvas.getContext('2d')
-        if (!ctx) {
-          resolve(null)
-          return
-        }
-
-        // Calculate cover fit
-        const scale = Math.max(canvas.width / video.videoWidth, canvas.height / video.videoHeight)
-        const x = (canvas.width - video.videoWidth * scale) / 2
-        const y = (canvas.height - video.videoHeight * scale) / 2
-
-        ctx.drawImage(video, x, y, video.videoWidth * scale, video.videoHeight * scale)
-        const thumbUrl = canvas.toDataURL('image/jpeg', 0.7)
-        resolve(thumbUrl)
-      } catch {
-        resolve(null)
-      }
-    }
-
-    video.onerror = () => resolve(null)
-    setTimeout(() => resolve(null), 10000)
-
-    video.src = videoUrl
-    video.load()
-  })
-}
 
 /**
  * PhotoThumbnail - Individual photo/video with lazy loading
@@ -138,6 +93,12 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
   const isVideo = isVideoFile(photo.name)
 
   useEffect(() => {
+    // SKIP VIDEO THUMBNAILS - they're 20MB+ each and kill memory
+    // Just show the video icon placeholder instead
+    if (isVideo) {
+      return
+    }
+
     // Check cache first - instant display without network request
     const cachedUrl = getCachedThumbnail(String(photo.id))
     if (cachedUrl) {
@@ -164,7 +125,7 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
       return
     }
 
-    // Start new load - ONLY fetch first chunk for thumbnails to save memory
+    // Start new load - ONLY fetch first chunk for image thumbnails
     const loadThumbnail = async (): Promise<string> => {
       const rawChunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(photo.content!)
       const chunks = rawChunks.map(c => normalizeChunk(c))
@@ -179,9 +140,8 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
       // Dynamic import to avoid circular dependency
       const { fetchViaExtension } = await import('../../lib/extension')
 
-      // For thumbnails, only fetch first chunk (enough for preview)
-      // For videos, might need more chunks to extract a frame
-      const chunksToFetch = isVideo ? chunks.slice(0, 2) : chunks.slice(0, 1)
+      // For image thumbnails, only fetch first chunk (enough for preview)
+      const chunksToFetch = chunks.slice(0, 1)
 
       const fileParts: ArrayBuffer[] = []
       for (const chunk of chunksToFetch) {
@@ -199,28 +159,10 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
         fileParts.push(data)
       }
 
-      // Create partial blob - may be incomplete but enough for thumbnail
+      // Create blob for image thumbnail
       const mimeType = getMimeType(photo.name)
       const blob = new Blob(fileParts, { type: mimeType })
-
-      if (isVideo) {
-        // Extract frame from video (partial data may work for some formats)
-        const videoUrl = URL.createObjectURL(blob)
-        try {
-          const thumbUrl = await extractVideoFrame(videoUrl)
-          URL.revokeObjectURL(videoUrl)
-          if (!thumbUrl) {
-            throw new Error('Failed to extract video frame')
-          }
-          return thumbUrl
-        } catch {
-          URL.revokeObjectURL(videoUrl)
-          throw new Error('Video frame extraction failed')
-        }
-      } else {
-        // Direct display for images - first chunk usually has enough data
-        return URL.createObjectURL(blob)
-      }
+      return URL.createObjectURL(blob)
     }
 
     setIsLoading(true)

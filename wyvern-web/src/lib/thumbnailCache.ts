@@ -14,8 +14,8 @@ const thumbnailCache = new Map<string, CacheEntry>()
 // Track in-progress loads to prevent duplicate requests
 const loadingPromises = new Map<string, Promise<string>>()
 
-// Max cache size (in entries) - prevent unlimited memory growth
-const MAX_CACHE_SIZE = 200
+// Max cache size (in entries) - reduced to prevent memory explosion
+const MAX_CACHE_SIZE = 50
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 /**
