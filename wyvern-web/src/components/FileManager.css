@@ -1,16 +1,4 @@
-/* FileManager - Modern Cloud Context */
-
-
-.status-bar {
-  display: flex;
-  align-items: center;
-  padding: 8px 16px;
-  background: var(--surface-subtle);
-  border-top: 1px solid var(--border-default);
-  font-size: 11px;
-  color: var(--foreground-muted);
-  gap: 8px;
-}
+/* FileManager - Uses design tokens */
 
 .file-manager {
   display: flex;
@@ -21,7 +9,7 @@
 /* Context Bar (Breadcrumb + Controls) */
 .context-bar {
   height: 56px;
-  padding: 0 32px;
+  padding: 0 var(--space-8);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -35,10 +23,10 @@
 .context-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
-/* View Toggle (Segmented Control style) */
+/* View Toggle (Segmented Control) */
 .view-toggle {
   display: flex;
   background: var(--surface);
@@ -56,16 +44,15 @@
   border: none;
   background: transparent;
   color: var(--foreground-muted);
-  border-radius: 4px;
-  /* inner radius */
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
 }
 
 .toggle-btn.active {
   background: var(--background-elevated);
   color: var(--foreground);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
 .toggle-btn:hover:not(.active) {
@@ -75,19 +62,27 @@
 .filter-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
   background: transparent;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   color: var(--foreground-muted);
   font-size: 13px;
+  font-family: inherit;
   cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
 .filter-btn:hover {
   background: var(--surface-hover);
   color: var(--foreground);
+}
+
+.filter-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
 }
 
 /* Content Area */
@@ -98,8 +93,9 @@
   flex-direction: column;
 }
 
-/* Empty State */
-.empty-state {
+/* Empty / Loading State */
+.empty-state,
+.loading-state {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -111,25 +107,67 @@
 
 .empty-illustration {
   color: var(--accent);
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
   opacity: 0.8;
 }
 
+.empty-state h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.empty-state p {
+  margin: 0;
+  color: var(--foreground-muted);
+  font-size: 14px;
+}
+
 .cta-button {
-  padding: 10px 20px;
+  padding: var(--space-2) var(--space-5);
   background: var(--accent);
   color: white;
   border: none;
   border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  transition: all 200ms ease;
-  box-shadow: 0 4px 12px rgba(94, 106, 210, 0.3);
+  transition: all var(--transition-normal);
+  box-shadow: 0 4px 12px var(--accent-glow);
 }
 
 .cta-button:hover {
-  background: var(--accent-bright);
+  background: var(--accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(94, 106, 210, 0.4);
+  box-shadow: 0 6px 16px var(--accent-glow);
+}
+
+/* Loading Spinner */
+.loader {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--surface);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Status Bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);
+  border-top: 1px solid var(--border-default);
+  font-size: 11px;
+  color: var(--foreground-muted);
+  gap: var(--space-2);
 }

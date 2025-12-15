@@ -278,18 +278,18 @@
 }
 
 .connection-indicator.online {
-  background: rgba(34, 197, 94, 0.1);
-  color: rgb(34, 197, 94);
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .connection-indicator.offline {
-  background: rgba(239, 68, 68, 0.1);
-  color: rgb(239, 68, 68);
+  background: var(--error-bg);
+  color: var(--error);
 }
 
 .connection-indicator.syncing {
-  background: rgba(59, 130, 246, 0.1);
-  color: rgb(59, 130, 246);
+  background: var(--info-bg);
+  color: var(--info);
 }
 
 .connection-indicator .spin {
@@ -320,13 +320,13 @@
 }
 
 .webhook-pool-indicator.optimal {
-  border-color: rgba(34, 197, 94, 0.3);
-  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(59, 165, 92, 0.3);
+  background: var(--success-bg);
 }
 
 .webhook-pool-indicator.suboptimal {
-  border-color: rgba(234, 179, 8, 0.3);
-  background: rgba(234, 179, 8, 0.08);
+  border-color: rgba(250, 166, 26, 0.3);
+  background: var(--warning-bg);
 }
 
 .webhook-pool-header {
@@ -338,11 +338,11 @@
 }
 
 .webhook-pool-indicator.optimal .webhook-icon {
-  color: rgb(34, 197, 94);
+  color: var(--success);
 }
 
 .webhook-pool-indicator.suboptimal .webhook-icon {
-  color: rgb(234, 179, 8);
+  color: var(--warning);
 }
 
 .webhook-count {
@@ -359,7 +359,7 @@
 }
 
 .webhook-pool-indicator.suboptimal .webhook-recommendation {
-  color: rgb(234, 179, 8);
+  color: var(--warning);
 }
 
 /* Storage Analytics Breakdown */

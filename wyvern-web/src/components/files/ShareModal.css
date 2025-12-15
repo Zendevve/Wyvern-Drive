@@ -1,16 +1,19 @@
+/* ShareModal - Uses shared Modal.css patterns */
+
+/* Inherit from Modal.css patterns */
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.2s ease-out;
+  z-index: var(--z-modal-backdrop);
+  animation: modalFadeIn var(--duration-normal) var(--ease-default);
 }
 
-@keyframes fadeIn {
+@keyframes modalFadeIn {
   from {
     opacity: 0;
   }
@@ -21,148 +24,184 @@
 }
 
 .share-modal {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
+  background: var(--background-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   width: 400px;
   max-width: 90vw;
   overflow: hidden;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  animation: modalSlideUp var(--duration-slow) var(--ease-spring);
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .modal-header h3 {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--foreground);
+  margin: 0;
+}
+
+.modal-header h3 svg {
+  color: var(--accent);
 }
 
 .close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: var(--foreground-muted);
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
 }
 
 .close-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--surface-hover);
+  color: var(--foreground);
 }
 
 .modal-body {
-  padding: 20px;
+  padding: var(--space-5);
 }
 
 .file-name {
   font-weight: 500;
-  color: var(--text-primary);
-  margin-bottom: 16px;
-  padding: 8px 12px;
-  background: var(--bg-tertiary);
-  border-radius: 6px;
+  color: var(--foreground);
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border-radius: var(--radius-md);
   font-size: 13px;
 }
 
 .option-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .option-row label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1);
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--foreground-muted);
   min-width: 90px;
 }
 
 .option-row select,
 .option-row input {
   flex: 1;
-  padding: 8px 12px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  color: var(--text-primary);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--foreground);
   font-size: 13px;
+  font-family: inherit;
   color-scheme: dark;
+  transition: border-color var(--transition-fast);
 }
 
 .option-row select option {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
+  background-color: var(--background-elevated);
+  color: var(--foreground);
 }
 
 .option-row select:focus,
 .option-row input:focus {
   outline: none;
-  border-color: var(--accent-primary);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 .error-text {
   color: var(--error);
   font-size: 12px;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .create-btn {
   width: 100%;
-  padding: 12px;
-  background: var(--accent-primary);
+  padding: var(--space-3);
+  background: var(--accent);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-weight: 500;
+  font-size: 14px;
+  font-family: inherit;
   cursor: pointer;
-  margin-top: 8px;
+  margin-top: var(--space-2);
+  transition: all var(--transition-fast);
 }
 
 .create-btn:hover:not(:disabled) {
   background: var(--accent-hover);
+  transform: translateY(-1px);
 }
 
 .create-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
 }
 
 .share-url-box {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
 .share-url-box input {
   flex: 1;
-  padding: 10px 12px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--accent-primary);
-  border-radius: 6px;
-  color: var(--text-primary);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  color: var(--foreground);
   font-size: 12px;
+  font-family: var(--font-mono);
 }
 
 .copy-btn {
-  padding: 10px 14px;
-  background: var(--accent-primary);
+  padding: var(--space-2) var(--space-3);
+  background: var(--accent);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
 .copy-btn:hover {
@@ -171,27 +210,31 @@
 
 .password-note {
   font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 16px;
+  color: var(--foreground-muted);
+  margin-bottom: var(--space-4);
 }
 
 .password-note code {
-  background: var(--bg-tertiary);
-  padding: 2px 6px;
-  border-radius: 4px;
+  background: var(--surface);
+  padding: 2px var(--space-1);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
 }
 
 .done-btn {
   width: 100%;
-  padding: 12px;
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  padding: var(--space-3);
+  background: var(--surface);
+  color: var(--foreground);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
   font-weight: 500;
+  font-size: 14px;
+  font-family: inherit;
   cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
 .done-btn:hover {
-  background: var(--bg-hover);
+  background: var(--surface-hover);
 }

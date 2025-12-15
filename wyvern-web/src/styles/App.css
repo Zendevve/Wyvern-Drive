@@ -1,4 +1,5 @@
 /* App Layout - Modern Cloud Standard */
+@import './Modal.css';
 
 .app {
   display: flex;

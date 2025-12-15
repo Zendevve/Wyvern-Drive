@@ -1,24 +1,28 @@
+/* ProgressToasts - Uses design tokens */
+
 .progress-toasts {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: var(--space-6);
+  right: var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  z-index: 2000;
+  gap: var(--space-3);
+  z-index: var(--z-toast);
   max-height: 400px;
   overflow-y: auto;
 }
 
 .progress-toast {
   width: 340px;
-  background: rgba(20, 20, 28, 0.95);
+  background: rgba(10, 10, 12, 0.95);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 14px 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  animation: slideIn 0.3s ease-out;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  animation: slideIn var(--duration-slow) var(--ease-spring);
 }
 
 @keyframes slideIn {
@@ -36,21 +40,21 @@
 .toast-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
 }
 
 .toast-label {
   font-size: 14px;
   font-weight: 600;
-  color: var(--accent, #6366f1);
+  color: var(--accent);
   flex-shrink: 0;
 }
 
 .toast-title {
   font-size: 13px;
   font-weight: 500;
-  color: white;
+  color: var(--foreground);
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -60,48 +64,48 @@
 .toast-speed {
   font-size: 12px;
   font-weight: 600;
-  color: #22c55e;
-  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  color: var(--success);
+  font-family: var(--font-mono);
   flex-shrink: 0;
 }
 
 .toast-info {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--foreground-subtle);
 }
 
 .toast-progress {
   flex: 1;
-  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-family: var(--font-mono);
 }
 
 .toast-eta {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--foreground-muted);
   font-style: italic;
 }
 
 .toast-percent {
   font-size: 12px;
   font-weight: 700;
-  color: var(--accent, #6366f1);
-  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  color: var(--accent);
+  font-family: var(--font-mono);
 }
 
 .progress-bar-bg {
   height: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6);
-  border-radius: 3px;
-  transition: width 0.15s ease-out;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+  background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+  border-radius: var(--radius-sm);
+  transition: width var(--transition-fast);
+  box-shadow: 0 0 10px var(--accent-glow);
 }
