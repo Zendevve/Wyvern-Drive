@@ -35,3 +35,6 @@ coverage/
 web/
 server/
 extension/
+
+# Public extension repo (separate git)
+wyvern-extension-public/

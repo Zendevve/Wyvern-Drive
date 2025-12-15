@@ -3,7 +3,7 @@
  * Groups images by date with virtualized scrolling
  */
 
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useFileStore } from '../../stores/fileStore'
 import { Calendar, Image as ImageIcon, Loader, Video } from 'lucide-react'
@@ -12,7 +12,12 @@ import { normalizeChunk } from '../../lib/types'
 import { isImageFile, isVideoFile, getMimeType } from '../../lib/thumbnails'
 import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
-import { fetchViaExtension } from '../../lib/extension' // Import centralized utility
+import {
+  getCachedThumbnail,
+  setCachedThumbnail,
+  getLoadingPromise,
+  setLoadingPromise
+} from '../../lib/thumbnailCache'
 import './PhotoTimeline.css'
 
 // Types
@@ -127,83 +132,108 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
   const [thumbnail, setThumbnail] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(false)
-  const thumbnailRef = useRef<string | null>(null) // For reliable cleanup
   const { encryptionPassword, selectedIds, toggleSelection } = useFileStore()
 
   const isSelected = selectedIds.has(String(photo.id))
   const isVideo = isVideoFile(photo.name)
 
   useEffect(() => {
+    // Check cache first - instant display without network request
+    const cachedUrl = getCachedThumbnail(String(photo.id))
+    if (cachedUrl) {
+      setThumbnail(cachedUrl)
+      return
+    }
+
     if (thumbnail || !photo.content) return
 
-    const loadThumbnail = async () => {
+    // Check if already loading - wait for that instead of starting new load
+    const existingPromise = getLoadingPromise(String(photo.id))
+    if (existingPromise) {
       setIsLoading(true)
-      try {
-        const rawChunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(photo.content)
-        const chunks = rawChunks.map(c => normalizeChunk(c))
-        chunks.sort((a, b) => a.i - b.i)
-
-        // Get decryption key if encrypted
-        let decryptionKey: CryptoKey | null = null
-        if (photo.encrypted && encryptionPassword && photo.encryption_salt) {
-          decryptionKey = await restoreEncryptionContext(encryptionPassword, photo.encryption_salt)
-        }
-
-        // Fetch chunks
-        const fileParts: ArrayBuffer[] = []
-        for (const chunk of chunks) {
-          let data = await fetchViaExtension(chunk.u)
-
-          if (photo.encrypted && decryptionKey && chunk.v) {
-            const iv = new Uint8Array(chunk.v)
-            data = await decryptChunk(data, decryptionKey, iv)
-          }
-
-          if (chunk.c) {
-            data = await decompressData(data)
-          }
-
-          fileParts.push(data)
-        }
-
-        const blob = new Blob(fileParts, { type: getMimeType(photo.name) })
-
-        if (isVideo) {
-          // Extract frame from video
-          const videoUrl = URL.createObjectURL(blob)
-          const thumbUrl = await extractVideoFrame(videoUrl)
-          URL.revokeObjectURL(videoUrl)
-          if (thumbUrl) {
-            thumbnailRef.current = thumbUrl
-            setThumbnail(thumbUrl)
-          } else {
-            setError(true)
-          }
-        } else {
-          // Direct display for images
-          const url = URL.createObjectURL(blob)
-          thumbnailRef.current = url
+      existingPromise
+        .then(url => {
           setThumbnail(url)
+        })
+        .catch(() => {
+          setError(true)
+        })
+        .finally(() => {
+          setIsLoading(false)
+        })
+      return
+    }
+
+    // Start new load
+    const loadThumbnail = async (): Promise<string> => {
+      const rawChunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(photo.content!)
+      const chunks = rawChunks.map(c => normalizeChunk(c))
+      chunks.sort((a, b) => a.i - b.i)
+
+      // Get decryption key if encrypted
+      let decryptionKey: CryptoKey | null = null
+      if (photo.encrypted && encryptionPassword && photo.encryption_salt) {
+        decryptionKey = await restoreEncryptionContext(encryptionPassword, photo.encryption_salt)
+      }
+
+      // Dynamic import to avoid circular dependency
+      const { fetchViaExtension } = await import('../../lib/extension')
+
+      // Fetch chunks
+      const fileParts: ArrayBuffer[] = []
+      for (const chunk of chunks) {
+        let data = await fetchViaExtension(chunk.u)
+
+        if (photo.encrypted && decryptionKey && chunk.v) {
+          const iv = new Uint8Array(chunk.v)
+          data = await decryptChunk(data, decryptionKey, iv)
         }
-      } catch (err) {
+
+        if (chunk.c) {
+          data = await decompressData(data)
+        }
+
+        fileParts.push(data)
+      }
+
+      const blob = new Blob(fileParts, { type: getMimeType(photo.name) })
+
+      if (isVideo) {
+        // Extract frame from video
+        const videoUrl = URL.createObjectURL(blob)
+        const thumbUrl = await extractVideoFrame(videoUrl)
+        URL.revokeObjectURL(videoUrl)
+        if (!thumbUrl) {
+          throw new Error('Failed to extract video frame')
+        }
+        return thumbUrl
+      } else {
+        // Direct display for images
+        return URL.createObjectURL(blob)
+      }
+    }
+
+    setIsLoading(true)
+
+    // Create promise and register it for deduplication
+    const promise = loadThumbnail()
+    setLoadingPromise(String(photo.id), promise)
+
+    promise
+      .then(url => {
+        // Store in cache for reuse
+        setCachedThumbnail(String(photo.id), url)
+        setThumbnail(url)
+      })
+      .catch(err => {
         console.error('Photo thumbnail failed:', err)
         setError(true)
-      } finally {
+      })
+      .finally(() => {
         setIsLoading(false)
-      }
-    }
+      })
 
-    loadThumbnail()
-
-    // Cleanup using ref for reliable URL revocation
-    // Delay revocation to prevent ERR_FILE_NOT_FOUND during React re-renders
-    return () => {
-      const urlToRevoke = thumbnailRef.current
-      thumbnailRef.current = null
-      if (urlToRevoke && !isVideo) {
-        setTimeout(() => URL.revokeObjectURL(urlToRevoke), 100)
-      }
-    }
+    // No cleanup needed - cache manages blob URL lifecycle
   }, [photo.id, photo.content, encryptionPassword])
 
   const handleClick = (e: React.MouseEvent) => {

@@ -1,8 +1,14 @@
-import { useState, useEffect, useRef, memo } from 'react'
+import { useState, useEffect, memo } from 'react'
 import type { WyvernFile, WyvernFolder, ChunkInfo, LegacyChunkInfo } from '../../lib/types'
 import { normalizeChunk } from '../../lib/types'
 import { useFileStore } from '../../stores/fileStore'
-import { fetchViaExtension } from '../../lib/extension' // Import centralized utility
+import { fetchViaExtension } from '../../lib/extension'
+import {
+  getCachedThumbnail,
+  setCachedThumbnail,
+  getLoadingPromise,
+  setLoadingPromise
+} from '../../lib/thumbnailCache'
 import { ContextMenu } from './ContextMenu'
 import { getFileIconName, formatSize, formatDate } from '../../lib/utils'
 import { isPreviewable, isImageFile, isVideoFile, getMimeType } from '../../lib/thumbnails'
@@ -27,7 +33,6 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
   const [thumbnail, setThumbnail] = useState<string | null>(null)
   const [isLoadingThumb, setIsLoadingThumb] = useState(false)
   const [isUnavailable, setIsUnavailable] = useState(false) // Health check state
-  const thumbnailRef = useRef<string | null>(null) // For reliable cleanup
 
   // Optimized selectors - only re-render when THIS file's selection changes
   const isSelected = useFileStore(state => state.selectedIds.has(String(file.id)))
@@ -45,88 +50,102 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
 
   // Load thumbnail for images and videos in grid view
   useEffect(() => {
-    if ((!isImage && !isVideo) || viewMode !== 'grid' || thumbnail) return
+    if ((!isImage && !isVideo) || viewMode !== 'grid') return
+
+    // Check cache first - instant display without network request
+    const cachedUrl = getCachedThumbnail(String(file.id))
+    if (cachedUrl) {
+      setThumbnail(cachedUrl)
+      return
+    }
+
+    if (thumbnail) return
 
     const wyvernFile = file as WyvernFile
     if (!wyvernFile.content) return
 
-    const loadThumbnail = async () => {
+    // Check if already loading - wait for that instead of starting new load
+    const existingPromise = getLoadingPromise(String(file.id))
+    if (existingPromise) {
       setIsLoadingThumb(true)
-      try {
-        const rawChunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(wyvernFile.content)
-        const chunks = rawChunks.map(c => normalizeChunk(c))
-        chunks.sort((a, b) => a.i - b.i)
-
-        // Get decryption key if encrypted
-        let decryptionKey: CryptoKey | null = null
-        if (wyvernFile.encrypted && encryptionPassword) {
-          if (wyvernFile.encryption_salt) {
-            decryptionKey = await restoreEncryptionContext(encryptionPassword, wyvernFile.encryption_salt)
-          }
-        }
-
-        // Fetch chunks
-        const fileParts: ArrayBuffer[] = []
-        for (const chunk of chunks) {
-          let data = await fetchViaExtension(chunk.u)
-
-          // Decrypt first if needed
-          if (wyvernFile.encrypted && decryptionKey && chunk.v) {
-            const iv = new Uint8Array(chunk.v)
-            data = await decryptChunk(data, decryptionKey, iv)
-          }
-
-          // Then decompress if chunk was compressed
-          if (chunk.c) {
-            data = await decompressData(data)
-          }
-
-          fileParts.push(data)
-        }
-
-        // Create blob URL
-        const blob = new Blob(fileParts, { type: getMimeType(wyvernFile.name) })
-
-        if (isImage) {
-          // Direct display for images
-          const url = URL.createObjectURL(blob)
-          thumbnailRef.current = url
+      existingPromise
+        .then(url => {
           setThumbnail(url)
-        } else if (isVideo) {
-          // Extract first frame for videos
-          const videoUrl = URL.createObjectURL(blob)
-          const thumbUrl = await extractVideoFrame(videoUrl)
-          URL.revokeObjectURL(videoUrl)
-          if (thumbUrl) {
-            thumbnailRef.current = thumbUrl
-            setThumbnail(thumbUrl)
-          }
+        })
+        .catch(() => {
+          setIsUnavailable(true)
+        })
+        .finally(() => {
+          setIsLoadingThumb(false)
+        })
+      return
+    }
+
+    // Start new load
+    const loadThumbnail = async (): Promise<string> => {
+      const rawChunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(wyvernFile.content!)
+      const chunks = rawChunks.map(c => normalizeChunk(c))
+      chunks.sort((a, b) => a.i - b.i)
+
+      let decryptionKey: CryptoKey | null = null
+      if (wyvernFile.encrypted && encryptionPassword && wyvernFile.encryption_salt) {
+        decryptionKey = await restoreEncryptionContext(encryptionPassword, wyvernFile.encryption_salt)
+      }
+
+      const fileParts: ArrayBuffer[] = []
+      for (const chunk of chunks) {
+        let data = await fetchViaExtension(chunk.u)
+
+        if (wyvernFile.encrypted && decryptionKey && chunk.v) {
+          const iv = new Uint8Array(chunk.v)
+          data = await decryptChunk(data, decryptionKey, iv)
         }
 
-      } catch (err) {
+        if (chunk.c) {
+          data = await decompressData(data)
+        }
+
+        fileParts.push(data)
+      }
+
+      const blob = new Blob(fileParts, { type: getMimeType(wyvernFile.name) })
+
+      if (isImage) {
+        return URL.createObjectURL(blob)
+      } else if (isVideo) {
+        const videoUrl = URL.createObjectURL(blob)
+        const thumbUrl = await extractVideoFrame(videoUrl)
+        URL.revokeObjectURL(videoUrl)
+        if (!thumbUrl) throw new Error('Failed to extract video frame')
+        return thumbUrl
+      }
+
+      throw new Error('Not an image or video')
+    }
+
+    setIsLoadingThumb(true)
+
+    const promise = loadThumbnail()
+    setLoadingPromise(String(file.id), promise)
+
+    promise
+      .then(url => {
+        setCachedThumbnail(String(file.id), url)
+        setThumbnail(url)
+      })
+      .catch(err => {
         console.error('Thumbnail load failed:', err)
-        // Check if this is a 404/unavailable error
         const errorMsg = String(err)
         if (errorMsg.includes('404') || errorMsg.includes('not found') || errorMsg.includes('timeout')) {
           setIsUnavailable(true)
         }
-      } finally {
+      })
+      .finally(() => {
         setIsLoadingThumb(false)
-      }
-    }
+      })
 
-    loadThumbnail()
-
-    // Cleanup using ref for reliable URL revocation
-    // Delay revocation to prevent ERR_FILE_NOT_FOUND during React re-renders
-    return () => {
-      const urlToRevoke = thumbnailRef.current
-      thumbnailRef.current = null
-      if (urlToRevoke) {
-        setTimeout(() => URL.revokeObjectURL(urlToRevoke), 100)
-      }
-    }
-  }, [file.id, viewMode, isImage, encryptionPassword])
+    // No cleanup needed - cache manages blob URL lifecycle
+  }, [file.id, viewMode, isImage, isVideo, encryptionPassword, thumbnail])
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
