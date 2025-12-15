@@ -219,20 +219,45 @@ export const useFileStore = create<FileStore>()(
       },
 
       initializeManager: async () => {
-        const { webhookUrls, webhookUrl, encryptionPassword, serverBoostLevel } = get()
+        const { webhookUrls, webhookUrl, encryptionPassword, serverBoostLevel, fileManager, userId } = get()
 
         // Use webhookUrls array, fall back to single webhookUrl for backward compat
         const urls = webhookUrls.length > 0 ? webhookUrls : (webhookUrl ? [webhookUrl] : [])
         if (urls.length === 0) return
 
-        console.log('[FileStore] Initializing manager with', urls.length, 'webhook(s). Boost:', serverBoostLevel, 'PW present:', !!encryptionPassword)
-        // Uses async create() which auto-migrates to SHA-256 userId
-        const manager = await WyvernFileManager.create(urls, serverBoostLevel)
-        if (encryptionPassword) {
-          await manager.setPassword(encryptionPassword)
+        // GUARD: Skip if we already have a valid manager for this user
+        // This prevents race conditions from multiple useEffect triggers
+        if (fileManager && userId) {
+          console.log('[FileStore] Manager already initialized, skipping')
+          return
         }
-        // CRITICAL: Set both fileManager AND userId - loadFiles needs userId!
-        set({ fileManager: manager, userId: manager.getUserId() })
+
+        // GUARD: Prevent concurrent initialization calls
+        // Use module-level variable to track ongoing initialization
+        if ((window as unknown as { __wyvernInitPromise?: Promise<void> }).__wyvernInitPromise) {
+          console.log('[FileStore] Initialization already in progress, waiting...')
+          await (window as unknown as { __wyvernInitPromise?: Promise<void> }).__wyvernInitPromise
+          return
+        }
+
+        const initPromise = (async () => {
+          console.log('[FileStore] Initializing manager with', urls.length, 'webhook(s). Boost:', serverBoostLevel, 'PW present:', !!encryptionPassword)
+          // Uses async create() which auto-migrates to SHA-256 userId
+          const manager = await WyvernFileManager.create(urls, serverBoostLevel)
+          if (encryptionPassword) {
+            await manager.setPassword(encryptionPassword)
+          }
+          // CRITICAL: Set both fileManager AND userId - loadFiles needs userId!
+          set({ fileManager: manager, userId: manager.getUserId() })
+        })();
+
+        (window as unknown as { __wyvernInitPromise?: Promise<void> }).__wyvernInitPromise = initPromise
+
+        try {
+          await initPromise
+        } finally {
+          (window as unknown as { __wyvernInitPromise?: Promise<void> }).__wyvernInitPromise = undefined
+        }
       },
 
       loadFiles: async () => {
