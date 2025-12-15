@@ -9,6 +9,7 @@ import { Sidebar } from './components/layout/Sidebar'
 import { AuthScreen } from './components/AuthScreen'
 import { WebhookSetup } from './components/WebhookSetup'
 import { ShareView } from './components/ShareView'
+import { LandingPage } from './components/LandingPage'
 import { RenameModal } from './components/files/RenameModal'
 import { MoveModal } from './components/files/MoveModal'
 import { VersionHistoryModal } from './components/files/VersionHistoryModal'
@@ -174,11 +175,14 @@ function AuthenticatedApp() {
 function App() {
   return (
     <Routes>
-      {/* Public share route - no auth required */}
+      {/* Public routes - no auth required */}
       <Route path="/share/:shareId" element={<ShareView />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/signin" element={<AuthScreen defaultView="sign_in" />} />
+      <Route path="/signup" element={<AuthScreen defaultView="sign_up" />} />
 
-      {/* All other routes - auth required */}
-      <Route path="/*" element={<AuthenticatedApp />} />
+      {/* App routes - auth required */}
+      <Route path="/app/*" element={<AuthenticatedApp />} />
     </Routes>
   )
 }

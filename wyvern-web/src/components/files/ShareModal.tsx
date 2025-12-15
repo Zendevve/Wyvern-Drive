@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Copy, Check, Link2, Clock, Lock, X } from 'lucide-react'
+import { Copy, Check, Link2, Clock, Lock, X, AlertTriangle, Info, Heart } from 'lucide-react'
 import { useFileStore } from '../../stores/fileStore'
 import { useFocusTrap } from '../../hooks/useFocusTrap'
 import type { WyvernFile } from '../../lib/types'
@@ -8,6 +8,16 @@ import './ShareModal.css'
 interface ShareModalProps {
   file: WyvernFile | null
   onClose: () => void
+}
+
+// Share links can only directly download files under 1MB (Supabase Storage limit)
+const SHARE_SIZE_LIMIT = 1 * 1024 * 1024
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
 export function ShareModal({ file, onClose }: ShareModalProps) {
@@ -21,6 +31,8 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
 
   // Focus trap for accessibility
   const focusTrapRef = useFocusTrap(!!file, onClose)
+
+  const isLargeFile = file && file.size > SHARE_SIZE_LIMIT
 
   useEffect(() => {
     // Reset state when file changes
@@ -81,6 +93,40 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
 
         <div className="modal-body">
           <p className="file-name">{file.name}</p>
+          <p className="file-size-info">{formatSize(file.size)}</p>
+
+          {/* File size limit warning */}
+          {isLargeFile && (
+            <div className="share-limit-banner">
+              <div className="banner-icon">
+                <AlertTriangle size={20} />
+              </div>
+              <div className="banner-content">
+                <strong>Large file ({formatSize(file.size)})</strong>
+                <p>Files over 1MB require the Wyvern extension to download.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Donation prompt for large files */}
+          {isLargeFile && (
+            <div className="donation-banner">
+              <div className="banner-icon">
+                <Heart size={18} />
+              </div>
+              <div className="banner-content">
+                <span>Want higher limits? Support us to help cover storage costs.</span>
+              </div>
+            </div>
+          )}
+
+          {/* Small file info */}
+          {!isLargeFile && (
+            <div className="share-info-banner">
+              <Info size={14} />
+              <span>This file can be downloaded directly without the extension.</span>
+            </div>
+          )}
 
           {!shareUrl ? (
             <>
@@ -88,11 +134,10 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
               <div className="option-row">
                 <label><Clock size={14} /> Expires</label>
                 <select value={expiresIn} onChange={e => setExpiresIn(e.target.value)}>
-                  <option value="0">Never</option>
+                  <option value="0">7 days (max)</option>
                   <option value="1">1 hour</option>
                   <option value="24">24 hours</option>
                   <option value="168">7 days</option>
-                  <option value="720">30 days</option>
                 </select>
               </div>
 

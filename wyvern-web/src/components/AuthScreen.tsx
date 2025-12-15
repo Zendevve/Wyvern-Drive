@@ -1,10 +1,36 @@
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared'
 import { supabase } from '../lib/supabase'
 import { Shield } from 'lucide-react'
 import './AuthScreen.css'
 
-export function AuthScreen() {
+interface AuthScreenProps {
+  defaultView?: 'sign_in' | 'sign_up'
+}
+
+export function AuthScreen({ defaultView = 'sign_in' }: AuthScreenProps) {
+  const navigate = useNavigate()
+
+  // Listen for auth state changes and redirect to app
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        navigate('/app')
+      }
+    })
+
+    // Check if already signed in
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigate('/app')
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [navigate])
+
   return (
     <div className="auth-screen">
       {/* Left Panel - Branding */}
@@ -32,7 +58,7 @@ export function AuthScreen() {
         <div className="auth-card">
           <div className="auth-header">
             <h2>Welcome</h2>
-            <p>Sign in to access your files</p>
+            <p>{defaultView === 'sign_up' ? 'Create your account' : 'Sign in to access your files'}</p>
           </div>
 
           <Auth
@@ -80,8 +106,8 @@ export function AuthScreen() {
               },
             }}
             providers={[]}
-            redirectTo={window.location.origin}
-            view="sign_in"
+            redirectTo={`${window.location.origin}/app`}
+            view={defaultView}
             showLinks={true}
             localization={{
               variables: {

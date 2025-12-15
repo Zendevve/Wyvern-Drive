@@ -806,8 +806,8 @@ Deno.serve(async (req: Request) => {
 
     // ===== SHARE LINKS =====
 
-    // Size threshold for Supabase Storage upload (5MB - conservative to manage storage costs)
-    const SHARE_STORAGE_THRESHOLD = 5 * 1024 * 1024
+    // Size threshold for Supabase Storage upload (1MB - conservative to manage storage costs)
+    const SHARE_STORAGE_THRESHOLD = 1 * 1024 * 1024
     // Max share duration (7 days) to ensure cleanup
     const MAX_SHARE_HOURS = 7 * 24 // 168 hours
 
@@ -1096,7 +1096,7 @@ Deno.serve(async (req: Request) => {
       }
 
       // CASE 2: Large file without storage - requires extension
-      const SHARE_STORAGE_THRESHOLD = 5 * 1024 * 1024
+      const SHARE_STORAGE_THRESHOLD = 1 * 1024 * 1024
       if (share.file_size && share.file_size >= SHARE_STORAGE_THRESHOLD) {
         console.log(`[Share Download] Large file (${(share.file_size / 1024 / 1024).toFixed(2)}MB) requires extension`)
         return json({
