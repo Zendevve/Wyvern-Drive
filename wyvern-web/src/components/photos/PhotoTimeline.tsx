@@ -3,7 +3,7 @@
  * Groups images by date with virtualized scrolling
  */
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useFileStore } from '../../stores/fileStore'
 import { Calendar, Image as ImageIcon, Loader, Video } from 'lucide-react'
