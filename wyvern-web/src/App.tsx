@@ -1,10 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { Settings, Bell } from 'lucide-react'
+import type { Session } from '@supabase/supabase-js'
+import { supabase, getUserProfile, saveUserProfile } from './lib/supabase'
 import { FileManager } from './components/FileManager'
 import { PhotoTimeline } from './components/photos/PhotoTimeline'
 import { Sidebar } from './components/layout/Sidebar'
-import { SetupScreen } from './components/SetupScreen'
+import { AuthScreen } from './components/AuthScreen'
+import { WebhookSetup } from './components/WebhookSetup'
 import { ShareView } from './components/ShareView'
 import { RenameModal } from './components/files/RenameModal'
 import { MoveModal } from './components/files/MoveModal'
@@ -18,19 +21,105 @@ import { useFileStore } from './stores/fileStore'
 import './styles/App.css'
 
 function AuthenticatedApp() {
-  const { isAuthenticated, initializeManager, loadFiles } = useFileStore()
+  const { initializeManager, loadFiles, webhookUrls } = useFileStore()
+  const [needsWebhookSetup, setNeedsWebhookSetup] = useState(false)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
+  const [session, setSession] = useState<Session | null>(null)
 
-  // Initialize file manager and load files after authentication
+  // Load user profile and check if webhooks are configured
   useEffect(() => {
-    if (isAuthenticated) {
+    const loadProfile = async () => {
+      if (!session?.user) return
+
+      setIsLoadingProfile(true)
+      try {
+        const profile = await getUserProfile(session.user.id)
+
+        if (profile && profile.webhook_urls && profile.webhook_urls.length > 0) {
+          // Load webhooks from profile
+          useFileStore.getState().setWebhookUrls(profile.webhook_urls)
+          setNeedsWebhookSetup(false)
+        } else if (webhookUrls.length > 0) {
+          // User has webhooks in store but not in profile - save to profile
+          await saveUserProfile(session.user.id, webhookUrls, false)
+          setNeedsWebhookSetup(false)
+        } else {
+          // New user - needs webhook setup
+          setNeedsWebhookSetup(true)
+        }
+      } catch (error) {
+        console.error('Failed to load profile:', error)
+        // Fall back to local store
+        if (webhookUrls.length > 0) {
+          setNeedsWebhookSetup(false)
+        } else {
+          setNeedsWebhookSetup(true)
+        }
+      } finally {
+        setIsLoadingProfile(false)
+      }
+    }
+
+    loadProfile()
+  }, [session, webhookUrls])
+
+  // Initialize file manager after webhooks are loaded
+  useEffect(() => {
+    if (webhookUrls.length > 0 && !needsWebhookSetup && !isLoadingProfile) {
       initializeManager().then(() => {
         loadFiles()
       })
     }
-  }, [isAuthenticated, initializeManager, loadFiles])
+  }, [webhookUrls, needsWebhookSetup, isLoadingProfile, initializeManager, loadFiles])
 
-  if (!isAuthenticated) {
-    return <SetupScreen />
+  // Listen for auth state changes
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // Show AuthScreen if not logged in
+  if (!session) {
+    return <AuthScreen />
+  }
+
+  // Show loading while checking profile
+  if (isLoadingProfile) {
+    return (
+      <div className="app-loading">
+        <div className="loading-spinner" />
+        <p>Loading your drive...</p>
+      </div>
+    )
+  }
+
+  // Show WebhookSetup if user hasn't configured webhooks yet
+  if (needsWebhookSetup) {
+    return (
+      <WebhookSetup
+        onComplete={async (webhooks, password) => {
+          // Save to store
+          useFileStore.getState().setWebhookUrls(webhooks)
+          if (password) {
+            await useFileStore.getState().setEncryptionPassword(password)
+          }
+
+          // Save to Supabase profile
+          if (session?.user) {
+            await saveUserProfile(session.user.id, webhooks, !!password)
+          }
+
+          setNeedsWebhookSetup(false)
+        }}
+      />
+    )
   }
 
   return (
