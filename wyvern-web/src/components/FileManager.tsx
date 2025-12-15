@@ -174,7 +174,7 @@ export function FileManager() {
           <div className="loading-state">
             <div className="loader" />
           </div>
-        ) : Object.keys(files).length === 0 ? (
+        ) : Object.keys(files || {}).length === 0 ? (
           <div className="empty-state">
             <div className="empty-illustration">
               <FolderPlus size={48} strokeWidth={1} />
@@ -222,7 +222,7 @@ export function FileManager() {
 
       {/* Status Bar */}
       <div className="status-bar">
-        <span>{Object.keys(files).length} items</span>
+        <span>{Object.keys(files || {}).length} items</span>
         {useFileStore.getState().selectedIds.size > 0 && (
           <span> • {useFileStore.getState().selectedIds.size} selected</span>
         )}
