@@ -81,7 +81,7 @@ export function AuthScreen() {
             }}
             providers={[]}
             redirectTo={window.location.origin}
-            view="sign_up"
+            view="sign_in"
             showLinks={true}
             localization={{
               variables: {
@@ -89,7 +89,7 @@ export function AuthScreen() {
                   email_label: 'Email address',
                   password_label: 'Password',
                   email_input_placeholder: 'you@example.com',
-                  password_input_placeholder: '••••••••',
+                  password_input_placeholder: 'At least 8 characters',
                   button_label: 'Sign In',
                   loading_button_label: 'Signing in...',
                   social_provider_text: 'Continue with {{provider}}',

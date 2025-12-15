@@ -21,7 +21,7 @@ import { useFileStore } from './stores/fileStore'
 import './styles/App.css'
 
 function AuthenticatedApp() {
-  const { initializeManager, loadFiles, webhookUrls } = useFileStore()
+  const { initializeManager, webhookUrls } = useFileStore()
   const [needsWebhookSetup, setNeedsWebhookSetup] = useState(false)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [session, setSession] = useState<Session | null>(null)
