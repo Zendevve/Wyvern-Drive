@@ -231,7 +231,8 @@ export const useFileStore = create<FileStore>()(
         if (encryptionPassword) {
           await manager.setPassword(encryptionPassword)
         }
-        set({ fileManager: manager })
+        // CRITICAL: Set both fileManager AND userId - loadFiles needs userId!
+        set({ fileManager: manager, userId: manager.getUserId() })
       },
 
       loadFiles: async () => {
