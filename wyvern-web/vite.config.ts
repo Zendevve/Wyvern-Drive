@@ -42,8 +42,16 @@ export default defineConfig({
         // Cache strategies
         runtimeCaching: [
           {
-            // Cache API responses
-            urlPattern: /^https:\/\/.*\.supabase\.co\/functions\/.*/i,
+            // Cache API responses (but NOT share/stream downloads)
+            urlPattern: ({ url }) => {
+              // Match supabase functions except share and stream endpoints
+              if (!url.hostname.includes('supabase.co')) return false
+              if (!url.pathname.includes('/functions/')) return false
+              // Exclude share downloads and streaming - they need CORS passthrough
+              if (url.pathname.includes('/share/')) return false
+              if (url.pathname.includes('/stream/')) return false
+              return true
+            },
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
