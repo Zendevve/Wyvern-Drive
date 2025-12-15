@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { supabase } from '../lib/supabase'
 import type { WyvernFile, WyvernFolder, FileVersion, ServerBoostLevel } from '../lib/types'
 import { WyvernFileManager } from '../lib/wyvern-file-manager'
 import { cacheFileTree, getCachedFileTree, clearUserCache, isOnline } from '../lib/offlineCache'
@@ -28,6 +29,7 @@ interface FileStore {
   webhookUrl: string | null  // @deprecated - kept for backward compatibility migration
   webhookUrls: string[]      // New: array of webhook URLs for parallel uploads
   userId: string | null
+  userEmail: string | null   // New: user email for UI display
   isAuthenticated: boolean
   encryptionPassword: string | null
   serverBoostLevel: ServerBoostLevel  // Discord server boost level for chunk sizing
@@ -63,6 +65,7 @@ interface FileStore {
   // Actions
   setWebhookUrl: (url: string) => void  // @deprecated - use setWebhookUrls
   setWebhookUrls: (urls: string[]) => void
+  setUserEmail: (email: string | null) => void // New action
   updateWebhooks: (urls: string[]) => Promise<void>  // For post-login updates
   setEncryptionPassword: (password: string | null) => Promise<void>
   setServerBoostLevel: (level: ServerBoostLevel) => void
@@ -73,7 +76,7 @@ interface FileStore {
   downloadFile: (fileId: string) => Promise<void>
   downloadFolder: (folderId: string) => Promise<void>
   deleteFile: (fileId: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   setCurrentPath: (path: string) => void
   selectFile: (id: string) => void
   toggleSelection: (id: string) => void
@@ -124,6 +127,7 @@ export const useFileStore = create<FileStore>()(
       webhookUrl: null,  // @deprecated
       webhookUrls: [],
       userId: null,
+      userEmail: null,
       isAuthenticated: false,
       encryptionPassword: null,
       serverBoostLevel: 'none' as ServerBoostLevel,  // Default: no boost
@@ -578,16 +582,28 @@ export const useFileStore = create<FileStore>()(
         }
       },
 
-      logout: () => {
+      setUserEmail: (email) => set({ userEmail: email }),
+
+      logout: async () => {
         const { userId } = get()
         // Clear offline cache for this user
         if (userId) {
           clearUserCache(userId).catch(console.error)
         }
+
+        // Sign out of Supabase
+        await supabase.auth.signOut()
+
+        // Clear migrated webhooks backup to prevent auto-sync on next login
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('wyvern-saved-webhooks')
+        }
+
         set({
           webhookUrl: null,
           webhookUrls: [],
           userId: null,
+          userEmail: null,
           isAuthenticated: false,
           encryptionPassword: null,
           fileManager: null,

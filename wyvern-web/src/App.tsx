@@ -29,39 +29,49 @@ function AuthenticatedApp() {
   // Load user profile and check if webhooks are configured
   useEffect(() => {
     const loadProfile = async () => {
-      if (!session?.user) return
+      if (!session?.user) {
+        setIsLoadingProfile(false)
+        return
+      }
 
       setIsLoadingProfile(true)
       try {
         const profile = await getUserProfile(session.user.id)
+        if (session.user.email) {
+          useFileStore.getState().setUserEmail(session.user.email)
+        }
+        console.log('[App] Loaded profile:', profile)
 
         if (profile && profile.webhook_urls && profile.webhook_urls.length > 0) {
           // Load webhooks from profile
+          console.log('[App] Found webhooks in profile, loading...')
           useFileStore.getState().setWebhookUrls(profile.webhook_urls)
           setNeedsWebhookSetup(false)
-        } else if (webhookUrls.length > 0) {
-          // User has webhooks in store but not in profile - save to profile
-          await saveUserProfile(session.user.id, webhookUrls, false)
-          setNeedsWebhookSetup(false)
         } else {
-          // New user - needs webhook setup
-          setNeedsWebhookSetup(true)
+          // Check if we have webhooks in local store
+          const localWebhooks = useFileStore.getState().webhookUrls
+          if (localWebhooks.length > 0) {
+            console.log('[App] Syncing local webhooks to profile...')
+            await saveUserProfile(session.user.id, localWebhooks, false)
+            setNeedsWebhookSetup(false)
+          } else {
+            // New user - needs webhook setup
+            console.log('[App] New user, needs webhook setup')
+            setNeedsWebhookSetup(true)
+          }
         }
       } catch (error) {
-        console.error('Failed to load profile:', error)
-        // Fall back to local store
-        if (webhookUrls.length > 0) {
-          setNeedsWebhookSetup(false)
-        } else {
-          setNeedsWebhookSetup(true)
-        }
+        console.error('[App] Failed to load profile:', error)
+        // Fall back to checking local store
+        const localWebhooks = useFileStore.getState().webhookUrls
+        setNeedsWebhookSetup(localWebhooks.length === 0)
       } finally {
         setIsLoadingProfile(false)
       }
     }
 
     loadProfile()
-  }, [session, webhookUrls])
+  }, [session])
 
   // Initialize file manager after webhooks are loaded
   useEffect(() => {

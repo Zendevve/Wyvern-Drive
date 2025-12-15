@@ -88,7 +88,7 @@ function formatStorageSize(bytes: number): string {
 export function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { logout, uploadFiles, uploadFolder, files, getWebhookPoolStats, setActiveModal, isSyncing, isOffline } = useFileStore()
+  const { logout, uploadFiles, uploadFolder, files, getWebhookPoolStats, setActiveModal, isSyncing, isOffline, userEmail } = useFileStore()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [showAnalytics, setShowAnalytics] = useState(false)
   const [showPendingUploads, setShowPendingUploads] = useState(false)
@@ -333,7 +333,7 @@ export function Sidebar() {
           <div className="user-profile">
             <div className="user-avatar" />
             <div className="user-info">
-              <span className="username">User1234</span>
+              <span className="username" title={userEmail || 'User'}>{userEmail || 'User'}</span>
             </div>
             <button
               onClick={() => setActiveModal('settings')}

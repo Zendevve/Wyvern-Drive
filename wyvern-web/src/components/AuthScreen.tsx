@@ -79,9 +79,9 @@ export function AuthScreen() {
                 label: 'auth-label',
               },
             }}
-            providers={['google']}
+            providers={[]}
             redirectTo={window.location.origin}
-            view="sign_in"
+            view="sign_up"
             showLinks={true}
             localization={{
               variables: {
