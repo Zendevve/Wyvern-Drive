@@ -102,8 +102,8 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
                 <AlertTriangle size={20} />
               </div>
               <div className="banner-content">
-                <strong>Large file ({formatSize(file.size)})</strong>
-                <p>Files over 1MB require the Wyvern extension to download.</p>
+                <strong>File too large ({formatSize(file.size)})</strong>
+                <p>Cannot share files larger than 1MB due to storage limits.</p>
               </div>
             </div>
           )}
@@ -115,7 +115,7 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
                 <Heart size={18} />
               </div>
               <div className="banner-content">
-                <span>Want higher limits? Support us to help cover storage costs.</span>
+                <span>Want higher limits? <a href="https://github.com/sponsors" target="_blank" rel="noopener noreferrer" className="donation-link">Support us</a> to help cover storage costs.</span>
               </div>
             </div>
           )}
@@ -157,7 +157,7 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
               <button
                 className="create-btn"
                 onClick={handleCreate}
-                disabled={isCreating}
+                disabled={isCreating || !!isLargeFile}
               >
                 {isCreating ? 'Creating...' : 'Create Share Link'}
               </button>

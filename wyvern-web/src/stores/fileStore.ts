@@ -61,6 +61,7 @@ interface FileStore {
   fileHealthStatus: Map<string, FileHealthStatus>
   isVerifying: boolean
   verifyProgress: { checked: number; total: number; unavailable: number }
+  error: string | null // New error state
 
   // Actions
   setWebhookUrl: (url: string) => void  // @deprecated - use setWebhookUrls
@@ -138,6 +139,7 @@ export const useFileStore = create<FileStore>()(
       selectedIds: new Set(),
       lastSelectedId: null,
       isLoading: false,
+      error: null,
       isSyncing: false,
       isOffline: !isOnline(),
       uploadProgress: new Map(),
@@ -316,10 +318,10 @@ export const useFileStore = create<FileStore>()(
           applyFileTree(cachedRoot)
 
           // Start background sync
-          set({ isSyncing: true, isOffline: !isOnline() })
+          set({ isSyncing: true, isOffline: !isOnline(), error: null })
         } else {
           // No cache - show loading state
-          set({ isLoading: true, isOffline: !isOnline() })
+          set({ isLoading: true, isOffline: !isOnline(), error: null })
         }
 
         // STEP 2: Fetch fresh data from API (sync)
@@ -330,9 +332,21 @@ export const useFileStore = create<FileStore>()(
           // STEP 3: Cache the file tree for next time
           await cacheFileTree(userId, root.children)
           console.log('[FileStore] File tree cached for offline use')
+          set({ error: null }) // Clear any previous errors on success
 
         } catch (error) {
           console.error('Failed to load files:', error)
+          const message = (error as Error).message || 'Failed to load files'
+
+          if (message.includes('404')) {
+            // 404 might mean user has no file record yet - which is fine, treat as empty?
+            // Or it implies backend endpoint missing.
+            // If WyvernFileManager throws 404 for fetchFiles, it usually means the endpoint failed.
+            set({ error: 'Could not connect to server. Check your connection or deploy status.' })
+          } else {
+            set({ error: message })
+          }
+
           set({ isOffline: true })
           // If we had cache, we're still showing it (graceful offline)
         } finally {

@@ -7,7 +7,7 @@ import { ShareModal } from './files/ShareModal'
 import { PreviewModal } from './files/PreviewModal'
 import { InfoSidebar } from './files/InfoSidebar'
 import { SettingsModal } from './SettingsModal'
-import { LayoutGrid, List as ListIcon, Filter, FolderPlus, UploadCloud, Info } from 'lucide-react'
+import { LayoutGrid, List as ListIcon, Filter, FolderPlus, UploadCloud, Info, AlertCircle, RotateCcw } from 'lucide-react'
 import { isPreviewable } from '../lib/thumbnails'
 import type { WyvernFile, WyvernFolder } from '../lib/types'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
@@ -15,7 +15,7 @@ import './FileManager.css'
 
 export function FileManager() {
   useKeyboardShortcuts() // Enable global keyboard shortcuts
-  const { files, isLoading, uploadFiles, uploadFolder, previewFileId, setPreviewFile, activeModal, activeFileId, setActiveModal, selectedIds } = useFileStore()
+  const { files, isLoading, error, loadFiles, uploadFiles, uploadFolder, previewFileId, setPreviewFile, activeModal, activeFileId, setActiveModal, selectedIds } = useFileStore()
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [showInfoSidebar, setShowInfoSidebar] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -174,6 +174,18 @@ export function FileManager() {
           <div className="loading-state">
             <div className="loader" />
           </div>
+        ) : error ? (
+          <div className="empty-state error-state">
+            <div className="empty-illustration" style={{ color: 'var(--error)' }}>
+              <AlertCircle size={48} />
+            </div>
+            <h3>Unable to load files</h3>
+            <p className="error-message">{error}</p>
+            <button className="cta-button" onClick={() => loadFiles()} style={{ marginTop: 16 }}>
+              <RotateCcw size={16} style={{ marginRight: 8 }} />
+              Retry Connection
+            </button>
+          </div>
         ) : Object.keys(files || {}).length === 0 ? (
           <div className="empty-state">
             <div className="empty-illustration">
@@ -181,9 +193,15 @@ export function FileManager() {
             </div>
             <h3>This folder is empty</h3>
             <p>Drag files here to upload</p>
-            <button className="cta-button" onClick={triggerUpload} style={{ marginTop: 16 }}>
-              Select Files
-            </button>
+            <div className="empty-actions" style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+              <button className="cta-button" onClick={triggerUpload}>
+                Select Files
+              </button>
+              {/* Hidden retry for manual refresh if needed */}
+              <button className="icon-button" onClick={() => loadFiles()} title="Refresh" style={{ opacity: 0.5 }}>
+                <RotateCcw size={16} />
+              </button>
+            </div>
           </div>
         ) : (
           <div className="file-content-area">

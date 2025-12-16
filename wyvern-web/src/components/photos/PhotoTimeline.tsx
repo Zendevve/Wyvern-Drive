@@ -12,12 +12,8 @@ import { normalizeChunk } from '../../lib/types'
 import { isImageFile, isVideoFile, getMimeType } from '../../lib/thumbnails'
 import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
-import {
-  getCachedThumbnail,
-  setCachedThumbnail,
-  getLoadingPromise,
-  setLoadingPromise
-} from '../../lib/thumbnailCache'
+import { getCachedThumbnail, setCachedThumbnail, getLoadingPromise, setLoadingPromise } from '../../lib/thumbnailCache'
+import { PreviewModal } from '../files/PreviewModal'
 import './PhotoTimeline.css'
 
 // Types
@@ -213,11 +209,11 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
         </>
       ) : error ? (
         <div className="photo-error">
-          <ImageIcon size={24} />
+          {isVideo ? <Video size={24} /> : <ImageIcon size={24} />}
         </div>
       ) : (
         <div className="photo-placeholder">
-          <ImageIcon size={24} />
+          {isVideo ? <Video size={24} /> : <ImageIcon size={24} />}
         </div>
       )}
       {isSelected && <div className="photo-check">✓</div>}
@@ -229,7 +225,7 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
  * Main PhotoTimeline Component
  */
 export function PhotoTimeline() {
-  const { files, setPreviewFile, loadFiles, isLoading } = useFileStore()
+  const { files, setPreviewFile, loadFiles, isLoading, previewFileId } = useFileStore()
   const parentRef = useRef<HTMLDivElement>(null)
 
   // Filter to images and videos (media files)
@@ -308,6 +304,18 @@ export function PhotoTimeline() {
 
   // Stats
   const totalPhotos = mediaFiles.length
+
+  // Preview Logic
+  const previewFile = previewFileId ? mediaFiles.find(f => String(f.id) === previewFileId) : null
+  const currentPreviewIndex = previewFile ? mediaFiles.findIndex(f => f.id === previewFile.id) : -1
+
+  const handleNavigate = (direction: 'prev' | 'next') => {
+    if (currentPreviewIndex === -1) return
+    const newIndex = direction === 'prev' ? currentPreviewIndex - 1 : currentPreviewIndex + 1
+    if (newIndex >= 0 && newIndex < mediaFiles.length) {
+      setPreviewFile(String(mediaFiles[newIndex].id))
+    }
+  }
 
   return (
     <div className="photo-timeline">
@@ -391,6 +399,15 @@ export function PhotoTimeline() {
           </div>
         </div>
       )}
+
+      {/* Preview Modal for Photos */}
+      <PreviewModal
+        file={previewFile || null}
+        onClose={() => setPreviewFile(null)}
+        onNavigate={handleNavigate}
+        hasPrev={currentPreviewIndex > 0}
+        hasNext={currentPreviewIndex > -1 && currentPreviewIndex < mediaFiles.length - 1}
+      />
     </div>
   )
 }

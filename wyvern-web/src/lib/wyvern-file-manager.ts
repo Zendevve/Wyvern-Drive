@@ -111,15 +111,24 @@ export class WyvernFileManager {
 
   /**
    * Migrate files from old 32-bit hash userId to new SHA-256 userId
+   * Has a timeout to prevent blocking initialization if server is unreachable
    */
   static async migrateUserId(webhookUrl: string): Promise<void> {
     try {
       console.log('[WyvernFileManager] Checking if userId migration is needed...')
+
+      // Create an AbortController with 5 second timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+
       const response = await fetch(`${API_URL}/migrate`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ webhookUrl })
+        body: JSON.stringify({ webhookUrl }),
+        signal: controller.signal
       })
+
+      clearTimeout(timeoutId)
 
       if (response.ok) {
         const result = await response.json()
@@ -132,7 +141,11 @@ export class WyvernFileManager {
         console.warn('[WyvernFileManager] Migration check failed:', await response.text())
       }
     } catch (error) {
-      console.warn('[WyvernFileManager] Migration check error (continuing with new hash):', error)
+      if ((error as Error).name === 'AbortError') {
+        console.warn('[WyvernFileManager] Migration check timed out (5s) - continuing with new hash')
+      } else {
+        console.warn('[WyvernFileManager] Migration check error (continuing with new hash):', error)
+      }
     }
   }
 

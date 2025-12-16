@@ -208,15 +208,15 @@ export function Sidebar() {
           <nav className="nav-section">
             <div className="nav-label">Locations</div>
             <button
-              className={`nav-item ${location.pathname === '/' ? 'active' : ''}`}
-              onClick={() => navigate('/')}
+              className={`nav-item ${location.pathname === '/app' || location.pathname === '/app/' ? 'active' : ''}`}
+              onClick={() => navigate('/app')}
             >
               <Home size={18} className="nav-icon" />
               <span>Home Drive</span>
             </button>
             <button
-              className={`nav-item ${location.pathname === '/photos' ? 'active' : ''}`}
-              onClick={() => navigate('/photos')}
+              className={`nav-item ${location.pathname === '/app/photos' ? 'active' : ''}`}
+              onClick={() => navigate('/app/photos')}
             >
               <Image size={18} className="nav-icon" />
               <span>Photos</span>

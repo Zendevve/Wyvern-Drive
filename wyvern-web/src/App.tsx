@@ -151,7 +151,7 @@ function AuthenticatedApp() {
         <main className="main-content">
           <Routes>
             <Route path="/" element={<FileManager />} />
-            <Route path="/photos" element={<PhotoTimeline />} />
+            <Route path="photos" element={<PhotoTimeline />} />
           </Routes>
         </main>
       </div>

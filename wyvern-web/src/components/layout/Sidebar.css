@@ -232,10 +232,13 @@
 }
 
 .user-info {
-  flex: 1;
+  /* Removed flex: 1 to keep actions close to info */
   font-size: 13px;
   font-weight: 500;
   color: var(--foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .logout-btn {
