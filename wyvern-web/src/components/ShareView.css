@@ -350,6 +350,21 @@
   margin: 0;
 }
 
+/* Extension Notice */
+.extension-notice {
+  background: rgba(251, 191, 36, 0.1);
+  /* amber/10 */
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #FBBF24;
+  /* amber */
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
 /* Error Message */
 .error-message {
   background: rgba(244, 63, 94, 0.1);

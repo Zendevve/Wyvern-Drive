@@ -1124,6 +1124,114 @@ Deno.serve(async (req: Request) => {
       })
     }
 
+    // GET /share/:shareId/chunks - Get chunk data for extension-based download (large files)
+    const shareChunksMatch = path.match(/^\/share\/([a-f0-9-]+)\/chunks$/)
+    if (shareChunksMatch && method === "GET") {
+      const [, shareId] = shareChunksMatch
+      const supabase = getSupabase()
+
+      // Get share with full file info including content (chunks)
+      const { data: share, error: shareError } = await supabase
+        .from("shares")
+        .select("*, files(*)")
+        .eq("id", shareId)
+        .maybeSingle()
+
+      if (shareError) {
+        console.error("[Share Chunks] Query error:", shareError)
+        return json({ error: "Database error" }, 500)
+      }
+
+      if (!share) return json({ error: "Share not found" }, 404)
+
+      // Check expiry
+      if (share.expires_at && new Date(share.expires_at) < new Date()) {
+        return json({ error: "Share link expired" }, 410)
+      }
+
+      // Check password if required
+      const providedPassword = url.searchParams.get("password")
+      if (share.password_hash) {
+        const providedHash = providedPassword ? await hashPassword(providedPassword) : null
+        if (!providedHash || providedHash !== share.password_hash) {
+          return json({ error: "Password required", passwordRequired: true }, 401)
+        }
+      }
+
+      const file = share.files
+      if (!file || !file.content) {
+        return json({ error: "File data not available" }, 404)
+      }
+
+      // Get owner's webhook for URL refresh
+      let ownerWebhook: string | null = null
+      if (share.user_id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("webhook_urls")
+          .eq("id", share.user_id)
+          .maybeSingle()
+        ownerWebhook = profile?.webhook_urls?.[0] || null
+      }
+
+      // Parse the chunks
+      interface RawChunk {
+        i?: number
+        u?: string
+        s?: number
+        index?: number
+        url?: string
+        size?: number
+        messageId?: string
+        m?: string
+      }
+
+      let rawChunks: RawChunk[]
+      try {
+        rawChunks = JSON.parse(file.content)
+      } catch {
+        return json({ error: "Invalid file data" }, 500)
+      }
+
+      // Normalize and refresh chunk URLs
+      const refreshedChunks = []
+      for (const c of rawChunks) {
+        const originalUrl = c.u ?? c.url ?? ''
+        const messageId = c.m ?? c.messageId
+
+        // Try to get valid (non-expired) URL
+        const validUrl = await getValidChunkUrl(
+          { url: originalUrl, messageId },
+          ownerWebhook
+        )
+
+        if (!validUrl) {
+          console.error(`[Share Chunks] Could not refresh URL for chunk ${c.i ?? c.index}`)
+          return json({
+            error: "Failed to access file content - links may have expired",
+            details: "Could not refresh Discord CDN URLs"
+          }, 503)
+        }
+
+        refreshedChunks.push({
+          i: c.i ?? c.index ?? 0,
+          u: validUrl,
+          s: c.s ?? c.size ?? 0
+        })
+      }
+
+      // Sort by index
+      refreshedChunks.sort((a, b) => a.i - b.i)
+
+      console.log(`[Share Chunks] Returning ${refreshedChunks.length} chunks for file ${file.name}`)
+
+      return json({
+        fileName: file.name,
+        fileSize: file.size,
+        chunks: refreshedChunks
+      })
+    }
+
     // GET /share/:shareId - Public download (NO AUTH)
     const publicShareMatch = path.match(/^\/share\/([a-f0-9-]+)$/)
     if (publicShareMatch && method === "GET") {

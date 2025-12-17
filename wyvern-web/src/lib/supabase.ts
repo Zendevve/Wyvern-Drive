@@ -20,6 +20,7 @@ export interface UserProfile {
   id: string
   webhook_urls: string[]
   encryption_enabled: boolean
+  server_boost_level?: string
   created_at: string
   updated_at: string
 }
@@ -27,7 +28,7 @@ export interface UserProfile {
 // Helper to get or create user profile
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
-    .from('user_profiles')
+    .from('profiles')  // FIXED: Was 'user_profiles', must match fileStore.ts which uses 'profiles'
     .select('*')
     .eq('id', userId)
     .single()
@@ -47,7 +48,7 @@ export async function saveUserProfile(
   encryptionEnabled: boolean
 ): Promise<boolean> {
   const { error } = await supabase
-    .from('user_profiles')
+    .from('profiles')  // FIXED: Was 'user_profiles', must match fileStore.ts which uses 'profiles'
     .upsert({
       id: userId,
       webhook_urls: webhookUrls,
@@ -64,3 +65,4 @@ export async function saveUserProfile(
 
   return true
 }
+

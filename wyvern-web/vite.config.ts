@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',  // Changed from 'autoUpdate' - don't reload page without user consent
       includeAssets: ['wyvern.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Wyvern Drive',

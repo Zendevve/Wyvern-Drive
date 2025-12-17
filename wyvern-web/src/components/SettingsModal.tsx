@@ -6,7 +6,7 @@ import type { ServerBoostLevel } from '../lib/types'
 import './SettingsModal.css'
 
 export function SettingsModal() {
-  const { activeModal, setActiveModal, webhookUrls, updateWebhooks, getWebhookPoolStats, serverBoostLevel, setServerBoostLevel } = useFileStore()
+  const { activeModal, setActiveModal, webhookUrls, updateWebhooks, serverBoostLevel, setServerBoostLevel } = useFileStore()
   const [webhooks, setWebhooks] = useState<string[]>([''])
   const [isSaving, setIsSaving] = useState(false)
 
@@ -26,11 +26,11 @@ export function SettingsModal() {
   // Hooks must be called before any early returns
   const focusTrapRef = useFocusTrap(isOpen, handleClose)
 
+
   if (!isOpen) return null
 
-  const webhookStats = getWebhookPoolStats()
-
   const addWebhook = () => {
+    console.log('[SettingsModal] Adding webhook, current count:', webhooks.length)
     setWebhooks([...webhooks, ''])
   }
 
@@ -82,11 +82,10 @@ export function SettingsModal() {
             <div className="section-header">
               <Zap size={18} />
               <h3>Webhook Pool</h3>
-              {webhookStats && (
-                <span className={`webhook-badge ${webhookStats.isOptimal ? 'optimal' : 'suboptimal'}`}>
-                  {webhookStats.count} active
-                </span>
-              )}
+              {/* Show validWebhooks.length to match what user sees in inputs */}
+              <span className={`webhook-badge ${validWebhooks.length >= 5 ? 'optimal' : 'suboptimal'}`}>
+                {validWebhooks.length} active
+              </span>
             </div>
 
             <p className="section-description">
