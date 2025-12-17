@@ -142,7 +142,7 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
 
       const fileParts: ArrayBuffer[] = []
       // Helper to fetch valid chunk with retry
-      const fetchChunk = async (chunk: ChunkInfo | LegacyChunkInfo): Promise<ArrayBuffer> => {
+      const fetchChunk = async (chunk: ChunkInfo): Promise<ArrayBuffer> => {
         try {
           return await fetchViaExtension(chunk.u)
         } catch (e: any) {
