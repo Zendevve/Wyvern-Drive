@@ -36,5 +36,7 @@ web/
 server/
 extension/
 
-# Public extension repo (separate git)
+# Extension repos (separate git repositories)
+# These push to https://github.com/Zendevve/wyvern-extension
+wyvern-extension/
 wyvern-extension-public/
