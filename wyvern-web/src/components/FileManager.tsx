@@ -2,6 +2,8 @@ import { useRef, useCallback, useState, useMemo, useEffect } from 'react'
 import { useFileStore } from '../stores/fileStore'
 import { FileDropZone } from './files/FileDropZone'
 import { FileGrid } from './files/FileGrid'
+import { FileGridSkeleton } from './files/FileGridSkeleton'
+import { FloatingActionBar } from './files/FloatingActionBar'
 import { Breadcrumb } from './files/Breadcrumb'
 import { ShareModal } from './files/ShareModal'
 import { PreviewModal } from './files/PreviewModal'
@@ -11,7 +13,7 @@ import { LayoutGrid, List as ListIcon, FolderPlus, AlertCircle, RotateCcw, Uploa
 import { isPreviewable } from '../lib/thumbnails'
 import type { WyvernFile, WyvernFolder } from '../lib/types'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
-// Removed FileManager.css as we moved to Tailwind
+// Tailwind-based styling
 
 export function FileManager() {
   useKeyboardShortcuts() // Enable global keyboard shortcuts
@@ -150,9 +152,7 @@ export function FileManager() {
 
       <FileDropZone onDrop={handleDrop} className="flex-1 relative">
         {isLoading ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-8 h-8 rounded-full border-2 border-white/10 border-t-white animate-spin"></div>
-          </div>
+          <FileGridSkeleton count={12} viewMode={viewMode} />
         ) : error ? (
           <div className="flex flex-col items-center justify-center h-[50vh] text-center">
             <div className="text-red-500 mb-4 opacity-80">
@@ -206,6 +206,9 @@ export function FileManager() {
         )
       }
       <SettingsModal />
+
+      {/* Floating Action Bar for multi-selection */}
+      <FloatingActionBar />
 
       {/* Status Bar */}
       <div className="fixed bottom-0 left-64 right-0 h-8 flex items-center justify-between px-6 bg-bg-app border-t border-border-divider text-[10px] text-text-tertiary z-20">

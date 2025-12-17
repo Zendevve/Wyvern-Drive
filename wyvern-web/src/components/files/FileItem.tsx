@@ -16,7 +16,7 @@ import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
 import {
   Loader, Folder, File, FileText, Image, Music, Video, Archive, Code, Cog,
-  AlertTriangle
+  AlertTriangle, Download, Share2, MoreHorizontal
 } from 'lucide-react'
 // Removed FileItem.css as we moved to Tailwind
 
@@ -41,7 +41,7 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
   const toggleSelection = useFileStore(state => state.toggleSelection)
   const lastSelectedId = useFileStore(state => state.lastSelectedId)
   const setRangeSelection = useFileStore(state => state.setRangeSelection)
-  const { moveFile } = useFileStore.getState()
+  const { moveFile, downloadFile, setActiveModal } = useFileStore.getState()
 
   const isFolder = file.type === 'directory'
   const isImage = !isFolder && isImageFile(file.name)
@@ -268,6 +268,33 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
             {isUnavailable && (
               <div className="absolute top-2 right-2 p-1 bg-amber-500/10 rounded-full text-amber-500" title="File unavailable">
                 <AlertTriangle size={12} />
+              </div>
+            )}
+
+            {/* Quick Actions Overlay (appears on hover) */}
+            {!isFolder && (
+              <div className="absolute bottom-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <button
+                  onClick={(e) => { e.stopPropagation(); downloadFile(String(file.id)) }}
+                  className="p-2 bg-black/70 hover:bg-accent rounded-lg text-white/80 hover:text-white transition-all backdrop-blur-sm"
+                  title="Download"
+                >
+                  <Download size={14} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setActiveModal('share', String(file.id)) }}
+                  className="p-2 bg-black/70 hover:bg-accent rounded-lg text-white/80 hover:text-white transition-all backdrop-blur-sm"
+                  title="Share"
+                >
+                  <Share2 size={14} />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY }) }}
+                  className="p-2 bg-black/70 hover:bg-accent rounded-lg text-white/80 hover:text-white transition-all backdrop-blur-sm"
+                  title="More actions"
+                >
+                  <MoreHorizontal size={14} />
+                </button>
               </div>
             )}
           </div>
