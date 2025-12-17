@@ -1,21 +1,22 @@
-/* FileGrid - Linear/Modern Style */
+/* FileGrid - Wyvern Violet Theme */
 
 /* Virtual Grid Styles */
 .virtual-file-grid {
   height: 100%;
   overflow: auto;
-  padding: var(--spacing-md);
+  padding: 24px 32px;
 }
 
 .virtual-file-grid.grid .virtual-row {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: var(--spacing-md);
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
 }
 
 .virtual-file-grid.list .virtual-row {
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
 
 .virtual-grid-inner {

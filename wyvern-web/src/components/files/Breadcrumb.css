@@ -1,4 +1,4 @@
-/* Breadcrumb Styles */
+/* Breadcrumb - Wyvern Violet Theme */
 
 .breadcrumb {
   display: flex;
@@ -16,22 +16,40 @@
 }
 
 .breadcrumb-separator {
-  color: var(--text-muted);
+  color: #71717A;
+  /* text-tertiary */
 }
 
 .breadcrumb-item {
-  padding: 4px 8px;
-  border-radius: 4px;
-  color: var(--text-secondary);
-  transition: all var(--transition-fast);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: #A1A1AA;
+  /* text-secondary */
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .breadcrumb-item:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+  background: #27272A;
+  /* bg-input */
+  color: #FFFFFF;
+  /* text-main */
 }
 
-.breadcrumb-item:last-child {
-  color: var(--text-primary);
+.breadcrumb-item.active {
+  color: #FFFFFF;
+  /* text-main */
   font-weight: 500;
+}
+
+.breadcrumb-item svg {
+  flex-shrink: 0;
 }

@@ -1,19 +1,24 @@
-/* FileManager - Uses design tokens */
+/* FileManager - Wyvern Violet Theme */
 
 .file-manager {
   display: flex;
   flex-direction: column;
   height: 100%;
+  background: #0F0F11;
+  /* bg-app */
 }
 
 /* Context Bar (Breadcrumb + Controls) */
 .context-bar {
   height: 56px;
-  padding: 0 var(--space-8);
+  padding: 0 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border-default);
+  border-bottom: 1px solid #27272A;
+  /* border-card */
+  background: #18181B;
+  /* bg-card */
 }
 
 .context-left {
@@ -23,65 +28,75 @@
 .context-right {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: 12px;
 }
 
 /* View Toggle (Segmented Control) */
 .view-toggle {
   display: flex;
-  background: var(--surface);
-  padding: 2px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-default);
+  background: #27272A;
+  /* bg-input */
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid #3F3F46;
+  /* border-active */
 }
 
 .toggle-btn {
-  width: 32px;
-  height: 28px;
+  width: 34px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--foreground-muted);
-  border-radius: var(--radius-sm);
+  color: #71717A;
+  /* text-tertiary */
+  border-radius: 8px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all 0.15s ease;
 }
 
 .toggle-btn.active {
-  background: var(--background-elevated);
-  color: var(--foreground);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  background: #8B5CF6;
+  /* accent */
+  color: white;
 }
 
 .toggle-btn:hover:not(.active) {
-  color: var(--foreground);
+  color: #FFFFFF;
+  /* text-main */
 }
 
 .filter-btn {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
+  gap: 6px;
+  padding: 6px 12px;
   background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  color: var(--foreground-muted);
+  border: 1px solid #3F3F46;
+  /* border-active */
+  border-radius: 8px;
+  color: #A1A1AA;
+  /* text-secondary */
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all 0.15s ease;
 }
 
 .filter-btn:hover {
-  background: var(--surface-hover);
-  color: var(--foreground);
+  background: #27272A;
+  /* bg-input */
+  color: #FFFFFF;
+  /* text-main */
 }
 
 .filter-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: #8B5CF6;
+  /* accent */
+  border-color: #8B5CF6;
+  /* accent */
   color: white;
 }
 
@@ -106,50 +121,55 @@
 }
 
 .empty-illustration {
-  color: var(--accent);
-  margin-bottom: var(--space-4);
+  color: #8B5CF6;
+  /* accent */
+  margin-bottom: 16px;
   opacity: 0.8;
 }
 
 .empty-state h3 {
-  margin: 0 0 var(--space-2);
+  margin: 0 0 8px;
   font-size: 18px;
   font-weight: 600;
-  color: var(--foreground);
+  color: #FFFFFF;
+  /* text-main */
 }
 
 .empty-state p {
   margin: 0;
-  color: var(--foreground-muted);
+  color: #71717A;
+  /* text-tertiary */
   font-size: 14px;
 }
 
 .cta-button {
-  padding: var(--space-2) var(--space-5);
-  background: var(--accent);
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+  /* accent gradient */
   color: white;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: 10px;
   font-size: 14px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: all var(--transition-normal);
-  box-shadow: 0 4px 12px var(--accent-glow);
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 }
 
 .cta-button:hover {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px var(--accent-glow);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
 }
 
 /* Loading Spinner */
 .loader {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--surface);
-  border-top-color: var(--accent);
+  border: 3px solid #27272A;
+  /* bg-input */
+  border-top-color: #8B5CF6;
+  /* accent */
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -164,10 +184,13 @@
 .status-bar {
   display: flex;
   align-items: center;
-  padding: var(--space-2) var(--space-4);
-  background: var(--surface);
-  border-top: 1px solid var(--border-default);
+  padding: 8px 16px;
+  background: #18181B;
+  /* bg-card */
+  border-top: 1px solid #27272A;
+  /* border-card */
   font-size: 11px;
-  color: var(--foreground-muted);
-  gap: var(--space-2);
+  color: #71717A;
+  /* text-tertiary */
+  gap: 8px;
 }
