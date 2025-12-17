@@ -7,7 +7,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt',  // Changed from 'autoUpdate' - don't reload page without user consent
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      registerType: 'prompt',
       includeAssets: ['wyvern.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Wyvern Drive',
@@ -38,44 +41,7 @@ export default defineConfig({
           }
         ]
       },
-      workbox: {
-        // Cache strategies
-        runtimeCaching: [
-          {
-            // Cache API responses (but NOT share/stream downloads)
-            urlPattern: ({ url }) => {
-              // Match supabase functions except share and stream endpoints
-              if (!url.hostname.includes('supabase.co')) return false
-              if (!url.pathname.includes('/functions/')) return false
-              // Exclude share downloads and streaming - they need CORS passthrough
-              if (url.pathname.includes('/share/')) return false
-              if (url.pathname.includes('/stream/')) return false
-              return true
-            },
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 // 1 day
-              },
-              networkTimeoutSeconds: 10
-            }
-          },
-          {
-            // Cache static assets
-            urlPattern: /\.(png|jpg|jpeg|svg|gif|webp|woff2?|ttf|eot)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'static-assets',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
-              }
-            }
-          }
-        ],
-        // Pre-cache app shell
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}']
       }
     })

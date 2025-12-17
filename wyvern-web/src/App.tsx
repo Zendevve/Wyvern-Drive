@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { Settings, Bell } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
-import { supabase, getUserProfile, saveUserProfile } from './lib/supabase'
+import { supabase, getUserProfile } from './lib/supabase'
 import { FileManager } from './components/FileManager'
 import { PhotoTimeline } from './components/photos/PhotoTimeline'
 import { Sidebar } from './components/layout/Sidebar'
 import { AuthScreen } from './components/AuthScreen'
-import { WebhookSetup } from './components/WebhookSetup'
+
 import { ShareView } from './components/ShareView'
 import { LandingPage } from './components/LandingPage'
 import { RenameModal } from './components/files/RenameModal'
@@ -18,11 +18,16 @@ import { GlobalSearch } from './components/ui/GlobalSearch'
 import { OfflineIndicator } from './components/ui/OfflineIndicator'
 import { InstallPrompt, UpdatePrompt } from './components/ui/PWAPrompts'
 import { AudioPlayer } from './components/AudioPlayer'
+import { MediaPlayer } from './components/MediaPlayer'
 import { useFileStore } from './stores/fileStore'
+import { registerStreamingListener } from './lib/streaming'
 import './styles/App.css'
 
+// Initialize streaming listener for Service Worker
+registerStreamingListener()
+
 function AuthenticatedApp() {
-  const { initializeManager, webhookUrls } = useFileStore()
+  const { initializeManager, webhookUrls, playingFile, setPlayingFile } = useFileStore()
   const [needsWebhookSetup, setNeedsWebhookSetup] = useState(false)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [session, setSession] = useState<Session | null>(null)
@@ -35,6 +40,21 @@ function AuthenticatedApp() {
         return
       }
 
+      // PRIORITY 1: Check local webhooks first - if we have them, skip setup
+      const localWebhooks = useFileStore.getState().webhookUrls
+      if (localWebhooks.length > 0) {
+        console.log('[App] Local webhooks found, skipping setup')
+        setNeedsWebhookSetup(false)
+        setIsLoadingProfile(false)
+
+        // Set email if available
+        if (session.user.email) {
+          useFileStore.getState().setUserEmail(session.user.email)
+        }
+        return
+      }
+
+      // PRIORITY 2: Try loading from Supabase profile
       setIsLoadingProfile(true)
       try {
         const profile = await getUserProfile(session.user.id)
@@ -43,29 +63,20 @@ function AuthenticatedApp() {
         }
         console.log('[App] Loaded profile:', profile)
 
-        if (profile && profile.webhook_urls && profile.webhook_urls.length > 0) {
-          // Load webhooks from profile
+        const profileWebhooks = profile?.webhook_urls
+        if (profileWebhooks && profileWebhooks.length > 0) {
           console.log('[App] Found webhooks in profile, loading...')
-          useFileStore.getState().setWebhookUrls(profile.webhook_urls)
+          useFileStore.getState().setWebhookUrls(profileWebhooks)
           setNeedsWebhookSetup(false)
         } else {
-          // Check if we have webhooks in local store
-          const localWebhooks = useFileStore.getState().webhookUrls
-          if (localWebhooks.length > 0) {
-            console.log('[App] Syncing local webhooks to profile...')
-            await saveUserProfile(session.user.id, localWebhooks, false)
-            setNeedsWebhookSetup(false)
-          } else {
-            // New user - needs webhook setup
-            console.log('[App] New user, needs webhook setup')
-            setNeedsWebhookSetup(true)
-          }
+          // No webhooks anywhere - new user needs setup
+          console.log('[App] New user, needs webhook setup')
+          setNeedsWebhookSetup(true)
         }
       } catch (error) {
         console.error('[App] Failed to load profile:', error)
-        // Fall back to checking local store
-        const localWebhooks = useFileStore.getState().webhookUrls
-        setNeedsWebhookSetup(localWebhooks.length === 0)
+        // No local webhooks and profile failed - needs setup
+        setNeedsWebhookSetup(true)
       } finally {
         setIsLoadingProfile(false)
       }
@@ -103,8 +114,9 @@ function AuthenticatedApp() {
     return <AuthScreen />
   }
 
-  // Show loading while checking profile
-  if (isLoadingProfile) {
+  // Show loading while checking profile (only if we don't have a user loaded yet)
+  // This prevents the "flash" or reload when focusing the window
+  if (isLoadingProfile && !useFileStore.getState().userId) {
     return (
       <div className="app-loading">
         <div className="loading-spinner" />
@@ -113,27 +125,7 @@ function AuthenticatedApp() {
     )
   }
 
-  // Show WebhookSetup if user hasn't configured webhooks yet
-  if (needsWebhookSetup) {
-    return (
-      <WebhookSetup
-        onComplete={async (webhooks, password) => {
-          // Save to store
-          useFileStore.getState().setWebhookUrls(webhooks)
-          if (password) {
-            await useFileStore.getState().setEncryptionPassword(password)
-          }
-
-          // Save to Supabase profile
-          if (session?.user) {
-            await saveUserProfile(session.user.id, webhooks, !!password)
-          }
-
-          setNeedsWebhookSetup(false)
-        }}
-      />
-    )
-  }
+  // NOTE: WebhookSetup page removed - users configure webhooks in Settings modal
 
   return (
     <div className="app">
@@ -162,6 +154,16 @@ function AuthenticatedApp() {
       <VersionHistoryModal />
       <ProgressToasts />
       <AudioPlayer />
+
+      {playingFile && (
+        <MediaPlayer
+          shareId={playingFile.id}
+          fileName={playingFile.name}
+          fileSize={playingFile.size}
+          mimeType={playingFile.mimeType}
+          onClose={() => setPlayingFile(null)}
+        />
+      )}
 
       {/* PWA Components */}
       <OfflineIndicator />

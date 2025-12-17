@@ -6,17 +6,21 @@ import { useState, useEffect } from 'react'
 import { Shield, Zap, Lock, Globe, Loader2, Link, Key, Plus, Minus } from 'lucide-react'
 import './SetupScreen.css' // Reuse existing styles
 
+import { useFileStore } from '../stores/fileStore'
+
 interface WebhookSetupProps {
   onComplete: (webhooks: string[], password: string | null) => void
   isLoading?: boolean
   initialWebhooks?: string[]
+  userEmail?: string
 }
 
-export function WebhookSetup({ onComplete, isLoading = false, initialWebhooks = [''] }: WebhookSetupProps) {
+export function WebhookSetup({ onComplete, isLoading = false, initialWebhooks = [''], userEmail }: WebhookSetupProps) {
   const [webhooks, setWebhooks] = useState<string[]>(initialWebhooks)
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [useEncryption, setUseEncryption] = useState(false)
+  const { logout } = useFileStore()
 
   // Load saved webhooks from localStorage on mount (for returning users)
   useEffect(() => {
@@ -100,12 +104,34 @@ export function WebhookSetup({ onComplete, isLoading = false, initialWebhooks = 
         </div>
 
         <div className="panel-footer">
-          v1.0.0 • Open Source MIT License
+          <div className="flex flex-col gap-2">
+            <span className="text-white/40">v1.0.0 • Open Source MIT License</span>
+            {userEmail && (
+              <span className="text-white/60 text-xs">
+                Signed in as <span className="text-white">{userEmail}</span> •
+                <button
+                  onClick={logout}
+                  className="ml-2 hover:text-white underline underline-offset-4 transition-colors"
+                >
+                  Sign Out
+                </button>
+              </span>
+            )}
+            {!userEmail && (
+              <button
+                onClick={logout}
+                className="text-left text-white/40 text-xs hover:text-white underline underline-offset-4 transition-colors"
+              >
+                Go back to Sign In
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Right Panel - Webhook Form */}
       <div className="setup-panel-right">
+        {/* ... Rest of existing component ... */}
         <div className="setup-card">
           <div className="setup-header">
             <h2>Connect Drive</h2>

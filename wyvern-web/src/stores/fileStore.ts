@@ -96,6 +96,10 @@ interface FileStore {
   previewFileId: string | null
   setPreviewFile: (fileId: string | null) => void
 
+  // Playing State (Video/Audio)
+  playingFile: { id: string, name: string, size: number, mimeType: string } | null
+  setPlayingFile: (file: { id: string, name: string, size: number, mimeType: string } | null) => void
+
   // File Operations
   renameFile: (fileId: string, newName: string) => Promise<void>
   moveFile: (fileId: string, parentId: number | null) => Promise<void>
@@ -146,6 +150,7 @@ export const useFileStore = create<FileStore>()(
       activeModal: null,
       activeFileId: null,
       previewFileId: null,
+      playingFile: null,
       isSettingsOpen: false,
 
       // Search, Sort & Filter defaults
@@ -160,6 +165,7 @@ export const useFileStore = create<FileStore>()(
       verifyProgress: { checked: 0, total: 0, unavailable: 0 },
 
       // Actions
+      setPlayingFile: (file) => set({ playingFile: file }),
       // @deprecated - use setWebhookUrls
       setWebhookUrl: (url) => set({
         webhookUrl: url,
@@ -195,7 +201,7 @@ export const useFileStore = create<FileStore>()(
         if (userId) {
           try {
             const { error } = await supabase
-              .from('profiles')
+              .from('user_profiles')
               .upsert({
                 id: userId,
                 webhook_urls: validUrls,

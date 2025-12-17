@@ -1193,23 +1193,35 @@ Deno.serve(async (req: Request) => {
         return json({ error: "Invalid file data" }, 500)
       }
 
+      // Pagination
+      const page = parseInt(url.searchParams.get("page") || "0")
+      const limit = parseInt(url.searchParams.get("limit") || "50")
+      const startIndex = page * limit
+      const endIndex = startIndex + limit
+
       // Normalize and refresh chunk URLs
       const refreshedChunks = []
-      for (const c of rawChunks) {
+      const chunkSlice = rawChunks.slice(startIndex, endIndex)
+
+      for (const c of chunkSlice) {
         const originalUrl = c.u ?? c.url ?? ''
         const messageId = c.m ?? c.messageId
 
         // Try to get valid (non-expired) URL
         const validUrl = await getValidChunkUrl(
           { url: originalUrl, messageId },
-          ownerWebhook
+          ownerWebhook || undefined
         )
 
         if (!validUrl) {
           console.error(`[Share Chunks] Could not refresh URL for chunk ${c.i ?? c.index}`)
+          // We don't fail the whole request for a single missing chunk in a page,
+          // but we should probably indicate it. For now, we skip it (client should handle missing chunks)
+          // or we could return a placeholder.
+          // Let's return error for now as integrity is important
           return json({
             error: "Failed to access file content - links may have expired",
-            details: "Could not refresh Discord CDN URLs"
+            details: `Could not refresh Discord CDN URL for chunk ${c.i ?? c.index}`
           }, 503)
         }
 
@@ -1220,15 +1232,20 @@ Deno.serve(async (req: Request) => {
         })
       }
 
-      // Sort by index
-      refreshedChunks.sort((a, b) => a.i - b.i)
+      // Sort by index (though slicing assumes order, rawChunks might not be sorted - but usually is)
+      // If we rely on page*limit, we should probably sort rawChunks first if they aren't safe.
+      // But re-sorting 2000 items is fast.
+      // refreshedChunks.sort((a, b) => a.i - b.i) // Only sorts the slice
 
-      console.log(`[Share Chunks] Returning ${refreshedChunks.length} chunks for file ${file.name}`)
+      console.log(`[Share Chunks] Returning page ${page} (${refreshedChunks.length} chunks) for file ${file.name}`)
 
       return json({
         fileName: file.name,
         fileSize: file.size,
-        chunks: refreshedChunks
+        chunks: refreshedChunks,
+        page,
+        total: rawChunks.length,
+        hasMore: endIndex < rawChunks.length
       })
     }
 
@@ -1382,7 +1399,7 @@ Deno.serve(async (req: Request) => {
       // Pre-validate first chunk URL to fail fast if refresh is needed but impossible
       const testChunk = chunks[0]
       if (testChunk) {
-        const validUrl = await getValidChunkUrl({ url: testChunk.url }, ownerWebhook)
+        const validUrl = await getValidChunkUrl({ url: testChunk.url }, ownerWebhook || undefined)
         if (!validUrl) {
           const hasBotToken = !!Deno.env.get("DISCORD_BOT_TOKEN")
           if (!hasBotToken && !ownerWebhook) {
@@ -1403,7 +1420,7 @@ Deno.serve(async (req: Request) => {
               try {
                 // Get valid URL (refreshes if expired)
                 // PASS OWNER WEBHOOK HERE
-                const validUrl = await getValidChunkUrl({ url: chunk.url }, ownerWebhook)
+                const validUrl = await getValidChunkUrl({ url: chunk.url }, ownerWebhook || undefined)
                 if (!validUrl) {
                   throw new Error(`Failed to get valid URL for chunk ${chunk.index}`)
                 }

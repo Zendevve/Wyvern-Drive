@@ -4,14 +4,15 @@
 .preview-modal-overlay {
   position: fixed;
   top: 0;
-  left: 220px;
-  /* Account for sidebar width */
+  left: 0;
+  /* Cover entire screen including sidebar */
   right: 0;
   bottom: 0;
   background: rgba(15, 15, 17, 0.95);
   /* bg-app with opacity */
   backdrop-filter: blur(16px);
-  z-index: 1000;
+  z-index: 2000;
+  /* Ensure it stays on top of everything */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -38,25 +39,35 @@
 
 /* Header */
 .preview-header {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+  /* Push actions to right */
   padding: 16px 24px;
   background: rgba(24, 24, 27, 0.8);
   /* bg-card with opacity */
   border-bottom: 1px solid #27272A;
   /* border-card */
+  min-height: 72px;
+  /* Ensure height for absolute positioning */
 }
 
 .preview-filename {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   color: #FFFFFF;
   /* text-main */
-  font-size: 14px;
+  font-size: 16px;
+  /* Slightly larger */
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 50%;
+  max-width: 40%;
+  /* Constraint width */
+  text-align: center;
 }
 
 .preview-actions {
@@ -177,15 +188,47 @@
 }
 
 .preview-video {
+  width: 100%;
   max-width: 90%;
-  max-height: 80%;
+  max-height: 80vh;
+  /* Use vh to fit screen */
   border-radius: 12px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  background: black;
+  /* Ensure background is black while loading */
 }
 
 .preview-audio {
   width: 100%;
   max-width: 400px;
+}
+
+/* Video loading overlay */
+.video-loading-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 24px 32px;
+  border-radius: 12px;
+  z-index: 10;
+  color: #fff;
+}
+
+.video-loading-overlay .spinner {
+  animation: spin 1s linear infinite;
+  color: #8B5CF6;
+}
+
+.video-loading-overlay p {
+  margin: 0;
+  font-size: 14px;
+  color: #A1A1AA;
 }
 
 .audio-player-container {

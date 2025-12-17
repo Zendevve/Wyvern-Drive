@@ -11,7 +11,8 @@ import {
 } from '../../lib/thumbnailCache'
 import { ContextMenu } from './ContextMenu'
 import { getFileIconName, formatSize, formatDate } from '../../lib/utils'
-import { isPreviewable, isImageFile, isVideoFile, getMimeType } from '../../lib/thumbnails'
+import { isPreviewable, isImageFile, isVideoFile } from '../../lib/thumbnails'
+import { getMimeType } from '../../lib/mimeTypes'
 import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
 import {
@@ -136,10 +137,15 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
       const { setCurrentPath, loadFiles } = useFileStore.getState()
       setCurrentPath(String(file.id))
       loadFiles()
-    } else if (isPreviewable(file.name)) {
-      useFileStore.getState().setPreviewFile(String(file.id))
     } else {
-      useFileStore.getState().downloadFile(String(file.id))
+
+      // Check if previewable (Image, Video, Audio)
+      if (isPreviewable(file.name)) {
+        useFileStore.getState().setPreviewFile(String(file.id))
+      } else {
+        // Fallback to download
+        useFileStore.getState().downloadFile(String(file.id))
+      }
     }
   }
 

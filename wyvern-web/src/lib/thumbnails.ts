@@ -8,7 +8,7 @@ const THUMBNAIL_QUALITY = 0.7
 // Image extensions
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico']
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mov', 'avi', 'mkv', 'ogv']
-const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a']
+const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'm4b']
 const DOCUMENT_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md']
 const CODE_EXTENSIONS = ['js', 'ts', 'tsx', 'jsx', 'py', 'java', 'cpp', 'c', 'h', 'css', 'html', 'json', 'xml']
 const ARCHIVE_EXTENSIONS = ['zip', 'rar', '7z', 'tar', 'gz', 'bz2']
@@ -217,6 +217,7 @@ export function getMimeType(filename: string): string {
     flac: 'audio/flac',
     aac: 'audio/aac',
     m4a: 'audio/mp4',
+    m4b: 'audio/mp4',
     // Documents
     pdf: 'application/pdf',
     doc: 'application/msword',

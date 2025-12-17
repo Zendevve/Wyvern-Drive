@@ -28,7 +28,7 @@ export interface UserProfile {
 // Helper to get or create user profile
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
-    .from('profiles')  // FIXED: Was 'user_profiles', must match fileStore.ts which uses 'profiles'
+    .from('user_profiles')
     .select('*')
     .eq('id', userId)
     .single()
@@ -48,7 +48,7 @@ export async function saveUserProfile(
   encryptionEnabled: boolean
 ): Promise<boolean> {
   const { error } = await supabase
-    .from('profiles')  // FIXED: Was 'user_profiles', must match fileStore.ts which uses 'profiles'
+    .from('user_profiles')
     .upsert({
       id: userId,
       webhook_urls: webhookUrls,

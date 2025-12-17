@@ -8,7 +8,7 @@ import { useAudioPlayer } from '../../stores/audioPlayerStore'
 import { decryptChunk } from '../../lib/encryption'
 import { restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
-import { fetchViaExtension } from '../../lib/extension' // Import centralized utility
+import { fetchViaExtension } from '../../lib/extension'
 import './PreviewModal.css'
 
 interface PreviewModalProps {
@@ -106,6 +106,10 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
         const rawChunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(file.content)
         const chunks = rawChunks.map(c => normalizeChunk(c))
         chunks.sort((a, b) => a.i - b.i)
+
+        // NOTE: SW streaming only works in production builds
+        // For reliability, always use blob download for all media types
+        // This downloads full file but ensures playback works everywhere
 
         // Get decryption key if encrypted
         let decryptionKey: CryptoKey | null = null
@@ -327,7 +331,7 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
           ) : isVideo ? (
             <div className="preview-message">
               <Loader size={32} className="spinner" />
-              <p>Loading video...</p>
+              <p>Loading video... {loadedChunks}/{totalChunks} chunks</p>
             </div>
           ) : isAudio && previewUrl ? (
             <div className="audio-player-container">
