@@ -183,13 +183,34 @@ export const useFileStore = create<FileStore>()(
         const validUrls = urls.filter(u => u.trim().length > 0)
         if (validUrls.length === 0) return
 
-        const { encryptionPassword } = get()
+        const { encryptionPassword, userId } = get()
 
         // Update state
         set({
           webhookUrls: validUrls,
           webhookUrl: validUrls[0]
         })
+
+        // Persist to Supabase profiles table
+        if (userId) {
+          try {
+            const { error } = await supabase
+              .from('profiles')
+              .upsert({
+                id: userId,
+                webhook_urls: validUrls,
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'id' })
+
+            if (error) {
+              console.error('[FileStore] Failed to save webhooks to DB:', error)
+            } else {
+              console.log('[FileStore] Webhooks saved to database')
+            }
+          } catch (err) {
+            console.error('[FileStore] Error saving webhooks:', err)
+          }
+        }
 
         // Reinitialize manager with new webhooks
         console.log('[FileStore] Updating webhooks and reinitializing manager')

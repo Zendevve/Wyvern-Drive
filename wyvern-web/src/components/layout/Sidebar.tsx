@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { useFileStore } from '../../stores/fileStore'
 import { PendingUploadsModal } from '../files/PendingUploads'
+import type { PendingUpload } from '../../lib/upload-state'
 
 
 // File categories config - comprehensive extension support
@@ -106,6 +107,8 @@ export function Sidebar() {
   // Input refs
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
+  const resumeInputRef = useRef<HTMLInputElement>(null)
+  const pendingUploadRef = useRef<PendingUpload | null>(null)
 
   const webhookStats = getWebhookPoolStats()
 
@@ -149,6 +152,34 @@ export function Sidebar() {
       uploadFolder(e.target.files)
       setIsMenuOpen(false)
     }
+  }
+
+  // Resume upload handler - opens file picker for user to select the same file
+  const handleResumeUpload = (upload: PendingUpload) => {
+    pendingUploadRef.current = upload
+    // Show alert to guide user
+    alert(`To resume "${upload.fileName}", please select the SAME file from your computer.\n\nThe upload will continue from chunk ${upload.uploadedChunks.length + 1} of ${upload.totalChunks}.`)
+    // Trigger file picker
+    resumeInputRef.current?.click()
+  }
+
+  const handleResumeSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    const pending = pendingUploadRef.current
+
+    if (!file || !pending) return
+
+    // Check if it's the same file (by name and size)
+    if (file.name !== pending.fileName || file.size !== pending.fileSize) {
+      alert(`File mismatch! Expected "${pending.fileName}" (${pending.fileSize} bytes) but got "${file.name}" (${file.size} bytes).\n\nPlease select the exact same file to resume.`)
+      e.target.value = ''
+      return
+    }
+
+    // File matches - resume upload via uploadFiles which will detect pending state
+    await uploadFiles(e.target.files!)
+    pendingUploadRef.current = null
+    e.target.value = ''
   }
 
   const NavItem = ({ to, icon: Icon, label, isActive, onClick }: any) => (
@@ -313,13 +344,18 @@ export function Sidebar() {
         <input type="file" ref={fileInputRef} multiple hidden onChange={handleFileSelect} />
         {/* @ts-ignore - webkitdirectory is standard but not in types */}
         <input type="file" ref={folderInputRef} multiple hidden webkitdirectory="" directory="" onChange={handleFolderSelect} />
-        {/* Removed unused resume input */}
+        {/* Resume upload input - single file */}
+        <input type="file" ref={resumeInputRef} hidden onChange={handleResumeSelect} />
       </aside >
 
       {/* Pending Uploads Modal */}
       {
         showPendingUploads && (
-          <PendingUploadsModal isOpen={true} onClose={() => setShowPendingUploads(false)} />
+          <PendingUploadsModal
+            isOpen={true}
+            onClose={() => setShowPendingUploads(false)}
+            onResumeUpload={handleResumeUpload}
+          />
         )
       }
     </>
