@@ -25,12 +25,57 @@ import { useFileStore } from '../../stores/fileStore'
 import { PendingUploadsModal } from '../files/PendingUploads'
 
 
-// File categories config (colors updated to new aesthetic)
+// File categories config - comprehensive extension support
 const FILE_CATEGORIES: Record<string, { extensions: string[], color: string, icon: typeof Image }> = {
-  images: { extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic'], color: '#3b82f6', icon: Image },
-  videos: { extensions: ['mp4', 'webm', 'mkv', 'avi', 'mov', 'm4v', 'flv'], color: '#a855f7', icon: Video },
-  audio: { extensions: ['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'opus'], color: '#10b981', icon: Music },
-  documents: { extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'xls', 'xlsx', 'ppt', 'pptx'], color: '#f59e0b', icon: FileText },
+  images: {
+    extensions: [
+      'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'heic', 'heif',
+      'tiff', 'tif', 'raw', 'cr2', 'nef', 'arw', 'dng', 'psd', 'ai', 'eps', 'avif'
+    ],
+    color: '#3b82f6',
+    icon: Image
+  },
+  videos: {
+    extensions: [
+      'mp4', 'webm', 'mkv', 'avi', 'mov', 'm4v', 'flv', 'wmv', 'mpg', 'mpeg',
+      '3gp', 'ts', 'mts', 'm2ts', 'vob', 'ogv', 'rm', 'rmvb', 'asf', 'divx'
+    ],
+    color: '#a855f7',
+    icon: Video
+  },
+  audio: {
+    extensions: [
+      'mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'opus', 'wma', 'aiff', 'ape',
+      'alac', 'mid', 'midi', 'amr', 'pcm'
+    ],
+    color: '#10b981',
+    icon: Music
+  },
+  documents: {
+    extensions: [
+      'pdf', 'doc', 'docx', 'txt', 'md', 'xls', 'xlsx', 'ppt', 'pptx', 'odt',
+      'ods', 'odp', 'rtf', 'csv', 'epub', 'mobi', 'pages', 'numbers', 'key'
+    ],
+    color: '#f59e0b',
+    icon: FileText
+  },
+  archives: {
+    extensions: [
+      'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'cab', 'iso', 'dmg',
+      'pkg', 'deb', 'rpm', 'apk', 'ipa', 'msi', 'jar', 'war'
+    ],
+    color: '#ec4899',
+    icon: File
+  },
+  code: {
+    extensions: [
+      'js', 'ts', 'jsx', 'tsx', 'py', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'go',
+      'rs', 'rb', 'php', 'swift', 'kt', 'lua', 'sh', 'bash', 'ps1', 'bat', 'html',
+      'css', 'scss', 'sass', 'vue', 'svelte', 'sql', 'json', 'xml', 'yaml', 'yml'
+    ],
+    color: '#06b6d4',
+    icon: FileText
+  },
   other: { extensions: [], color: '#6b7280', icon: File }
 }
 
@@ -72,7 +117,7 @@ export function Sidebar() {
 
   // Re-implementing helper calculateStorageByCategory for this scope
   const calculateStorageByCategory = (items: Record<string, any>) => {
-    const result: Record<string, number> = { images: 0, videos: 0, audio: 0, documents: 0, other: 0 }
+    const result: Record<string, number> = { images: 0, videos: 0, audio: 0, documents: 0, archives: 0, code: 0, other: 0 }
     if (!items) return result
     function traverse(files: Record<string, any>) {
       for (const item of Object.values(files)) {
