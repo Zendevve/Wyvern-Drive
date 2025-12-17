@@ -15,7 +15,7 @@ const Section = ({ children, className = "", id = "" }: { children: React.ReactN
 const ButtonPrimary = ({ children, to }: { children: React.ReactNode; to: string }) => (
   <Link
     to={to}
-    className="inline-flex items-center gap-2 px-8 py-4 bg-white text-[#0A0A0B] rounded-full font-medium transition-all hover:bg-gray-100 hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:-translate-y-0.5"
+    className="inline-flex items-center gap-2 px-8 py-4 bg-accent text-white rounded-full font-medium transition-all hover:bg-accent/90 hover:shadow-[0_0_20px_rgba(139,92,246,0.4)] hover:-translate-y-0.5"
   >
     {children}
   </Link>
@@ -24,7 +24,7 @@ const ButtonPrimary = ({ children, to }: { children: React.ReactNode; to: string
 
 
 const FeatureCard = ({ icon: Icon, title, desc }: { icon: any, title: string, desc: string }) => (
-  <div className="group p-8 rounded-2xl bg-[#141416] border border-[#2A2A2E] hover:border-white/10 transition-all hover:-translate-y-1">
+  <div className="group p-8 rounded-2xl bg-bg-card border border-border-card hover:border-accent/30 transition-all hover:-translate-y-1">
     <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center mb-6 text-white/80 group-hover:text-white transition-colors">
       <Icon size={24} strokeWidth={1.5} />
     </div>
@@ -34,7 +34,7 @@ const FeatureCard = ({ icon: Icon, title, desc }: { icon: any, title: string, de
 )
 
 const StepCard = ({ num, title, desc }: { num: string, title: string, desc: string }) => (
-  <div className="relative p-8 pt-12 rounded-2xl bg-[#141416] border border-[#2A2A2E]">
+  <div className="relative p-8 pt-12 rounded-2xl bg-bg-card border border-border-card">
     <div className="absolute top-8 right-8 text-6xl font-[Playfair_Display] text-white/5 font-bold leading-none select-none">
       {num}
     </div>
@@ -55,7 +55,7 @@ export function LandingPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-[#0A0A0B] text-[#71717A] font-sans selection:bg-white/20 selection:text-white overflow-x-hidden">
+    <div className="min-h-screen bg-bg-app text-text-muted font-sans selection:bg-accent/20 selection:text-white overflow-x-hidden">
 
       {/* Background Elements */}
       <div className="fixed inset-0 pointer-events-none z-0">
@@ -66,7 +66,7 @@ export function LandingPage() {
       </div>
 
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0A0A0B]/80 backdrop-blur-md">
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border-card bg-bg-app/80 backdrop-blur-md">
         <Container className="h-20 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 text-white font-[Playfair_Display] text-2xl font-bold tracking-tight">
             Wyvern <span className="text-white/20 font-sans font-light">/</span>
@@ -82,7 +82,7 @@ export function LandingPage() {
             <Link to="/signin" className="text-sm font-medium hover:text-white transition-colors hidden sm:block">
               Sign In
             </Link>
-            <Link to="/signup" className="flex items-center gap-2 px-5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full text-sm font-medium transition-all backdrop-blur-sm border border-white/10">
+            <Link to="/signup" className="flex items-center gap-2 px-5 py-2 bg-accent hover:bg-accent/80 text-white rounded-full text-sm font-medium transition-all backdrop-blur-sm border border-accent/50">
               Get Started
             </Link>
           </div>

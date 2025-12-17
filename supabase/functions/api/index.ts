@@ -1130,21 +1130,30 @@ Deno.serve(async (req: Request) => {
       const [, shareId] = publicShareMatch
       const supabase = getSupabase()
 
-      // Get share AND owner's profile (for webhook access)
-      // We need the owner's webhook to refresh the file links
-      const { data: share } = await supabase
+      // Get share record (simple query, no join)
+      const { data: share, error: shareError } = await supabase
         .from("shares")
-        .select("*, files(*), profiles:user_id(webhook_urls)")
+        .select("*, files(*)")
         .eq("id", shareId)
         .maybeSingle()
 
+      if (shareError) {
+        console.error("[Share Download] Query error:", shareError)
+        return json({ error: "Database error" }, 500)
+      }
+
       if (!share) return json({ error: "Share not found" }, 404)
 
-      // Get owner's webhook (primary strategy for BYO Storage sharing)
-      // Note: profiles needs to be joined. If the relation name differs, this might need adjust.
-      // But assuming standard FK relations, profiles:user_id should work if named correctly.
-      // If not, we can do a second fetch if this comes back null.
-      const ownerWebhook = share.profiles?.webhook_urls?.[0] || null
+      // Get owner's webhook separately (for BYO Storage refresh)
+      let ownerWebhook: string | null = null
+      if (share.user_id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("webhook_urls")
+          .eq("id", share.user_id)
+          .maybeSingle()
+        ownerWebhook = profile?.webhook_urls?.[0] || null
+      }
 
       // Check expiry
       if (share.expires_at && new Date(share.expires_at) < new Date()) {
