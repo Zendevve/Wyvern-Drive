@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useFileStore } from '../stores/fileStore'
-import { Shield, Zap, Lock, Globe, Loader2, Link, Key, Plus, Minus } from 'lucide-react'
-import './SetupScreen.css'
+import { Lock, Zap, Loader2, Link as LinkIcon, Key, Plus, Minus, ArrowUpRight, Eye, EyeOff, Shield } from 'lucide-react'
 
-// LocalStorage key for persisting webhooks across sessions
 const SAVED_WEBHOOKS_KEY = 'wyvern-saved-webhooks'
 
 export function SetupScreen() {
@@ -13,7 +12,6 @@ export function SetupScreen() {
   const [showPassword, setShowPassword] = useState(false)
   const [useEncryption, setUseEncryption] = useState(false)
 
-  // Load saved webhooks from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem(SAVED_WEBHOOKS_KEY)
     if (saved) {
@@ -23,21 +21,15 @@ export function SetupScreen() {
           setWebhooks(savedWebhooks)
         }
       } catch {
-        // Ignore invalid JSON
+        // Ignore
       }
     }
   }, [])
 
-  const addWebhook = () => {
-    setWebhooks([...webhooks, ''])
-  }
-
+  const addWebhook = () => setWebhooks([...webhooks, ''])
   const removeWebhook = (index: number) => {
-    if (webhooks.length > 1) {
-      setWebhooks(webhooks.filter((_, i) => i !== index))
-    }
+    if (webhooks.length > 1) setWebhooks(webhooks.filter((_, i) => i !== index))
   }
-
   const updateWebhook = (index: number, value: string) => {
     setWebhooks(webhooks.map((w, i) => i === index ? value : w))
   }
@@ -48,92 +40,84 @@ export function SetupScreen() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!canSubmit) return
-
-    // Save webhooks to localStorage for persistence across logout/re-login
     localStorage.setItem(SAVED_WEBHOOKS_KEY, JSON.stringify(validWebhooks))
-
-    if (useEncryption && password) {
-      setEncryptionPassword(password)
-    }
+    if (useEncryption && password) setEncryptionPassword(password)
     setWebhookUrls(validWebhooks)
   }
 
   return (
-    <div className="setup-screen">
-      {/* Left Panel - Branding & Hero */}
-      <div className="setup-panel-left">
-        <div className="brand-header">
-          <Shield size={24} />
-          <span>WYVERN DRIVE</span>
-        </div>
-
-        <div className="hero-content">
-          <h1>Storage,<br />Evolved.</h1>
-          <p className="hero-subtitle">
-            A decentralized, encrypted file system that lives directly in your Discord server.
-            Unlimited storage, zero monthly fees.
-          </p>
-        </div>
-
-        <div className="feature-list">
-          <div className="feature-item">
-            <Globe size={20} />
-            <div>
-              <strong>Decentralized Core</strong>
-              <span>Powered by Discord's robust CDN infrastructure</span>
-            </div>
-          </div>
-          <div className="feature-item">
-            <Lock size={20} />
-            <div>
-              <strong>End-to-End Encryption</strong>
-              <span>Client-side AES-256 encryption ensures privacy</span>
-            </div>
-          </div>
-          <div className="feature-item">
-            <Zap size={20} />
-            <div>
-              <strong>Lightning Fast</strong>
-              <span>Parallel chunked uploads with multi-webhook support</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="panel-footer">
-          v1.0.0 • Open Source MIT License
-        </div>
+    <div className="min-h-screen bg-[#0a0a0c] flex items-center justify-center p-6">
+      {/* Subtle Grid Background */}
+      <div className="fixed inset-0 pointer-events-none z-0 opacity-[0.03]"
+        style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)', backgroundSize: '60px 60px' }}>
       </div>
 
-      {/* Right Panel - Auth Form */}
-      <div className="setup-panel-right">
-        <div className="setup-card">
-          <div className="setup-header">
-            <h2>Connect Drive</h2>
-            <p>Enter your Webhook URL(s) to initialize the filesystem.</p>
+      {/* Gradient Orb */}
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full bg-gradient-to-b from-white/[0.02] to-transparent blur-3xl pointer-events-none z-0"></div>
+
+      {/* Prismatic Blur */}
+      <div className="fixed top-[20%] right-[30%] w-[30%] h-[30%] bg-blue-500/5 blur-[100px] rounded-full opacity-20 pointer-events-none"></div>
+
+      <div className="relative z-10 w-full max-w-md">
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-2 text-white font-medium mb-12 justify-center">
+          <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+            <Lock size={16} />
+          </div>
+          <span className="text-lg font-[Playfair_Display] tracking-tight">Wyvern</span>
+        </Link>
+
+        {/* Card */}
+        <div className="bg-[#141418] border border-white/5 rounded-2xl p-8 relative overflow-hidden">
+          {/* Subtle top sheen */}
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-[Playfair_Display] text-white mb-2">Connect Drive</h1>
+            <p className="text-white/40 text-sm">
+              Wyvern Drive uses a "Bring Your Own Storage" model.<br />
+              Your files live in your private Discord channel, secure and free forever.
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="setup-form">
-            <div className="input-group">
-              <label>
-                <Link size={14} /> Webhook URLs
-              </label>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Webhook Inputs */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-xs font-medium text-white/50 uppercase tracking-wider">
+                  <LinkIcon size={12} /> Webhook URLs
+                </label>
+                <a
+                  href="https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-white/30 hover:text-white/60 transition-colors"
+                >
+                  How to get a URL?
+                </a>
+              </div>
 
-              <div className="webhook-list">
+              <div className="bg-white/[0.03] rounded-lg p-3 text-xs text-white/40 border border-white/[0.05] mb-2">
+                1. Create a <strong>private</strong> Discord channel.<br />
+                2. Go to Edit Channel &gt; Integrations &gt; Webhooks.<br />
+                3. Create a new Webhook and copy the URL.
+              </div>
+
+              <div className="space-y-2">
                 {webhooks.map((webhook, index) => (
-                  <div key={index} className="webhook-input-row">
+                  <div key={index} className="flex gap-2">
                     <input
                       type="password"
                       value={webhook}
                       onChange={(e) => updateWebhook(index, e.target.value)}
                       placeholder="https://discord.com/api/webhooks/..."
-                      className="setup-input"
+                      className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/[0.08] rounded-lg text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-white/20 transition-colors"
                     />
                     {webhooks.length > 1 && (
                       <button
                         type="button"
-                        className="remove-webhook-btn"
                         onClick={() => removeWebhook(index)}
-                        title="Remove webhook"
+                        className="p-3 bg-white/[0.03] border border-white/[0.08] rounded-lg text-white/30 hover:text-white/60 hover:border-white/15 transition-colors"
                       >
                         <Minus size={16} />
                       </button>
@@ -144,107 +128,94 @@ export function SetupScreen() {
 
               <button
                 type="button"
-                className="add-webhook-btn"
                 onClick={addWebhook}
+                className="flex items-center gap-2 text-xs text-white/40 hover:text-white/60 transition-colors"
               >
-                <Plus size={14} />
-                Add another webhook
+                <Plus size={12} /> Add another webhook (for speed)
               </button>
 
-              <div className="webhook-tip">
-                <Zap size={12} />
+              {/* Webhook Status */}
+              <div className="flex items-center gap-2 text-xs text-white/30">
+                <Zap size={10} className={validWebhooks.length >= 3 ? 'text-emerald-400' : ''} />
                 <span>
                   {validWebhooks.length === 0
-                    ? 'Enter at least one valid Discord webhook URL'
+                    ? 'Paste your Webhook URL above'
                     : validWebhooks.length < 3
-                      ? `${validWebhooks.length} webhook${validWebhooks.length > 1 ? 's' : ''} — Add ${3 - validWebhooks.length} more for faster uploads`
-                      : validWebhooks.length < 5
-                        ? `${validWebhooks.length} webhooks — Good! Add ${5 - validWebhooks.length} more for optimal speed`
-                        : `${validWebhooks.length} webhooks — Optimal configuration!`
+                      ? `${validWebhooks.length} webhook${validWebhooks.length > 1 ? 's' : ''} added (add 3 for max speed)`
+                      : `${validWebhooks.length} webhooks — Turbo Mode Active`
                   }
                 </span>
               </div>
             </div>
 
-            <label className="checkbox-label">
+            {/* Encryption Toggle */}
+            <label className="flex items-center gap-4 p-4 bg-white/[0.02] border border-white/[0.05] rounded-lg cursor-pointer hover:border-white/10 transition-colors">
               <input
                 type="checkbox"
                 checked={useEncryption}
                 onChange={(e) => setUseEncryption(e.target.checked)}
+                className="w-4 h-4 accent-white rounded"
               />
-              Enable Client-Side Encryption
+              <div className="flex-1">
+                <div className="text-sm text-white/80">Enable encryption</div>
+                <div className="text-xs text-white/30">Encrypt files with a master password</div>
+              </div>
+              <Shield size={16} className={useEncryption ? 'text-white/60' : 'text-white/20'} />
             </label>
 
+            {/* Password Field */}
             {useEncryption && (
-              <div className="input-group animate-in">
-                <label htmlFor="password">
-                  <Key size={14} /> Master Password
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-white/50 uppercase tracking-wider">
+                  <Key size={12} /> Master Password
                 </label>
-                <div style={{ position: 'relative' }}>
+                <div className="relative">
                   <input
-                    id="password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Set a strong decryption password"
-                    required={useEncryption}
-                    className="setup-input"
+                    placeholder="At least 8 characters"
                     minLength={8}
+                    className="w-full px-4 py-3 pr-12 bg-white/[0.03] border border-white/[0.08] rounded-lg text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-white/20 transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    style={{
-                      position: 'absolute',
-                      right: '12px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--text-muted)',
-                      fontSize: '12px',
-                      cursor: 'pointer'
-                    }}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
                   >
-                    {showPassword ? "Hide" : "Show"}
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
             )}
 
+            {/* Submit */}
             <button
               type="submit"
-              className="setup-button"
               disabled={!canSubmit || isLoading}
+              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-white text-[#0a0a0c] rounded-lg font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/90 transition-all"
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="spinner" size={18} /> Initializing...
+                  <Loader2 className="animate-spin" size={16} />
+                  Connecting...
                 </>
               ) : (
-                <>Connect to Wyvern <ChevronRight size={16} /></>
+                <>
+                  Connect to Wyvern <ArrowUpRight size={16} />
+                </>
               )}
             </button>
           </form>
         </div>
+
+        {/* Back to home */}
+        <div className="text-center mt-8">
+          <Link to="/" className="text-white/40 text-sm hover:text-white/60 transition-colors inline-flex items-center gap-1">
+            Back to home <ArrowUpRight size={12} />
+          </Link>
+        </div>
       </div>
     </div>
-  )
-}
-
-function ChevronRight({ size = 24 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m9 18 6-6-6-6" />
-    </svg>
   )
 }

@@ -503,9 +503,9 @@ export class WyvernFileManager {
       // Keep the chunk data for retries
       const chunkBuffer = chunkData
 
-      // Retry logic
       let attempts = 0
       let messageId: string | null = null
+      let channelId: string | null = null
       let attachmentUrl: string | null = null
 
       while (attempts < CONFIG.RETRY_ATTEMPTS && (!messageId || !attachmentUrl)) {
@@ -523,6 +523,7 @@ export class WyvernFileManager {
           if (res.ok) {
             const data = await res.json()
             messageId = data.id
+            channelId = data.channel_id // Capture channel ID for link refresh
             if (data.attachments && data.attachments.length > 0) {
               attachmentUrl = data.attachments[0].url
             }
@@ -547,12 +548,15 @@ export class WyvernFileManager {
       if (!messageId || !attachmentUrl) throw new Error('Failed to upload chunk or get attachment URL')
 
       // Use compact format for chunk metadata (short keys)
+      // Include message ID and channel ID for link refresh support
       const chunkInfo: ChunkInfo = {
-        i: index,              // index
-        u: attachmentUrl,      // url
-        s: chunkBuffer.byteLength,  // size
+        i: index,                    // index
+        u: attachmentUrl,            // url (may expire!)
+        s: chunkBuffer.byteLength,   // size
+        m: messageId,                // message id (for refreshing)
+        cid: channelId || undefined, // channel id (for refreshing)
         v: iv ? Array.from(iv) : undefined,  // iv (optional)
-        c: isCompressed || undefined  // compressed flag (only if true)
+        c: isCompressed || undefined // compressed flag (only if true)
       }
       chunks[index] = chunkInfo
 
@@ -690,6 +694,84 @@ export class WyvernFileManager {
     }
   }
 
+  // --- Link Refreshing ---
+
+  /**
+   * Check if a Discord URL is expired or expiring soon (within 1 hour)
+   * URL has format: ...&ex={hex_timestamp}&...
+   */
+  private isUrlExpired(url: string): boolean {
+    try {
+      const urlObj = new URL(url)
+      const exHex = urlObj.searchParams.get('ex')
+      if (!exHex) return false // No expiry param, assume valid or not a Discord link
+
+      const expiry = parseInt(exHex, 16) * 1000 // Convert to ms
+      const now = Date.now()
+
+      // Consider expired if expires in less than 1 hour
+      return expiry - now < 3600 * 1000
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Refresh expired chunk URLs by calling the backend
+   * Updates the chunk objects in-place
+   */
+  private async refreshChunkUrls(chunks: ChunkInfo[]): Promise<void> {
+    const refreshableChunks = chunks.filter(c => this.isUrlExpired(c.u))
+
+    if (refreshableChunks.length === 0) return
+
+    console.log(`[WyvernFileManager] Found ${refreshableChunks.length} expired chunks (${refreshableChunks.length} refreshable), refreshing...`)
+
+    try {
+      // Use the first webhook for refreshing (assuming it owns the messages or we try best effort)
+      let webhookUrl = this.webhooks[0]
+      if (!webhookUrl) {
+        console.warn('[WyvernFileManager] No webhook URL available for refresh, checking profile...')
+        // Fallback attempt: try to read from local storage directly if manager state is partial
+        try {
+          const profile = JSON.parse(localStorage.getItem('wyvern_profile') || '{}')
+          if (profile.webhook_urls && profile.webhook_urls.length > 0) {
+            webhookUrl = profile.webhook_urls[0]
+          }
+        } catch (e) {/* ignore */ }
+      }
+
+      const res = await fetch(`${API_URL}/refresh-urls`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          chunks: refreshableChunks,
+          webhookUrl
+        })
+      })
+
+      if (!res.ok) {
+        console.warn('[WyvernFileManager] Failed to refresh URLs:', await res.text())
+        return
+      }
+
+      const { refreshed } = await res.json()
+
+      // Update chunks in place
+      let updatedCount = 0
+      for (const chunk of chunks) {
+        if (refreshed[chunk.i]) {
+          chunk.u = refreshed[chunk.i]
+          updatedCount++
+        }
+      }
+
+      console.log(`[WyvernFileManager] Successfully refreshed ${updatedCount} URLs`)
+    } catch (e) {
+      console.error('[WyvernFileManager] Error refreshing URLs:', e)
+    }
+  }
+
   // --- Download Interaction ---
 
   async downloadFile(file: WyvernFile, options?: DownloadOptions): Promise<void> {
@@ -708,6 +790,9 @@ export class WyvernFileManager {
     // Sort chunks by index (normalize first for backward compat)
     const normalizedChunks = chunks.map((c: ChunkInfo | LegacyChunkInfo) => normalizeChunk(c))
     normalizedChunks.sort((a, b) => a.i - b.i)
+
+    // Check for expired links and refresh if needed
+    await this.refreshChunkUrls(normalizedChunks)
 
     // Check encryption and restore key with file's salt
     const isEncrypted = file.encrypted
@@ -737,8 +822,23 @@ export class WyvernFileManager {
       await Promise.all(batch.map(async (chunk) => {
         if (!chunk.u) throw new Error('Missing chunk URL')
 
-        // Fetch via extension to bypass CORS
-        let data = await fetchViaExtension(chunk.u)
+        // Fetch via extension to bypass CORS with retry capability
+        let data: ArrayBuffer
+        try {
+          data = await fetchViaExtension(chunk.u)
+        } catch (e: any) {
+          // If 404/403 or generic fetch failure, try refresh
+          const msg = e.message || ''
+          // "Failed to read file" is what background.js throws on 404/403
+          if (msg.includes('404') || msg.includes('403') || msg.includes('Failed to read')) {
+            console.log(`[WyvernFileManager] Chunk fetch failed (${msg}), attempting refresh...`)
+            await this.refreshChunkUrls([chunk])
+            // Retry with new URL
+            data = await fetchViaExtension(chunk.u)
+          } else {
+            throw e
+          }
+        }
 
         // Decrypt first if needed
         if (isEncrypted && decryptionKey) {

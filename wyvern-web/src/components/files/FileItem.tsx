@@ -14,10 +14,12 @@ import { getFileIconName, formatSize, formatDate } from '../../lib/utils'
 import { isPreviewable, isImageFile, isVideoFile, getMimeType } from '../../lib/thumbnails'
 import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
-import { Loader, Folder, File, FileText, Image, Music, Video, Archive, Code, Cog, AlertTriangle } from 'lucide-react'
-import './FileItem.css'
+import {
+  Loader, Folder, File, FileText, Image, Music, Video, Archive, Code, Cog,
+  AlertTriangle
+} from 'lucide-react'
+// Removed FileItem.css as we moved to Tailwind
 
-// Module-level icon mapping (prevents recreation on each render)
 const ICON_MAP: Record<string, typeof File> = {
   Folder, File, FileText, Image, Music, Video, Archive, Code, Cog
 }
@@ -32,9 +34,8 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
   const [isDragOver, setIsDragOver] = useState(false)
   const [thumbnail, setThumbnail] = useState<string | null>(null)
   const [isLoadingThumb, setIsLoadingThumb] = useState(false)
-  const [isUnavailable, setIsUnavailable] = useState(false) // Health check state
+  const [isUnavailable, setIsUnavailable] = useState(false)
 
-  // Optimized selectors - only re-render when THIS file's selection changes
   const isSelected = useFileStore(state => state.selectedIds.has(String(file.id)))
   const encryptionPassword = useFileStore(state => state.encryptionPassword)
   const toggleSelection = useFileStore(state => state.toggleSelection)
@@ -48,12 +49,9 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
   const iconName = isFolder ? 'Folder' : getFileIconName(file.name)
   const IconComponent = ICON_MAP[iconName] || File
 
-  // Load thumbnail for images only in grid view
-  // SKIP VIDEO THUMBNAILS - they're 20MB+ each and kill memory
   useEffect(() => {
     if (!isImage || viewMode !== 'grid') return
 
-    // Check cache first - instant display without network request
     const cachedUrl = getCachedThumbnail(String(file.id))
     if (cachedUrl) {
       setThumbnail(cachedUrl)
@@ -65,24 +63,16 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
     const wyvernFile = file as WyvernFile
     if (!wyvernFile.content) return
 
-    // Check if already loading - wait for that instead of starting new load
     const existingPromise = getLoadingPromise(String(file.id))
     if (existingPromise) {
       setIsLoadingThumb(true)
       existingPromise
-        .then(url => {
-          setThumbnail(url)
-        })
-        .catch(() => {
-          setIsUnavailable(true)
-        })
-        .finally(() => {
-          setIsLoadingThumb(false)
-        })
+        .then(url => setThumbnail(url))
+        .catch(() => setIsUnavailable(true))
+        .finally(() => setIsLoadingThumb(false))
       return
     }
 
-    // Start new load - ONLY fetch first chunk for image thumbnails
     const loadThumbnail = async (): Promise<string> => {
       const rawChunks: (ChunkInfo | LegacyChunkInfo)[] = JSON.parse(wyvernFile.content!)
       const chunks = rawChunks.map(c => normalizeChunk(c))
@@ -93,22 +83,18 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
         decryptionKey = await restoreEncryptionContext(encryptionPassword, wyvernFile.encryption_salt)
       }
 
-      // For image thumbnails, only fetch first chunk (enough for preview)
       const chunksToFetch = chunks.slice(0, 1)
-
       const fileParts: ArrayBuffer[] = []
+
       for (const chunk of chunksToFetch) {
         let data = await fetchViaExtension(chunk.u)
-
         if (wyvernFile.encrypted && decryptionKey && chunk.v) {
           const iv = new Uint8Array(chunk.v)
           data = await decryptChunk(data, decryptionKey, iv)
         }
-
         if (chunk.c) {
           data = await decompressData(data)
         }
-
         fileParts.push(data)
       }
 
@@ -117,7 +103,6 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
     }
 
     setIsLoadingThumb(true)
-
     const promise = loadThumbnail()
     setLoadingPromise(String(file.id), promise)
 
@@ -133,33 +118,23 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
           setIsUnavailable(true)
         }
       })
-      .finally(() => {
-        setIsLoadingThumb(false)
-      })
-
-    // No cleanup needed - cache manages blob URL lifecycle
+      .finally(() => setIsLoadingThumb(false))
   }, [file.id, viewMode, isImage, isVideo, encryptionPassword, thumbnail])
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-
-    // If right-clicking an unselected item, select it first (standard behavior)
     const { selectedIds, selectFile } = useFileStore.getState()
     if (!selectedIds.has(String(file.id))) {
       selectFile(String(file.id))
     }
-    // Now show context menu (will reflect current selection)
     setContextMenu({ x: e.clientX, y: e.clientY })
   }
 
   const handleDoubleClick = () => {
     if (isFolder) {
-      // Navigate into folder
       const { setCurrentPath, loadFiles } = useFileStore.getState()
-      // Build path from folder name (simple approach, assuming flat structure for now)
-      // For nested folders, we'd need to track parent path properly
-      setCurrentPath(String(file.id)) // Using ID as path key for now
+      setCurrentPath(String(file.id))
       loadFiles()
     } else if (isPreviewable(file.name)) {
       useFileStore.getState().setPreviewFile(String(file.id))
@@ -168,11 +143,8 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
     }
   }
 
-  // Ctrl+Click to toggle, Shift+Click for range selection
   const handleClick = (e: React.MouseEvent) => {
-    // Stop propagation so FileGrid background click doesn't trigger clearSelection
     e.stopPropagation()
-
     if (e.shiftKey && lastSelectedId) {
       e.preventDefault()
       setRangeSelection(lastSelectedId, String(file.id))
@@ -180,54 +152,38 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
       e.preventDefault()
       toggleSelection(String(file.id))
     } else {
-      // Single click selects only this file
       useFileStore.getState().selectFile(String(file.id))
     }
   }
 
-  // Keyboard navigation handler
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Enter = open (same as double-click)
     if (e.key === 'Enter') {
       e.preventDefault()
       handleDoubleClick()
     }
-    // Space = toggle selection
     if (e.key === ' ') {
       e.preventDefault()
       toggleSelection(String(file.id))
     }
   }
 
-  // Drag Source
   const handleDragStart = (e: React.DragEvent) => {
     const { selectedIds } = useFileStore.getState()
-
-    // If this file is part of a selection, drag all selected
-    // If not selected, select it first (unless multiple selected already and we just didn't click?)
-    // Actually, usually simpler: if dragging unselected item, select it.
     if (!selectedIds.has(String(file.id))) {
       useFileStore.getState().selectFile(String(file.id))
     }
-
-    // Refresh state after potential update
     const currentSelectedIds = useFileStore.getState().selectedIds
-
     if (currentSelectedIds.size > 1) {
       e.dataTransfer.setData('application/wyvern-file-ids', JSON.stringify(Array.from(currentSelectedIds)))
-      e.dataTransfer.effectAllowed = 'move'
     } else {
-      // Single file drag
       e.dataTransfer.setData('application/wyvern-file-id', String(file.id))
-      e.dataTransfer.effectAllowed = 'move'
     }
+    e.dataTransfer.effectAllowed = 'move'
   }
 
-  // Drop Target (Folders only)
   const handleDragOver = (e: React.DragEvent) => {
     if (!isFolder) return
-    if (e.dataTransfer.types.includes('application/wyvern-file-id') ||
-      e.dataTransfer.types.includes('application/wyvern-file-ids')) {
+    if (e.dataTransfer.types.includes('application/wyvern-file-id') || e.dataTransfer.types.includes('application/wyvern-file-ids')) {
       e.preventDefault()
       e.stopPropagation()
       setIsDragOver(true)
@@ -247,12 +203,9 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
     e.preventDefault()
     e.stopPropagation()
     setIsDragOver(false)
-
-    // Check for batch move first
     const batchIds = e.dataTransfer.getData('application/wyvern-file-ids')
     if (batchIds) {
       const ids: string[] = JSON.parse(batchIds)
-      // Filter out self (can't move folder into itself)
       const idsToMove = ids.filter(id => id !== String(file.id))
       for (const id of idsToMove) {
         await moveFile(id, file.id)
@@ -261,18 +214,23 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
       useFileStore.getState().loadFiles()
       return
     }
-
-    // Single file move
     const fileId = e.dataTransfer.getData('application/wyvern-file-id')
     if (fileId && fileId !== String(file.id)) {
       moveFile(fileId, file.id)
     }
   }
 
+  // Styles based on state
+  const gridClass = `flex flex-col p-4 bg-bg-card border rounded-xl relative cursor-pointer group hover:bg-bg-hover transition-all hover:shadow-lg hover:shadow-black/20 hover:border-border-active ${isSelected ? 'ring-2 ring-accent border-transparent z-10' : 'border-border-card'
+    } ${isDragOver ? 'ring-2 ring-accent bg-accent/10' : ''}`
+
+  const listClass = `flex items-center gap-4 px-4 py-3 border-b border-border-divider hover:bg-bg-hover cursor-pointer group transition-colors ${isSelected ? 'bg-accent/5' : ''
+    } ${isDragOver ? 'bg-accent/10' : ''}`
+
   return (
     <>
       <div
-        className={`file-item ${viewMode} ${isDragOver ? 'drag-over' : ''} ${isImage && thumbnail ? 'has-thumbnail' : ''} ${isSelected ? 'selected' : ''}`}
+        className={viewMode === 'grid' ? gridClass : listClass}
         draggable="true"
         data-id={file.id}
         tabIndex={0}
@@ -288,35 +246,58 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
         onClick={handleClick}
         onKeyDown={handleKeyDown}
       >
-        {/* Thumbnail or Icon */}
-        {viewMode === 'grid' && (isImage || isVideo) && thumbnail ? (
-          <div className={`file-thumbnail ${isVideo ? 'video-thumb' : ''}`}>
-            <img src={thumbnail} alt={file.name} />
-            {isVideo && <div className="video-overlay"><Video size={24} /></div>}
+        {/* Grid Thumbnail/Icon */}
+        {viewMode === 'grid' && (
+          <div className="w-full aspect-square mb-3 flex items-center justify-center bg-black/20 rounded-lg overflow-hidden relative">
+            {(isImage || isVideo) && thumbnail ? (
+              <>
+                <img src={thumbnail} alt={file.name} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" />
+                {isVideo && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                    <Video size={24} className="text-white drop-shadow-md" />
+                  </div>
+                )}
+              </>
+            ) : (isImage || isVideo) && isLoadingThumb ? (
+              <Loader size={24} className="text-[#52525B] animate-spin" />
+            ) : (
+              <IconComponent size={32} className={isFolder ? 'text-[#E4E4E7]' : 'text-[#71717A] group-hover:text-[#E4E4E7] transition-colors'} strokeWidth={1.5} />
+            )}
+
+            {/* Unavailable Badge */}
+            {isUnavailable && (
+              <div className="absolute top-2 right-2 p-1 bg-amber-500/10 rounded-full text-amber-500" title="File unavailable">
+                <AlertTriangle size={12} />
+              </div>
+            )}
           </div>
-        ) : viewMode === 'grid' && (isImage || isVideo) && isLoadingThumb ? (
-          <div className="file-thumbnail loading">
-            <Loader size={24} className="spinner" />
+        )}
+
+        {/* List Icon */}
+        {viewMode === 'list' && (
+          <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-black/20 text-[#A1A1AA]">
+            <IconComponent size={18} strokeWidth={1.5} />
           </div>
-        ) : (
-          <span className="file-icon"><IconComponent size={viewMode === 'grid' ? 32 : 18} /></span>
         )}
 
-        <span className="file-name">{file.name}</span>
-
-        {/* Unavailable warning badge */}
-        {isUnavailable && (
-          <span className="file-unavailable-badge" title="File unavailable - Discord content may have been deleted">
-            <AlertTriangle size={14} />
-          </span>
-        )}
-
-        {viewMode === 'list' && !isFolder && (
-          <>
-            <span className="file-size">{formatSize((file as WyvernFile).size)}</span>
-            <span className="file-date">{formatDate(file.updated_at)}</span>
-          </>
-        )}
+        {/* Info */}
+        <div className={`flex-1 min-w-0 ${viewMode === 'list' ? 'flex items-center justify-between' : ''}`}>
+          <div className="truncate text-sm font-medium text-[#E4E4E7] group-hover:text-white transition-colors mb-0.5">
+            {file.name}
+          </div>
+          {viewMode === 'grid' && (
+            <div className="flex items-center justify-between text-[10px] text-[#71717A]">
+              <span>{isFolder ? 'Folder' : formatSize((file as WyvernFile).size)}</span>
+              {/* Optional: Add modification date or context menu trigger here for mobile? */}
+            </div>
+          )}
+          {viewMode === 'list' && !isFolder && (
+            <div className="flex items-center gap-8 text-xs text-[#71717A]">
+              <span className="w-20 text-right">{formatSize((file as WyvernFile).size)}</span>
+              <span className="w-24 text-right hidden sm:block">{formatDate(file.updated_at)}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {contextMenu && (
@@ -331,5 +312,4 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
   )
 }
 
-// Memoized export - prevent re-renders when parent updates but props haven't changed
 export const FileItem = memo(FileItemComponent)

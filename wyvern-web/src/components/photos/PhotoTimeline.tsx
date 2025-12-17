@@ -134,14 +134,51 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
       }
 
       // Dynamic import to avoid circular dependency
+      // Dynamic import to avoid circular dependency
       const { fetchViaExtension } = await import('../../lib/extension')
 
       // For image thumbnails, only fetch first chunk (enough for preview)
       const chunksToFetch = chunks.slice(0, 1)
 
       const fileParts: ArrayBuffer[] = []
+      // Helper to fetch valid chunk with retry
+      const fetchChunk = async (chunk: ChunkInfo | LegacyChunkInfo): Promise<ArrayBuffer> => {
+        try {
+          return await fetchViaExtension(chunk.u)
+        } catch (e: any) {
+          // If 404/403 (expired), try to refresh URL
+          const isNetworkError = e.message && (e.message.includes('404') || e.message.includes('403') || e.message.includes('Failed to fetch'))
+          if (isNetworkError && chunk.m && chunk.cid) {
+            console.log(`[PhotoThumbnail] Chunk expired (${chunk.u}), refreshing...`)
+            // Manually refresh single chunk to avoid circular dep with WyvernFileManager
+            // (Ideally we should expose refreshChunkUrls as static or singleton, but for now we re-implement quick fetch)
+            try {
+              const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:54321/functions/v1'}/refresh-urls`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${localStorage.getItem('sb-access-token') || ''}`
+                },
+                body: JSON.stringify({ chunks: [chunk] })
+              })
+              if (res.ok) {
+                const { refreshed } = await res.json()
+                if (refreshed[chunk.i]) {
+                  chunk.u = refreshed[chunk.i]
+                  // Retry fetch with new URL
+                  return await fetchViaExtension(chunk.u)
+                }
+              }
+            } catch (refreshErr) {
+              console.error('Refresh failed', refreshErr)
+            }
+          }
+          throw e
+        }
+      }
+
       for (const chunk of chunksToFetch) {
-        let data = await fetchViaExtension(chunk.u)
+        let data = await fetchChunk(chunk)
 
         if (photo.encrypted && decryptionKey && chunk.v) {
           const iv = new Uint8Array(chunk.v)

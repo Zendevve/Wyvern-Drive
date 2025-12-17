@@ -1,10 +1,9 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared'
 import { supabase } from '../lib/supabase'
-import { Shield } from 'lucide-react'
-import './AuthScreen.css'
+import { Lock, ArrowUpRight } from 'lucide-react'
 
 interface AuthScreenProps {
   defaultView?: 'sign_in' | 'sign_up'
@@ -13,7 +12,6 @@ interface AuthScreenProps {
 export function AuthScreen({ defaultView = 'sign_in' }: AuthScreenProps) {
   const navigate = useNavigate()
 
-  // Listen for auth state changes and redirect to app
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
@@ -21,7 +19,6 @@ export function AuthScreen({ defaultView = 'sign_in' }: AuthScreenProps) {
       }
     })
 
-    // Check if already signed in
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         navigate('/app')
@@ -32,33 +29,39 @@ export function AuthScreen({ defaultView = 'sign_in' }: AuthScreenProps) {
   }, [navigate])
 
   return (
-    <div className="auth-screen">
-      {/* Left Panel - Branding */}
-      <div className="auth-panel-left">
-        <div className="brand-header">
-          <Shield size={24} />
-          <span>WYVERN DRIVE</span>
-        </div>
-
-        <div className="hero-content">
-          <h1>Storage,<br />Evolved.</h1>
-          <p className="hero-subtitle">
-            A decentralized, encrypted file system that lives directly in your Discord server.
-            Unlimited storage, zero monthly fees.
-          </p>
-        </div>
-
-        <div className="panel-footer">
-          v1.0.0 • Open Source MIT License
-        </div>
+    <div className="min-h-screen bg-[#0a0a0c] flex flex-col items-center justify-center p-6 overflow-y-auto">
+      {/* Subtle Grid Background */}
+      <div className="fixed inset-0 pointer-events-none z-0 opacity-[0.03]"
+        style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)', backgroundSize: '60px 60px' }}>
       </div>
 
-      {/* Right Panel - Auth Form */}
-      <div className="auth-panel-right">
-        <div className="auth-card">
-          <div className="auth-header">
-            <h2>Welcome</h2>
-            <p>{defaultView === 'sign_up' ? 'Create your account' : 'Sign in to access your files'}</p>
+      {/* Gradient Orb */}
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full bg-gradient-to-b from-white/[0.02] to-transparent blur-3xl pointer-events-none z-0"></div>
+
+      {/* Prismatic Blur */}
+      <div className="fixed top-[20%] right-[30%] w-[30%] h-[30%] bg-blue-500/5 blur-[100px] rounded-full opacity-20 pointer-events-none"></div>
+
+      <div className="relative z-10 w-full max-w-md">
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-2 text-white font-medium mb-12 justify-center">
+          <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+            <Lock size={16} />
+          </div>
+          <span className="text-lg font-[Playfair_Display] tracking-tight">Wyvern</span>
+        </Link>
+
+        {/* Card */}
+        <div className="bg-[#141418] border border-white/5 rounded-2xl p-8 relative overflow-hidden">
+          {/* Subtle top sheen */}
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-[Playfair_Display] text-white mb-2">
+              {defaultView === 'sign_up' ? 'Create account' : 'Welcome back'}
+            </h1>
+            <p className="text-white/40 text-sm">
+              {defaultView === 'sign_up' ? 'Start storing files securely' : 'Sign in to access your vault'}
+            </p>
           </div>
 
           <Auth
@@ -68,41 +71,57 @@ export function AuthScreen({ defaultView = 'sign_in' }: AuthScreenProps) {
               variables: {
                 default: {
                   colors: {
-                    brand: '#5e6ad2',
-                    brandAccent: '#7c3aed',
-                    brandButtonText: 'white',
-                    defaultButtonBackground: '#1a1a2e',
-                    defaultButtonBackgroundHover: '#252545',
-                    inputBackground: '#1a1a2e',
-                    inputBorder: 'rgba(255, 255, 255, 0.1)',
-                    inputBorderHover: 'rgba(255, 255, 255, 0.2)',
-                    inputBorderFocus: '#5e6ad2',
-                    inputText: 'white',
-                    inputLabelText: 'rgba(255, 255, 255, 0.7)',
-                    inputPlaceholder: 'rgba(255, 255, 255, 0.4)',
+                    brand: '#ffffff',
+                    brandAccent: '#e5e5e5',
+                    brandButtonText: '#0a0a0c',
+                    defaultButtonBackground: 'rgba(255,255,255,0.05)',
+                    defaultButtonBackgroundHover: 'rgba(255,255,255,0.1)',
+                    inputBackground: 'rgba(255,255,255,0.03)',
+                    inputBorder: 'rgba(255,255,255,0.08)',
+                    inputBorderHover: 'rgba(255,255,255,0.15)',
+                    inputBorderFocus: 'rgba(255,255,255,0.3)',
+                    inputText: '#ffffff',
+                    inputLabelText: 'rgba(255,255,255,0.5)',
+                    inputPlaceholder: 'rgba(255,255,255,0.25)',
                   },
                   borderWidths: {
-                    buttonBorderWidth: '1px',
+                    buttonBorderWidth: '0px',
                     inputBorderWidth: '1px',
                   },
                   radii: {
-                    borderRadiusButton: '8px',
-                    buttonBorderRadius: '8px',
-                    inputBorderRadius: '8px',
+                    borderRadiusButton: '10px',
+                    buttonBorderRadius: '10px',
+                    inputBorderRadius: '10px',
                   },
                   fontSizes: {
                     baseBodySize: '14px',
                     baseInputSize: '14px',
-                    baseLabelSize: '13px',
+                    baseLabelSize: '12px',
                     baseButtonSize: '14px',
+                  },
+                  fonts: {
+                    bodyFontFamily: 'inherit',
+                    buttonFontFamily: 'inherit',
+                    inputFontFamily: 'inherit',
+                    labelFontFamily: 'inherit',
                   },
                 },
               },
-              className: {
-                container: 'auth-container',
-                button: 'auth-button',
-                input: 'auth-input',
-                label: 'auth-label',
+              style: {
+                button: {
+                  fontWeight: '500',
+                  padding: '14px 16px',
+                },
+                input: {
+                  padding: '14px 16px',
+                  background: 'rgba(255,255,255,0.03)',
+                },
+                anchor: {
+                  color: 'rgba(255,255,255,0.5)',
+                },
+                label: {
+                  marginBottom: '6px',
+                },
               },
             }}
             providers={[]}
@@ -112,32 +131,37 @@ export function AuthScreen({ defaultView = 'sign_in' }: AuthScreenProps) {
             localization={{
               variables: {
                 sign_in: {
-                  email_label: 'Email address',
+                  email_label: 'Email',
                   password_label: 'Password',
                   email_input_placeholder: 'you@example.com',
-                  password_input_placeholder: 'At least 8 characters',
+                  password_input_placeholder: 'Your password',
                   button_label: 'Sign In',
                   loading_button_label: 'Signing in...',
-                  social_provider_text: 'Continue with {{provider}}',
                   link_text: "Don't have an account? Sign up",
                 },
                 sign_up: {
-                  email_label: 'Email address',
+                  email_label: 'Email',
                   password_label: 'Password',
                   email_input_placeholder: 'you@example.com',
                   password_input_placeholder: 'At least 8 characters',
-                  button_label: 'Sign Up',
+                  button_label: 'Create Account',
                   loading_button_label: 'Creating account...',
-                  social_provider_text: 'Continue with {{provider}}',
                   link_text: 'Already have an account? Sign in',
                 },
               },
             }}
           />
 
-          <div className="auth-footer">
-            <p>By signing in, you agree to store your files on your own Discord server.</p>
-          </div>
+          <p className="text-xs text-white/30 text-center mt-8">
+            By continuing, you agree to store files on your own Discord server.
+          </p>
+        </div>
+
+        {/* Back to home */}
+        <div className="text-center mt-8">
+          <Link to="/" className="text-white/40 text-sm hover:text-white/60 transition-colors inline-flex items-center gap-1">
+            Back to home <ArrowUpRight size={12} />
+          </Link>
         </div>
       </div>
     </div>

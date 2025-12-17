@@ -5,9 +5,10 @@ import './FileDropZone.css'
 interface FileDropZoneProps {
   onDrop: (files: FileList) => void
   children: ReactNode
+  className?: string
 }
 
-export function FileDropZone({ onDrop, children }: FileDropZoneProps) {
+export function FileDropZone({ onDrop, children, className = '' }: FileDropZoneProps) {
   const [isDragging, setIsDragging] = useState(false)
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -89,7 +90,7 @@ export function FileDropZone({ onDrop, children }: FileDropZoneProps) {
 
   return (
     <div
-      className={`file-dropzone ${isDragging ? 'dragging' : ''}`}
+      className={`file-dropzone ${isDragging ? 'dragging' : ''} ${className}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}

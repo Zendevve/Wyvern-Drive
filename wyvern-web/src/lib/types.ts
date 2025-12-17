@@ -58,8 +58,10 @@ export interface DownloadOptions {
  */
 export interface ChunkInfo {
   i: number       // index
-  u: string       // url (Discord CDN)
+  u: string       // url (Discord CDN) - may expire!
   s: number       // size in bytes
+  m?: string      // message id (for refreshing expired links)
+  cid?: string    // channel id (for refreshing expired links)
   v?: number[]    // iv for encrypted chunks (Array for JSON serialization)
   c?: boolean     // compressed (gzip) - only true if compressed
 }

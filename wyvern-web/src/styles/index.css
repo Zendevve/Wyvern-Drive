@@ -1,52 +1,67 @@
 /* Wyvern Drive - "Linear" Design System (Blurple Edition) */
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 :root {
   /* ==========================================
-     BACKGROUND SYSTEM
+     BACKGROUND SYSTEM (Wyvern Violet)
      ========================================== */
-  --background-deep: #020203;
-  --background-base: #050506;
-  --background-elevated: #0a0a0c;
+  --background-deep: #0F0F11;
+  /* Deep Charcoal */
+  --background-base: #0F0F11;
+  /* Deep Charcoal */
+  --background-elevated: #18181B;
+  /* Dark Violet-Grey */
 
   /* Surfaces */
-  --surface: rgba(255, 255, 255, 0.05);
-  --surface-hover: rgba(255, 255, 255, 0.08);
-  --surface-active: rgba(255, 255, 255, 0.12);
+  --surface: #18181B;
+  --surface-hover: #27272A;
+  /* Zinc-800 */
+  --surface-active: #3F3F46;
+  /* Zinc-700 */
 
   /* ==========================================
      TEXT SYSTEM
      ========================================== */
-  --foreground: #EDEDEF;
-  --foreground-muted: #8A8F98;
-  --foreground-subtle: rgba(255, 255, 255, 0.60);
+  --foreground: #FFFFFF;
+  --foreground-muted: #A1A1AA;
+  /* Zinc-400 */
+  --foreground-subtle: #71717A;
+  /* Zinc-500 */
 
   /* ==========================================
-     ACCENT COLORS (Blurple)
+     ACCENT COLORS (Electric Violet)
      ========================================== */
-  --accent: #5865F2;
-  /* Discord Blurple */
-  --accent-bright: #7289da;
-  --accent-hover: #4752C4;
-  --accent-glow: rgba(88, 101, 242, 0.3);
+  --accent: #8B5CF6;
+  /* Violet-500 */
+  --accent-bright: #A78BFA;
+  /* Violet-400 */
+  --accent-hover: #7C3AED;
+  /* Violet-600 */
+  --accent-glow: rgba(139, 92, 246, 0.3);
 
   /* ==========================================
      STATUS COLORS
      ========================================== */
-  --success: #3BA55C;
-  --success-bg: rgba(59, 165, 92, 0.12);
-  --error: #ED4245;
-  --error-bg: rgba(237, 66, 69, 0.12);
-  --warning: #FAA61A;
-  --warning-bg: rgba(250, 166, 26, 0.12);
-  --info: #5865F2;
-  --info-bg: rgba(88, 101, 242, 0.12);
+  --success: #10B981;
+  --success-bg: rgba(16, 185, 129, 0.1);
+  --error: #F43F5E;
+  --error-bg: rgba(244, 63, 94, 0.1);
+  --warning: #F59E0B;
+  --warning-bg: rgba(245, 158, 11, 0.1);
+  --info: #3B82F6;
+  --info-bg: rgba(59, 130, 246, 0.1);
 
   /* ==========================================
      BORDERS
      ========================================== */
-  --border-default: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.10);
-  --border-accent: rgba(88, 101, 242, 0.30);
+  --border-default: #27272A;
+  --border-hover: #3F3F46;
+  --border-accent: #8B5CF6;
 
   /* ==========================================
      SPACING SCALE (4px base)
@@ -63,15 +78,9 @@
   /* ==========================================
      ANIMATION
      ========================================== */
-  --duration-instant: 50ms;
   --duration-fast: 150ms;
   --duration-normal: 200ms;
-  --duration-slow: 300ms;
   --ease-default: ease-out;
-  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
-  /* Expo-out */
-  --transition-fast: 150ms cubic-bezier(0.16, 1, 0.3, 1);
-  --transition-normal: 200ms cubic-bezier(0.16, 1, 0.3, 1);
 
   /* ==========================================
      Z-INDEX SCALE
@@ -88,28 +97,33 @@
   /* ==========================================
      SIZING
      ========================================== */
-  --sidebar-width: 260px;
-  --header-height: 52px;
+  --sidebar-width: 250px;
+  /* Updated from 260px */
+  --header-height: 64px;
 
   /* ==========================================
      RADIUS
      ========================================== */
-  --radius-sm: 6px;
-  --radius-md: 8px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
   --radius-lg: 12px;
+  /* Consistent 12px strategy */
   --radius-xl: 16px;
   --radius-2xl: 16px;
-  /* Added matching design system */
   --radius-full: 9999px;
 
   /* ==========================================
      TYPOGRAPHY
      ========================================== */
-  --font-primary: 'Inter', 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+  --font-primary: 'Inter',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  --font-mono: 'JetBrains Mono',
+    monospace;
 
   /* ==========================================
-     LEGACY ALIASES
+     LEGACY ALIASES (Refactored)
      ========================================== */
   --bg-primary: var(--background-base);
   --bg-secondary: var(--background-elevated);
@@ -119,16 +133,7 @@
   --text-secondary: var(--foreground-muted);
   --text-muted: var(--foreground-subtle);
   --accent-primary: var(--accent);
-  --accent-secondary: var(--accent-bright);
   --border-color: var(--border-default);
-  --primary: var(--accent);
-
-  /* File Category Colors */
-  --color-category-images: #5865F2;
-  --color-category-videos: #06b6d4;
-  --color-category-audio: #3BA55C;
-  --color-category-documents: #f59e0b;
-  --color-category-other: #6b7280;
 }
 
 *,
@@ -151,28 +156,10 @@ body {
   font-size: 14px;
   line-height: 1.5;
   color: var(--foreground);
-  /* Layered Background System */
   background-color: var(--background-base);
-  background-image:
-    radial-gradient(ellipse at top, #0a0a0f 0%, #050506 50%, #020203 100%);
-  background-attachment: fixed;
-  overflow: hidden;
+  /* #18181B */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-/* Noise Texture Overlay */
-body::before {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.015'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: var(--z-overlay);
-  opacity: 0.4;
 }
 
 /* Scrollbar */
@@ -186,12 +173,12 @@ body::before {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: #27272A;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: #3F3F46;
 }
 
 /* Focus States */
@@ -202,7 +189,7 @@ body::before {
 
 /* Selection */
 ::selection {
-  background: var(--accent);
+  background: rgba(249, 115, 22, 0.2);
   color: white;
 }
 
@@ -218,7 +205,7 @@ button {
 a {
   color: var(--accent);
   text-decoration: none;
-  transition: color var(--transition-fast);
+  transition: color var(--duration-fast);
 }
 
 a:hover {
@@ -227,16 +214,10 @@ a:hover {
 
 /* Utility Classes for Design System */
 .gradient-text {
-  background: linear-gradient(to bottom, white 0%, rgba(255, 255, 255, 0.7) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  /* Removed complex gradients for simpler high contrast */
+  color: #FFFFFF;
 }
 
 .gradient-text-accent {
-  background: linear-gradient(135deg, var(--accent) 0%, #7289da 50%, var(--accent) 100%);
-  background-size: 200%;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--accent);
 }

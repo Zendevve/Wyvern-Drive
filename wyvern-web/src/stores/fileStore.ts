@@ -251,6 +251,24 @@ export const useFileStore = create<FileStore>()(
           }
           // CRITICAL: Set both fileManager AND userId - loadFiles needs userId!
           set({ fileManager: manager, userId: manager.getUserId() })
+
+          // SYNC: Persist webhooks to Supabase profile (for Share Link refreshing)
+          // This enables the backend to access the user's webhooks when serving shared files
+          try {
+            const { error } = await supabase
+              .from('profiles')
+              .upsert({
+                id: manager.getUserId(),
+                webhook_urls: urls,
+                server_boost_level: serverBoostLevel,
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'id' })
+
+            if (error) console.error('[FileStore] Failed to sync webhooks to profile:', error)
+            else console.log('[FileStore] Synced webhooks to profile for sharing support')
+          } catch (e) {
+            console.error('[FileStore] Profile sync error:', e)
+          }
         })();
 
         (window as unknown as { __wyvernInitPromise?: Promise<void> }).__wyvernInitPromise = initPromise
@@ -546,7 +564,15 @@ export const useFileStore = create<FileStore>()(
           })
         } catch (error) {
           console.error(`Failed to download ${file.name}:`, error)
-          alert(`Failed to download ${file.name}: ${(error as Error).message}`)
+          const msg = (error as Error).message || String(error)
+
+          if (msg.includes('404')) {
+            alert(`Download Failed: The file link has expired (404). Discord attachment links expire after 24 hours. Please re-upload the file or refresh the cache.`)
+          } else if (msg.includes('403')) {
+            alert(`Download Failed: Access denied (403). The link signature may have expired.`)
+          } else {
+            alert(`Failed to download ${file.name}: ${msg}\n\nTip: If this file is encrypted, ensure your encryption password is set in Settings.`)
+          }
         }
 
         set((state) => {
@@ -630,19 +656,31 @@ export const useFileStore = create<FileStore>()(
 
       logout: async () => {
         const { userId } = get()
+
         // Clear offline cache for this user
         if (userId) {
           clearUserCache(userId).catch(console.error)
         }
 
-        // Sign out of Supabase
-        await supabase.auth.signOut()
-
-        // Clear migrated webhooks backup to prevent auto-sync on next login
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('wyvern-saved-webhooks')
+        // Sign out of Supabase (use local scope to avoid 403 errors)
+        try {
+          await supabase.auth.signOut({ scope: 'local' })
+        } catch (e) {
+          console.warn('[FileStore] Logout API failed, clearing local state anyway:', e)
         }
 
+        // Clear all Supabase auth data from localStorage to force logout
+        // This ensures we log out even if the API call fails
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('wyvern-saved-webhooks')
+          // Clear Supabase auth keys
+          const keysToRemove = Object.keys(localStorage).filter(key =>
+            key.startsWith('sb-') || key.includes('supabase')
+          )
+          keysToRemove.forEach(key => localStorage.removeItem(key))
+        }
+
+        // Clear store state
         set({
           webhookUrl: null,
           webhookUrls: [],
@@ -659,6 +697,9 @@ export const useFileStore = create<FileStore>()(
           isSyncing: false,
           isOffline: false,
         })
+
+        // Force page reload to clear any cached auth state
+        window.location.href = '/'
       },
 
       setCurrentPath: (path) => set({ currentPath: path, selectedIds: new Set(), lastSelectedId: null }),

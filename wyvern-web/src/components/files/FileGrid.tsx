@@ -4,7 +4,7 @@ import { FileItem } from './FileItem'
 import { VirtualFileGrid } from './VirtualFileGrid'
 import { useFileStore } from '../../stores/fileStore'
 import { useFilteredFiles } from '../../hooks/useFilteredFiles'
-import './FileGrid.css'
+// Removed FileGrid.css
 
 interface FileGridProps {
   files: Record<string, WyvernFile | WyvernFolder>
@@ -12,10 +12,7 @@ interface FileGridProps {
 }
 
 export function FileGrid({ files, viewMode }: FileGridProps) {
-  // Use filtered/sorted files from hook
   const { files: filteredFiles, hasFilter } = useFilteredFiles()
-
-  // Fall back to passed files if no filter (for backward compat)
   const items = hasFilter ? filteredFiles : Object.values(files)
   const { clearSelection } = useFileStore.getState()
 
@@ -30,22 +27,18 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
   const [selectionBox, setSelectionBox] = useState<{ startX: number, startY: number, currentX: number, currentY: number } | null>(null)
   const didDrag = useRef(false)
 
-  // Items are already sorted by useFilteredFiles hook
-
-  // Mouse handlers for drag selection
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Only left click, and only on background (not if target is file item)
     if (e.button !== 0) return
-    if ((e.target as HTMLElement).closest('.file-item')) return
+    // Ignore clicks on file items themselves (let their handlers work)
+    if ((e.target as HTMLElement).closest('[role="button"]')) return
 
-    // Start selection
     setIsSelecting(true)
     didDrag.current = false
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) return
 
-    const startX = e.clientX - rect.left
-    const startY = e.clientY - rect.top
+    const startX = e.clientX - rect.left + containerRef.current!.scrollLeft
+    const startY = e.clientY - rect.top + containerRef.current!.scrollTop
 
     setSelectionBox({
       startX,
@@ -54,7 +47,6 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
       currentY: startY
     })
 
-    // Clear previous selection unless shift/ctrl pressed
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
       clearSelection()
     }
@@ -64,10 +56,9 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
     if (!isSelecting || !selectionBox || !containerRef.current) return
 
     const rect = containerRef.current.getBoundingClientRect()
-    const currentX = e.clientX - rect.left
-    const currentY = e.clientY - rect.top
+    const currentX = e.clientX - rect.left + containerRef.current.scrollLeft
+    const currentY = e.clientY - rect.top + containerRef.current.scrollTop
 
-    // Check if moved significantly to consider it a drag
     if (!didDrag.current && (Math.abs(currentX - selectionBox.startX) > 5 || Math.abs(currentY - selectionBox.startY) > 5)) {
       didDrag.current = true
     }
@@ -77,21 +68,20 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
 
   const handleMouseUp = () => {
     if (isSelecting && didDrag.current && selectionBox && containerRef.current) {
-      // Finalize selection logic
       const boxLeft = Math.min(selectionBox.startX, selectionBox.currentX)
       const boxTop = Math.min(selectionBox.startY, selectionBox.currentY)
       const boxWidth = Math.abs(selectionBox.currentX - selectionBox.startX)
       const boxHeight = Math.abs(selectionBox.currentY - selectionBox.startY)
 
-      const fileItems = containerRef.current.querySelectorAll('.file-item')
+      const fileItems = containerRef.current.querySelectorAll('[role="button"]')
       fileItems.forEach(item => {
         const itemRect = (item as HTMLElement).getBoundingClientRect()
         const containerRect = containerRef.current!.getBoundingClientRect()
 
-        const itemLeft = itemRect.left - containerRect.left
-        const itemTop = itemRect.top - containerRect.top
+        // Calculate item position relative to container, accounting for scroll
+        const itemLeft = itemRect.left - containerRect.left + containerRef.current!.scrollLeft
+        const itemTop = itemRect.top - containerRect.top + containerRef.current!.scrollTop
 
-        // Check intersection (AABB)
         if (
           boxLeft < itemLeft + itemRect.width &&
           boxLeft + boxWidth > itemLeft &&
@@ -101,7 +91,6 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
           const id = (item as HTMLElement).getAttribute('data-id')
           if (id) {
             const store = useFileStore.getState()
-            // Add to selection if not already selected
             if (!store.selectedIds.has(id)) {
               store.toggleSelection(id)
             }
@@ -112,73 +101,49 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
 
     setIsSelecting(false)
     setSelectionBox(null)
-
-    // Allow queue to drain before resetting didDrag so click handler can see it
     setTimeout(() => { didDrag.current = false }, 0)
   }
 
   const handleBackgroundClick = (e: React.MouseEvent) => {
+    // Only clear if we clicked background and didn't drag
     if (e.target === e.currentTarget && !didDrag.current) {
       clearSelection()
     }
   }
 
-  const boxStyle = selectionBox ? {
-    left: Math.min(selectionBox.startX, selectionBox.currentX),
-    top: Math.min(selectionBox.startY, selectionBox.currentY),
-    width: Math.abs(selectionBox.currentX - selectionBox.startX),
-    height: Math.abs(selectionBox.currentY - selectionBox.startY)
-  } : {}
-
-  // Arrow key navigation between file items
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
 
     e.preventDefault()
-    const fileItems = containerRef.current?.querySelectorAll('.file-item') as NodeListOf<HTMLElement>
+    const fileItems = containerRef.current?.querySelectorAll('[role="button"]') as NodeListOf<HTMLElement>
     if (!fileItems || fileItems.length === 0) return
 
-    // Find currently focused item
     const currentIndex = Array.from(fileItems).findIndex(el => el === document.activeElement)
     let newIndex = currentIndex
-
-    // Grid has ~6 items per row (approximate), list is 1
-    const itemsPerRow = viewMode === 'grid' ? 6 : 1
+    const itemsPerRow = viewMode === 'grid' ? 6 : 1 // Approximate for grid
 
     switch (e.key) {
-      case 'ArrowRight':
-        newIndex = Math.min(currentIndex + 1, fileItems.length - 1)
-        break
-      case 'ArrowLeft':
-        newIndex = Math.max(currentIndex - 1, 0)
-        break
-      case 'ArrowDown':
-        newIndex = Math.min(currentIndex + itemsPerRow, fileItems.length - 1)
-        break
-      case 'ArrowUp':
-        newIndex = Math.max(currentIndex - itemsPerRow, 0)
-        break
-      case 'Home':
-        newIndex = 0
-        break
-      case 'End':
-        newIndex = fileItems.length - 1
-        break
+      case 'ArrowRight': newIndex = Math.min(currentIndex + 1, fileItems.length - 1); break
+      case 'ArrowLeft': newIndex = Math.max(currentIndex - 1, 0); break
+      case 'ArrowDown': newIndex = Math.min(currentIndex + itemsPerRow, fileItems.length - 1); break
+      case 'ArrowUp': newIndex = Math.max(currentIndex - itemsPerRow, 0); break
+      case 'Home': newIndex = 0; break;
+      case 'End': newIndex = fileItems.length - 1; break;
     }
 
     if (newIndex !== currentIndex && newIndex >= 0) {
       fileItems[newIndex].focus()
-      // Also select the item
       const id = fileItems[newIndex].getAttribute('data-id')
-      if (id) {
-        useFileStore.getState().selectFile(id)
-      }
+      if (id) useFileStore.getState().selectFile(id)
     }
   }, [viewMode])
 
   return (
     <div
-      className={`file-grid ${viewMode}`}
+      className={`relative min-h-[calc(100vh-140px)] outline-none ${viewMode === 'grid'
+          ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4 content-start'
+          : 'flex flex-col gap-1'
+        }`}
       ref={containerRef}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -187,6 +152,7 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
       onClick={handleBackgroundClick}
       onKeyDown={handleKeyDown}
       role="grid"
+      tabIndex={0}
       aria-label="File list"
     >
       {items.map((item) => (
@@ -194,7 +160,15 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
       ))}
 
       {isSelecting && selectionBox && (
-        <div className="selection-box" style={boxStyle} />
+        <div
+          className="absolute bg-blue-500/20 border border-blue-500/50 z-50 pointer-events-none"
+          style={{
+            left: Math.min(selectionBox.startX, selectionBox.currentX),
+            top: Math.min(selectionBox.startY, selectionBox.currentY),
+            width: Math.abs(selectionBox.currentX - selectionBox.startX),
+            height: Math.abs(selectionBox.currentY - selectionBox.startY)
+          }}
+        />
       )}
     </div>
   )

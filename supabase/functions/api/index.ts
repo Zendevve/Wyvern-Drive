@@ -66,52 +66,103 @@ function extractDiscordIds(url: string): { channelId: string; messageId: string;
 // Returns the fresh URL or null if refresh failed
 async function refreshDiscordUrl(
   channelId: string,
-  messageId: string,
-  filename: string
+  messageId: string | undefined,
+  filename: string,
+  webhookUrl?: string
 ): Promise<string | null> {
+
+  // Strategy 0: Webhook Fetch (Preferred for BYO Storage)
+  if (webhookUrl && messageId) {
+    try {
+      console.log(`[refreshDiscordUrl] Trying webhook refresh for msg ${messageId.substring(0, 5)}...`)
+      // Extract ID and Token from webhook URL
+      // https://discord.com/api/webhooks/{id}/{token}
+      const match = webhookUrl.match(/webhooks\/(\d+)\/([^\/?]+)/)
+      if (match) {
+        const [, wbId, wbToken] = match
+        const res = await fetch(`https://discord.com/api/v10/webhooks/${wbId}/${wbToken}/messages/${messageId}`)
+        if (res.ok) {
+          const message = await res.json()
+          const attachment = message.attachments?.find((a: any) => a.filename === filename) || message.attachments?.[0]
+          if (attachment) {
+            console.log(`[refreshDiscordUrl] Webhook refresh success!`)
+            return attachment.url
+          }
+        } else {
+          console.warn(`[refreshDiscordUrl] Webhook fetch failed: ${res.status} ${await res.text()}`)
+        }
+      } else {
+        console.warn(`[refreshDiscordUrl] Invalid webhook URL format`)
+      }
+    } catch (e) {
+      console.error("[refreshDiscordUrl] Webhook error:", e)
+    }
+  } else {
+    console.log(`[refreshDiscordUrl] Skipping webhook: HasUrl=${!!webhookUrl}, HasMsgId=${!!messageId}`)
+  }
+
+  // Strategy 1: Bot Token (Fallback for dev / legacy)
   const botToken = Deno.env.get("DISCORD_BOT_TOKEN")
   if (!botToken) {
-    console.error("[refreshDiscordUrl] No DISCORD_BOT_TOKEN configured")
+    // If no bot token and webhook failed/missing, we can't refresh
     return null
   }
 
-  try {
-    const response = await fetch(
-      `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
-      {
-        headers: {
-          'Authorization': `Bot ${botToken}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    )
+  const headers = {
+    'Authorization': `Bot ${botToken}`,
+    'Content-Type': 'application/json'
+  }
 
-    if (!response.ok) {
-      console.error(`[refreshDiscordUrl] Discord API error: ${response.status}`)
+  try {
+    // Direct Message Fetch via Bot
+    if (messageId) {
+      const response = await fetch(
+        `https://discord.com/api/v10/channels/${channelId}/messages/${messageId}`,
+        { headers }
+      )
+
+      if (response.ok) {
+        const message = await response.json()
+        const attachment = message.attachments.find((a: any) => a.filename === filename) || message.attachments[0]
+        if (attachment) return attachment.url
+      }
+    }
+
+    // Channel History Search via Bot (Deep Fallback)
+    // Only works if Bot is in the channel
+    // SAFETY: Do not search for generic filenames ("chunk_XX") as they are not unique
+    // and will lead to data corruption (serving the wrong file/user's chunk).
+    if (filename.startsWith('chunk_') || filename === 'file') {
+      console.warn(`[refreshDiscordUrl] Skipping search for generic filename '${filename}' to prevent data corruption.`)
       return null
     }
 
-    const message = await response.json()
+    const searchResponse = await fetch(
+      `https://discord.com/api/v10/channels/${channelId}/messages?limit=50`,
+      { headers }
+    )
 
-    // Find matching attachment by filename
-    if (message.attachments && message.attachments.length > 0) {
-      // If filename matches, use that attachment; otherwise use first one
-      const attachment = message.attachments.find((a: { filename: string }) =>
-        a.filename === filename
-      ) || message.attachments[0]
-
-      return attachment.url
+    if (searchResponse.ok) {
+      const messages = await searchResponse.json()
+      for (const msg of messages) {
+        const attachment = msg.attachments?.find((a: any) => a.filename === filename)
+        if (attachment) return attachment.url
+      }
     }
 
     return null
   } catch (e) {
-    console.error("[refreshDiscordUrl] Error:", e)
+    console.error("[refreshDiscordUrl] Bot error:", e)
     return null
   }
 }
 
 // Try to get a valid URL for a chunk, refreshing if needed
-async function getValidChunkUrl(chunk: { url: string; channelId?: string; messageId?: string }): Promise<string | null> {
+// Try to get a valid URL for a chunk, refreshing if needed
+async function getValidChunkUrl(
+  chunk: { url: string; channelId?: string; messageId?: string },
+  webhookUrl?: string
+): Promise<string | null> {
   // First, try the stored URL directly
   try {
     const testResponse = await fetch(chunk.url, { method: 'HEAD' })
@@ -130,7 +181,7 @@ async function getValidChunkUrl(chunk: { url: string; channelId?: string; messag
     return null
   }
 
-  const freshUrl = await refreshDiscordUrl(ids.channelId, ids.messageId, ids.filename)
+  const freshUrl = await refreshDiscordUrl(ids.channelId, ids.messageId, ids.filename, webhookUrl)
   if (freshUrl) {
     console.log("[getValidChunkUrl] Successfully refreshed Discord URL")
     return freshUrl
@@ -376,7 +427,25 @@ Deno.serve(async (req: Request) => {
 
       for (const { chunk, sliceStart, sliceEnd } of neededChunks) {
         try {
-          const response = await fetch(chunk.url)
+          // Use getValidChunkUrl to handle expired links automatically
+          // We need to map the ChunkInfo to what getValidChunkUrl expects
+          const ids = extractDiscordIds(chunk.url)
+
+          let fetchUrl = chunk.url
+          // Optimistically try to get ids from url if not in chunk object
+          // note: chunk object in DB might not have m/cid fields if old format
+          // but extractDiscordIds can get them from the URL if it's a discord URL
+
+          if (ids) {
+            const validUrl = await getValidChunkUrl({
+              url: chunk.url,
+              messageId: chunk.messageId || ids.messageId,
+              channelId: ids.channelId // We don't store channelId in old chunks, but can extract from URL
+            })
+            if (validUrl) fetchUrl = validUrl
+          }
+
+          const response = await fetch(fetchUrl)
           if (!response.ok) {
             throw new Error(`Failed to fetch chunk: ${response.status}`)
           }
@@ -780,6 +849,43 @@ Deno.serve(async (req: Request) => {
       return json({ success: true })
     }
 
+    // POST /refresh-urls - Batch refresh Discord URLs
+    if (path === "/refresh-urls" && method === "POST") {
+      const { chunks, webhookUrl } = await req.json()
+      if (!Array.isArray(chunks)) {
+        return json({ error: "Invalid chunks array" }, 400)
+      }
+
+      console.log(`[REFRESH] Refreshing ${chunks.length} URLs. Webhook provided: ${!!webhookUrl}`)
+      const refreshed: Record<number, string> = {}
+
+      // Process in parallel with concurrency limit
+      const BATCH_SIZE = 5
+      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+        const batch = chunks.slice(i, i + BATCH_SIZE)
+        await Promise.all(batch.map(async (chunk) => {
+          if (!chunk.m || !chunk.cid) {
+            // Try to extract from URL if missing
+            const ids = extractDiscordIds(chunk.url || '') // Assuming fallback extraction
+            if (ids) {
+              chunk.m = ids.messageId
+              chunk.cid = ids.channelId
+              chunk.filename = ids.filename
+            } else {
+              return
+            }
+          }
+
+          const newUrl = await refreshDiscordUrl(chunk.cid, chunk.m, chunk.filename || 'file', webhookUrl)
+          if (newUrl) {
+            refreshed[chunk.i] = newUrl
+          }
+        }))
+      }
+
+      return json({ refreshed })
+    }
+
     // DELETE /versions/:userId/:fileId/:versionId
     const deleteVersionMatch = path.match(/^\/versions\/([^\/]+)\/(\d+)\/(\d+)$/)
     if (deleteVersionMatch && method === "DELETE") {
@@ -1024,14 +1130,21 @@ Deno.serve(async (req: Request) => {
       const [, shareId] = publicShareMatch
       const supabase = getSupabase()
 
-      // Get share
+      // Get share AND owner's profile (for webhook access)
+      // We need the owner's webhook to refresh the file links
       const { data: share } = await supabase
         .from("shares")
-        .select("*, files(*)")
+        .select("*, files(*), profiles:user_id(webhook_urls)")
         .eq("id", shareId)
         .maybeSingle()
 
       if (!share) return json({ error: "Share not found" }, 404)
+
+      // Get owner's webhook (primary strategy for BYO Storage sharing)
+      // Note: profiles needs to be joined. If the relation name differs, this might need adjust.
+      // But assuming standard FK relations, profiles:user_id should work if named correctly.
+      // If not, we can do a second fetch if this comes back null.
+      const ownerWebhook = share.profiles?.webhook_urls?.[0] || null
 
       // Check expiry
       if (share.expires_at && new Date(share.expires_at) < new Date()) {
@@ -1096,11 +1209,12 @@ Deno.serve(async (req: Request) => {
       }
 
       // CASE 2: Large file without storage - requires extension
-      const SHARE_STORAGE_THRESHOLD = 1 * 1024 * 1024
-      if (share.file_size && share.file_size >= SHARE_STORAGE_THRESHOLD) {
+      // LIMIT: 100MB for web streaming (to avoid browser OOM and timeouts)
+      const SHARE_STREAM_LIMIT = 100 * 1024 * 1024
+      if (share.file_size && share.file_size >= SHARE_STREAM_LIMIT) {
         console.log(`[Share Download] Large file (${(share.file_size / 1024 / 1024).toFixed(2)}MB) requires extension`)
         return json({
-          error: "This file is too large for direct download",
+          error: "This file is too large for web sharing (Limit: 100MB). Please install the Wyvern Drive extension.",
           requiresExtension: true,
           fileSize: share.file_size,
           fileName: file.name
@@ -1151,13 +1265,13 @@ Deno.serve(async (req: Request) => {
       // Pre-validate first chunk URL to fail fast if refresh is needed but impossible
       const testChunk = chunks[0]
       if (testChunk) {
-        const validUrl = await getValidChunkUrl({ url: testChunk.url })
+        const validUrl = await getValidChunkUrl({ url: testChunk.url }, ownerWebhook)
         if (!validUrl) {
           const hasBotToken = !!Deno.env.get("DISCORD_BOT_TOKEN")
-          if (!hasBotToken) {
+          if (!hasBotToken && !ownerWebhook) {
             return json({
               error: "Share links require server configuration. Please contact the file owner.",
-              details: "Discord CDN URLs have expired and cannot be refreshed without a Discord bot token."
+              details: "Discord CDN URLs have expired and cannot be refreshed (Owner has no synced Webhook)."
             }, 503)
           }
           return json({ error: "Failed to access file content" }, 500)
@@ -1171,7 +1285,8 @@ Deno.serve(async (req: Request) => {
             for (const chunk of chunks) {
               try {
                 // Get valid URL (refreshes if expired)
-                const validUrl = await getValidChunkUrl({ url: chunk.url })
+                // PASS OWNER WEBHOOK HERE
+                const validUrl = await getValidChunkUrl({ url: chunk.url }, ownerWebhook)
                 if (!validUrl) {
                   throw new Error(`Failed to get valid URL for chunk ${chunk.index}`)
                 }

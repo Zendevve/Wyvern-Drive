@@ -10,8 +10,8 @@ interface ShareModalProps {
   onClose: () => void
 }
 
-// Share links can only directly download files under 1MB (Supabase Storage limit)
-const SHARE_SIZE_LIMIT = 1 * 1024 * 1024
+// Share links can only directly download files under 100MB (Backend proxy streaming limit)
+const SHARE_SIZE_LIMIT = 100 * 1024 * 1024
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -103,7 +103,7 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
               </div>
               <div className="banner-content">
                 <strong>File too large ({formatSize(file.size)})</strong>
-                <p>Cannot share files larger than 1MB due to storage limits.</p>
+                <p>Cannot share files larger than 100MB via web (requires extension).</p>
               </div>
             </div>
           )}
