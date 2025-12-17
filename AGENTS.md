@@ -211,6 +211,9 @@ If no new rule is detected → do not update the file.
 - No magic numbers (extract to constants)
 - No pure black (#000000) for text (use #121212)
 - No justified text alignment (causes readability issues)
+- **No hardcoded border-radius values** (use design system variables)
+- **No colors outside design system** (use CSS custom properties)
+- **No form inputs without labels** (accessibility violation)
 
 ### Patterns
 
@@ -218,6 +221,70 @@ If no new rule is detected → do not update the file.
 - **File download:** fetch metadata → download chunks → decrypt → merge to Blob
 - **Errors:** try/catch with typed error classes, user-facing messages
 - **State:** Zustand for global state, React hooks for local state
+
+---
+
+## Quality Standards (From Audit)
+
+### Form Inputs (NEVER VIOLATE)
+
+- **Every `<input>` must have associated `<label>` with `htmlFor`**
+  ```tsx
+  // ❌ BAD
+  <input type="text" placeholder="Name" />
+
+  // ✅ GOOD
+  <label htmlFor="name-input">Name</label>
+  <input id="name-input" type="text" />
+  ```
+
+- **Error states must use: color + icon + text**
+  ```tsx
+  {error && (
+    <div className="error" role="alert">
+      <AlertIcon aria-hidden="true" />
+      <p id="error-msg">{error}</p>
+    </div>
+  )}
+  ```
+
+- **Use `aria-invalid` and `aria-describedby` for errors**
+
+### Button Standards (ALWAYS)
+
+- **Capitalization:** Title Case ("Upload File", not "upload file" or "UPLOAD FILE")
+- **Padding:** Multiple of 4px (8px, 12px, 16px) — **never 14px, 10px, etc.**
+- **Radius:** Use `var(--radius-lg)` from design system, **never hardcoded**
+- **Touch targets:** Minimum 44×44px on mobile (use padding to expand)
+
+### Design System Compliance (ALWAYS)
+
+- **Border radius:** Use CSS variables only
+  ```css
+  /* ❌ BAD */
+  border-radius: 8px;
+
+  /* ✅ GOOD */
+  border-radius: var(--radius-lg);
+  ```
+
+- **Colors:** Use design system variables only
+  ```css
+  /* ❌ BAD */
+  background: #8B5CF6;
+
+  /* ✅ GOOD */
+  background: var(--accent);
+  ```
+
+- **Spacing:** All spacing follows 4px grid (4, 8, 12, 16, 20, 24, 32, 40...)
+  ```css
+  /* ❌ BAD */
+  padding: 10px 14px;
+
+  /* ✅ GOOD */
+  padding: 12px 16px;
+  ```
 
 ---
 

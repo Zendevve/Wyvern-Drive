@@ -59,6 +59,14 @@
   font-weight: 600;
 }
 
+.input-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--foreground-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .modal-content input {
   width: 100%;
   padding: var(--space-2) var(--space-3);
@@ -70,6 +78,10 @@
   font-size: 14px;
   font-family: inherit;
   transition: border-color var(--transition-fast);
+}
+
+.modal-content input[aria-invalid="true"] {
+  border-color: var(--error);
 }
 
 .modal-content input:focus {
@@ -113,11 +125,25 @@
 }
 
 .error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
   padding: var(--space-3);
   background: var(--error-bg);
-  border: 1px solid rgba(237, 66, 69, 0.3);
+  border: 1px solid rgba(244, 63, 94, 0.3);
   border-radius: var(--radius-md);
   color: var(--error);
   margin-bottom: var(--space-3);
   font-size: 13px;
+}
+
+.error-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.error p {
+  margin: 0;
+  line-height: 1.4;
 }

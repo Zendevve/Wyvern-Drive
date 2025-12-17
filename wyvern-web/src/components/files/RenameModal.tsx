@@ -42,15 +42,26 @@ export function RenameModal() {
         aria-modal="true"
         aria-labelledby="rename-modal-title"
       >
-        <h3 id="rename-modal-title">Rename</h3>
+        <h3 id="rename-modal-title">Rename File</h3>
         <form onSubmit={handleSubmit}>
+          <label htmlFor="rename-input" className="input-label">
+            New name
+          </label>
           <input
+            id="rename-input"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
+            aria-invalid={!!error}
+            aria-describedby={error ? "rename-error" : undefined}
           />
-          {error && <p className="error">{error}</p>}
+          {error && (
+            <div className="error" role="alert">
+              <span className="error-icon" aria-hidden="true">⚠</span>
+              <p id="rename-error">{error}</p>
+            </div>
+          )}
           <div className="modal-actions">
             <button type="button" onClick={() => setActiveModal(null)}>Cancel</button>
             <button type="submit" className="primary">Rename</button>

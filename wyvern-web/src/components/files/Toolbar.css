@@ -31,10 +31,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
+  padding: 8px 16px;
+  /* Fixed: was 14px, now 16px for 4px grid */
   background: #27272A;
   /* bg-input */
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  /* Fixed: use design system variable */
   color: #FFFFFF;
   /* text-main */
   font-size: 13px;
@@ -84,7 +86,8 @@
   /* bg-input */
   border: 1px solid #3F3F46;
   /* border-active */
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  /* Fixed: use design system variable */
   color: #FFFFFF;
   /* text-main */
   font-size: 13px;
@@ -106,8 +109,10 @@
 .search-clear {
   position: absolute;
   right: 8px;
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  /* Fixed: increased from 20px for better touch target */
+  height: 28px;
+  /* Fixed: increased from 20px for better touch target */
   background: #3F3F46;
   /* border-active */
   border: none;
@@ -143,7 +148,8 @@
   background: #27272A;
   /* bg-input */
   border: 1px solid transparent;
-  border-radius: 20px;
+  border-radius: var(--radius-full);
+  /* Fixed: use design system variable for pills */
   color: #A1A1AA;
   /* text-secondary */
   font-size: 12px;
@@ -179,7 +185,8 @@
   background: #27272A;
   /* bg-input */
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  /* Fixed: use design system variable */
   color: #FFFFFF;
   /* text-main */
   font-size: 12px;
@@ -202,7 +209,8 @@
   /* bg-card */
   border: 1px solid #27272A;
   /* border-card */
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
+  /* Fixed: use design system variable */
   padding: 4px;
   z-index: 100;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
@@ -216,7 +224,8 @@
   padding: 8px 12px;
   background: none;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  /* Fixed: use design system variable */
   color: #FFFFFF;
   /* text-main */
   font-size: 13px;
@@ -239,7 +248,8 @@
   display: flex;
   background: #27272A;
   /* bg-input */
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
+  /* Fixed: use design system variable */
   overflow: hidden;
 }
 

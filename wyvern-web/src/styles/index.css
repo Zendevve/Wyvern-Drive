@@ -189,7 +189,8 @@ body {
 
 /* Selection */
 ::selection {
-  background: rgba(249, 115, 22, 0.2);
+  background: var(--accent-glow);
+  /* Fixed: use design system accent instead of orange */
   color: white;
 }
 
