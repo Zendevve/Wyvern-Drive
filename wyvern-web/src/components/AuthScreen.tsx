@@ -29,7 +29,7 @@ export function AuthScreen({ defaultView = 'sign_in' }: AuthScreenProps) {
   }, [navigate])
 
   return (
-    <div className="min-h-screen bg-[#0a0a0c] flex flex-col items-center justify-center p-6 overflow-y-auto">
+    <div className="min-h-screen bg-bg-app flex flex-col items-center justify-center p-6 overflow-y-auto">
       {/* Subtle Grid Background */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-[0.03]"
         style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)', backgroundSize: '60px 60px' }}>
@@ -44,16 +44,16 @@ export function AuthScreen({ defaultView = 'sign_in' }: AuthScreenProps) {
       <div className="relative z-10 w-full max-w-md">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 text-white font-medium mb-12 justify-center">
-          <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/30 flex items-center justify-center text-accent">
             <Lock size={16} />
           </div>
           <span className="text-lg font-[Playfair_Display] tracking-tight">Wyvern</span>
         </Link>
 
         {/* Card */}
-        <div className="bg-[#141418] border border-white/5 rounded-2xl p-8 relative overflow-hidden">
+        <div className="bg-bg-card border border-border-card rounded-2xl p-8 relative overflow-hidden">
           {/* Subtle top sheen */}
-          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-accent/20 to-transparent"></div>
 
           <div className="text-center mb-8">
             <h1 className="text-3xl font-[Playfair_Display] text-white mb-2">
@@ -71,9 +71,9 @@ export function AuthScreen({ defaultView = 'sign_in' }: AuthScreenProps) {
               variables: {
                 default: {
                   colors: {
-                    brand: '#ffffff',
-                    brandAccent: '#e5e5e5',
-                    brandButtonText: '#0a0a0c',
+                    brand: '#8B5CF6',
+                    brandAccent: '#7C3AED',
+                    brandButtonText: '#ffffff',
                     defaultButtonBackground: 'rgba(255,255,255,0.05)',
                     defaultButtonBackgroundHover: 'rgba(255,255,255,0.1)',
                     inputBackground: 'rgba(255,255,255,0.03)',

@@ -1,12 +1,14 @@
-/* FileItem - Linear/Modern Style */
+/* FileItem - Wyvern Violet Theme */
 
 .file-item {
   display: flex;
   flex-direction: column;
   padding: 16px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  background: #18181B;
+  /* bg-card */
+  border: 1px solid #27272A;
+  /* border-card */
+  border-radius: 12px;
   cursor: pointer;
   transition: all 200ms ease-out;
   position: relative;
@@ -14,18 +16,21 @@
 }
 
 .file-item:hover {
-  background: var(--surface-hover);
-  border-color: var(--border-hover);
+  background: #27272A;
+  /* bg-input */
+  border-color: #3F3F46;
+  /* border-active */
   transform: translateY(-2px);
-  box-shadow:
-    0 0 0 1px var(--border-hover),
-    0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 .file-item.selected {
-  border-color: var(--accent);
-  background: rgba(94, 106, 210, 0.1);
-  box-shadow: 0 0 0 1px var(--accent);
+  border-color: #8B5CF6;
+  /* accent */
+  background: rgba(139, 92, 246, 0.1);
+  /* accent/10 */
+  box-shadow: 0 0 0 1px #8B5CF6;
+  /* accent */
 }
 
 /* Grid View specific */
@@ -39,13 +44,15 @@
 .file-preview {
   font-size: 42px;
   margin-bottom: 12px;
-  color: var(--foreground-muted);
+  color: #71717A;
+  /* text-tertiary */
 }
 
 .file-item:hover .file-preview {
-  color: var(--foreground);
+  color: #FFFFFF;
+  /* text-main */
   transform: scale(1.05);
-  transition: transform 200ms ease;
+  transition: all 200ms ease;
 }
 
 /* Thumbnail styles */
@@ -56,9 +63,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md, 6px);
+  border-radius: 8px;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.2);
+  background: #0F0F11;
+  /* bg-app */
 }
 
 .file-thumbnail img {
@@ -73,11 +81,13 @@
 }
 
 .file-thumbnail.loading {
-  background: rgba(255, 255, 255, 0.05);
+  background: #27272A;
+  /* bg-input */
 }
 
 .file-thumbnail .spinner {
-  color: var(--foreground-muted);
+  color: #8B5CF6;
+  /* accent */
   animation: spin 1s linear infinite;
 }
 
@@ -90,7 +100,7 @@
   position: absolute;
   bottom: 6px;
   right: 6px;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.8);
   border-radius: 4px;
   padding: 4px;
   display: flex;
@@ -121,7 +131,8 @@
 .file-name {
   font-size: 13px;
   font-weight: 500;
-  color: var(--foreground);
+  color: #FFFFFF;
+  /* text-main */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -130,7 +141,8 @@
 
 .file-meta {
   font-size: 11px;
-  color: var(--foreground-muted);
+  color: #71717A;
+  /* text-tertiary */
 }
 
 /* List View specific */
@@ -163,7 +175,8 @@
   height: 20px;
   background: rgba(245, 158, 11, 0.2);
   border-radius: 50%;
-  color: #f59e0b;
+  color: #F59E0B;
+  /* status-warning */
   position: absolute;
   top: 8px;
   right: 8px;

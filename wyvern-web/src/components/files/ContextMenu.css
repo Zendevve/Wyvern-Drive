@@ -1,68 +1,86 @@
-/* ContextMenu - Uses design tokens */
+/* ContextMenu - Wyvern Violet Theme */
 
 .context-menu {
   position: fixed;
-  background: var(--background-elevated);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  padding: var(--space-1);
-  min-width: 180px;
+  background: #18181B;
+  /* bg-card */
+  border: 1px solid #27272A;
+  /* border-card */
+  border-radius: 12px;
+  padding: 4px;
+  min-width: 200px;
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(255, 255, 255, 0.05);
-  z-index: var(--z-modal);
-  animation: menuFadeIn var(--duration-fast) var(--ease-default);
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03);
+  z-index: 9999;
+  animation: menuFadeIn 0.15s ease-out;
 }
 
 @keyframes menuFadeIn {
   from {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(-6px) scale(0.98);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
 .context-menu button {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 10px;
   width: 100%;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  color: var(--foreground);
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: #FFFFFF;
+  /* text-main */
   font-size: 13px;
   font-family: inherit;
   text-align: left;
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition: all 0.15s ease;
 }
 
 .context-menu button:hover {
-  background: var(--surface-hover);
+  background: #27272A;
+  /* bg-input */
 }
 
 .context-menu button.danger {
-  color: var(--error);
+  color: #F43F5E;
+  /* status-error */
 }
 
 .context-menu button.danger:hover {
-  background: var(--error-bg);
+  background: rgba(244, 63, 94, 0.1);
 }
 
 .context-menu button svg {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
+  color: #A1A1AA;
+  /* text-secondary */
+}
+
+.context-menu button:hover svg {
+  color: #FFFFFF;
+  /* text-main on hover */
+}
+
+.context-menu button.danger svg {
+  color: #F43F5E;
+  /* status-error */
 }
 
 .context-divider {
   height: 1px;
-  background: var(--border-default);
-  margin: var(--space-1) var(--space-2);
+  background: #27272A;
+  /* border-card */
+  margin: 4px 8px;
 }

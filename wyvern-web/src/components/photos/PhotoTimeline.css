@@ -1,10 +1,11 @@
-/* PhotoTimeline - Google Photos-like timeline view */
+/* PhotoTimeline - Google Photos-like timeline view (Wyvern Violet Theme) */
 
 .photo-timeline {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--surface);
+  background: #0F0F11;
+  /* bg-app */
 }
 
 /* Header */
@@ -12,9 +13,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--border-default);
-  background: var(--surface-raised);
+  padding: 20px 24px;
+  border-bottom: 1px solid #27272A;
+  /* border-card */
+  background: #18181B;
+  /* bg-card */
 }
 
 .timeline-title {
@@ -24,29 +27,33 @@
 }
 
 .timeline-title svg {
-  color: var(--brand);
+  color: #8B5CF6;
+  /* accent */
 }
 
 .timeline-title h2 {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: var(--foreground);
+  color: #FFFFFF;
+  /* text-main */
 }
 
 .photo-count {
   font-size: 13px;
-  color: var(--foreground-muted);
-  padding: 4px 10px;
-  background: var(--surface);
-  border-radius: var(--radius-full);
+  color: #A1A1AA;
+  /* text-secondary */
+  padding: 4px 12px;
+  background: #27272A;
+  /* bg-input */
+  border-radius: 9999px;
 }
 
 /* Scroll container */
 .timeline-scroll {
   flex: 1;
   overflow: auto;
-  padding: 0 16px;
+  padding: 16px 24px;
 }
 
 .timeline-inner {
@@ -59,51 +66,57 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 8px 8px;
-  position: sticky;
-  background: var(--surface);
+  padding: 20px 0 12px;
+  background: #0F0F11;
+  /* bg-app - sticky background */
   z-index: 10;
 }
 
 .date-label {
   font-size: 15px;
   font-weight: 600;
-  color: var(--foreground);
+  color: #FFFFFF;
+  /* text-main */
 }
 
 .date-count {
   font-size: 12px;
-  color: var(--foreground-muted);
+  color: #71717A;
+  /* text-tertiary */
 }
 
-/* Photo rows */
+/* Photo rows - responsive grid with gaps */
 .timeline-photo-row {
-  display: flex;
-  gap: 4px;
-  padding: 0 8px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  padding-bottom: 8px;
 }
 
-/* Photo thumbnails */
+/* Photo thumbnails - square aspect ratio */
 .photo-thumbnail {
-  flex: 1;
-  max-width: calc(100% / 6 - 4px);
   aspect-ratio: 1;
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
   position: relative;
-  background: var(--surface-raised);
-  transition: transform 150ms, box-shadow 150ms;
+  background: #18181B;
+  /* bg-card */
+  border: 1px solid transparent;
+  transition: all 200ms ease;
 }
 
 .photo-thumbnail:hover {
-  transform: scale(1.02);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transform: scale(1.03);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  border-color: #8B5CF6;
+  /* accent */
   z-index: 5;
 }
 
 .photo-thumbnail.selected {
-  outline: 3px solid var(--brand);
+  outline: 3px solid #8B5CF6;
+  /* accent */
   outline-offset: -3px;
 }
 
@@ -121,46 +134,55 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--foreground-muted);
+  color: #71717A;
+  /* text-tertiary */
 }
 
 .photo-loading .spinner {
   animation: spin 1s linear infinite;
+  color: #8B5CF6;
+  /* accent */
 }
 
 .photo-error {
-  background: var(--surface);
-  color: var(--danger);
+  background: #18181B;
+  /* bg-card */
+  color: #F43F5E;
+  /* status-error */
 }
 
 .photo-check {
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: var(--brand);
+  background: #8B5CF6;
+  /* accent */
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
   font-weight: bold;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
 }
 
 /* Video badge */
 .video-badge {
   position: absolute;
-  bottom: 6px;
-  right: 6px;
-  background: rgba(0, 0, 0, 0.75);
-  border-radius: 4px;
-  padding: 4px 6px;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 6px;
+  padding: 4px 8px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 4px;
   color: white;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 /* Empty state */
@@ -170,20 +192,30 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: var(--foreground-muted);
-  gap: 12px;
-  padding: 48px;
+  color: #71717A;
+  /* text-tertiary */
+  gap: 16px;
+  padding: 64px;
+}
+
+.timeline-empty svg {
+  color: #27272A;
+  /* muted icon */
 }
 
 .timeline-empty h3 {
   margin: 0;
-  color: var(--foreground);
+  color: #FFFFFF;
+  /* text-main */
   font-weight: 500;
+  font-size: 18px;
 }
 
 .timeline-empty p {
   margin: 0;
   font-size: 14px;
+  color: #A1A1AA;
+  /* text-secondary */
 }
 
 /* Loading state */
@@ -194,12 +226,14 @@
   align-items: center;
   justify-content: center;
   gap: 16px;
-  color: var(--foreground-muted);
+  color: #A1A1AA;
+  /* text-secondary */
 }
 
 .timeline-loading .spinner {
   animation: spin 1s linear infinite;
-  color: var(--brand);
+  color: #8B5CF6;
+  /* accent */
 }
 
 @keyframes spin {
@@ -212,29 +246,50 @@
   }
 }
 
-/* Responsive */
-@media (max-width: 1200px) {
-  .photo-thumbnail {
-    max-width: calc(100% / 5 - 4px);
+/* Responsive grid - more columns on larger screens, fewer on mobile */
+@media (min-width: 1600px) {
+  .timeline-photo-row {
+    grid-template-columns: repeat(8, 1fr);
+    gap: 12px;
   }
 }
 
-@media (max-width: 900px) {
-  .photo-thumbnail {
-    max-width: calc(100% / 4 - 4px);
+@media (max-width: 1400px) {
+  .timeline-photo-row {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
   }
 }
 
-@media (max-width: 600px) {
-  .photo-thumbnail {
-    max-width: calc(100% / 3 - 4px);
+@media (max-width: 1000px) {
+  .timeline-photo-row {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+}
+
+@media (max-width: 700px) {
+  .timeline-photo-row {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
   }
 
   .timeline-header {
-    padding: 12px 16px;
+    padding: 16px 16px;
   }
 
   .timeline-scroll {
-    padding: 0 8px;
+    padding: 12px 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .timeline-photo-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+  }
+
+  .photo-thumbnail {
+    border-radius: 8px;
   }
 }
