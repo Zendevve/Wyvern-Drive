@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Copy, Check, Link2, Clock, Lock, X, AlertTriangle, Info, Heart } from 'lucide-react'
+import { Copy, Check, Link2, Clock, Lock, X, AlertTriangle, Info } from 'lucide-react'
 import { useFileStore } from '../../stores/fileStore'
 import { useFocusTrap } from '../../hooks/useFocusTrap'
 import type { WyvernFile } from '../../lib/types'
@@ -32,6 +32,7 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
   // Focus trap for accessibility
   const focusTrapRef = useFocusTrap(!!file, onClose)
 
+  // Show warning for files >100MB (can still share, but recipient needs extension)
   const isLargeFile = file && file.size > SHARE_SIZE_LIMIT
 
   useEffect(() => {
@@ -95,38 +96,24 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
           <p className="file-name">{file.name}</p>
           <p className="file-size-info">{formatSize(file.size)}</p>
 
-          {/* File size limit warning */}
+          {/* Large file warning - recipient needs extension */}
           {isLargeFile && (
             <div className="share-limit-banner">
               <div className="banner-icon">
                 <AlertTriangle size={20} />
               </div>
               <div className="banner-content">
-                <strong>File too large ({formatSize(file.size)})</strong>
-                <p>Cannot share files larger than 100MB via web (requires extension).</p>
+                <strong>Large file ({formatSize(file.size)})</strong>
+                <p>Recipient needs the Wyvern extension to download files over 100MB.</p>
               </div>
             </div>
           )}
 
-          {/* Donation prompt for large files */}
-          {isLargeFile && (
-            <div className="donation-banner">
-              <div className="banner-icon">
-                <Heart size={18} />
-              </div>
-              <div className="banner-content">
-                <span>Want higher limits? <a href="https://github.com/sponsors" target="_blank" rel="noopener noreferrer" className="donation-link">Support us</a> to help cover storage costs.</span>
-              </div>
-            </div>
-          )}
-
-          {/* Small file info */}
-          {!isLargeFile && (
-            <div className="share-info-banner">
-              <Info size={14} />
-              <span>This file can be downloaded directly without the extension.</span>
-            </div>
-          )}
+          {/* Extension info banner for all files */}
+          <div className="share-info-banner">
+            <Info size={14} />
+            <span>Recipients need the free Wyvern extension to download shared files.</span>
+          </div>
 
           {!shareUrl ? (
             <>
@@ -157,7 +144,7 @@ export function ShareModal({ file, onClose }: ShareModalProps) {
               <button
                 className="create-btn"
                 onClick={handleCreate}
-                disabled={isCreating || !!isLargeFile}
+                disabled={isCreating}
               >
                 {isCreating ? 'Creating...' : 'Create Share Link'}
               </button>
