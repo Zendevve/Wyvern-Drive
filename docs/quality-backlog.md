@@ -9,11 +9,11 @@
 ## Progress Summary
 
 - ✅ **Critical:** 4/4 complete (100%)
-- 🔄 **High:** 4/6 complete (67%)
-- ⏳ **Medium:** 1/9 complete (11%)
+- ✅ **High:** 6/6 complete (100%)
+- ⏳ **Medium:** 2/9 complete (22%)
 - ⏳ **Low:** 0/5 complete (0%)
 
-**Total:** 9/24 issues resolved (38%)
+**Total:** 12/24 issues resolved (50%)
 
 ---
 
@@ -38,18 +38,14 @@
 
 - [x] **V3:** ~~Change selection color to accent violet~~ — _Fixed 2025-12-18_
 
-- [ ] **V4:** Check icon optical centering
-  - **Location:** Various icon buttons
-  - **Fix:** Visual inspection + `margin-left` compensation
-  - **Effort:** 🟡 Medium (1 hour - requires visual testing)
+- [x] **V4:** Check icon optical centering — _Audited 2025-12-18_
+  - **Result:** Icons already use flexbox centering (align-items/justify-content: center)
 
 - [x] **UX1:** Count sidebar nav items (Miller's Law) — _Audited 2025-12-18_
   - **Result:** 7 items (at limit, compliant)
 
-- [ ] **UX6:** Add upload success animation (Peak-End Rule)
-  - **Location:** Upload completion handler
-  - **Fix:** Add success toast/animation
-  - **Effort:** 🟡 Medium (1-2 hours)
+- [x] **UX6:** Add upload success animation (Peak-End Rule) — _Fixed 2025-12-18_
+  - **Fix:** Created SuccessToasts component with slide-in animation and pulse effect
 
 ---
 
