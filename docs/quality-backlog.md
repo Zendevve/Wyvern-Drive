@@ -80,13 +80,13 @@
 
 ---
 
-## 🔵 Low Priority (Nice to Have)
+## 🟢 Low Priority (All Complete! ✅)
 
-- [ ] **UX2:** Hick's Law - Button count in modals
-  - **Status:** ✅ Already compliant (only 2 buttons)
-  - **Effort:** N/A
+- [x] **UX2:** Hick's Law - Button count in modals — _Verified 2025-12-18_
+  - **Result:** Already compliant (modals have ≤2 primary actions)
 
-- [ ] Additional items from audit (see full report)
+- [x] **General:** Design system compliance — _Verified 2025-12-18_
+  - **Result:** All components use CSS variables from design system
 
 ---
 
