@@ -307,4 +307,14 @@
   .filter-chip span {
     display: none;
   }
+
+  /* UX5: Ensure adequate touch targets on mobile (44px minimum) */
+  .view-toggle button {
+    padding: 12px 14px;
+  }
+
+  .toolbar-btn {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
 }
