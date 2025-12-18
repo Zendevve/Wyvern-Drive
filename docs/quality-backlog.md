@@ -9,11 +9,11 @@
 ## Progress Summary
 
 - ✅ **Critical:** 4/4 complete (100%)
-- 🔄 **High:** 0/6 complete (0%)
-- ⏳ **Medium:** 0/9 complete (0%)
+- 🔄 **High:** 4/6 complete (67%)
+- ⏳ **Medium:** 1/9 complete (11%)
 - ⏳ **Low:** 0/5 complete (0%)
 
-**Total:** 4/24 issues resolved (17%)
+**Total:** 9/24 issues resolved (38%)
 
 ---
 
@@ -28,29 +28,23 @@
 
 ## 🟠 High Priority (Fix This Sprint)
 
-- [ ] **A4:** Add visible focus indicators
-  - **Location:** `FileGrid.tsx:154-156`
-  - **Fix:** Add custom `:focus-visible` styles to `[role="grid"]`
-  - **Effort:** 🟢 Small (15 min)
+- [x] **A4:** Add visible focus indicators — _Fixed 2025-12-18_
+  - **Fix:** Added `focus-visible:ring-2 focus-visible:ring-accent` to FileGrid
 
-- [ ] **A5:** ~~Increase touch target size (search clear button)~~ — _Fixed 2025-12-18_
+- [x] **A5:** ~~Increase touch target size (search clear button)~~ — _Fixed 2025-12-18_
 
-- [ ] **A6:** Add `aria-live` for search results
-  - **Location:** `FileGrid.tsx` (search results)
-  - **Fix:** Add live region announcing result count
-  - **Effort:** 🟢 Small (20 min)
+- [x] **A6:** Add `aria-live` for search results — _Fixed 2025-12-18_
+  - **Fix:** Added live region announcing file count
 
-- [ ] **V3:** ~~Change selection color to accent violet~~ — _Fixed 2025-12-18_
+- [x] **V3:** ~~Change selection color to accent violet~~ — _Fixed 2025-12-18_
 
 - [ ] **V4:** Check icon optical centering
   - **Location:** Various icon buttons
   - **Fix:** Visual inspection + `margin-left` compensation
   - **Effort:** 🟡 Medium (1 hour - requires visual testing)
 
-- [ ] **UX1:** Count sidebar nav items (Miller's Law)
-  - **Location:** Sidebar component
-  - **Fix:** Verify ≤7 items or group into categories
-  - **Effort:** 🟢 Small (10 min audit)
+- [x] **UX1:** Count sidebar nav items (Miller's Law) — _Audited 2025-12-18_
+  - **Result:** 7 items (at limit, compliant)
 
 - [ ] **UX6:** Add upload success animation (Peak-End Rule)
   - **Location:** Upload completion handler
@@ -61,20 +55,16 @@
 
 ## 🟡 Medium Priority (Backlog)
 
-- [ ] **A7:** Add skip link
-  - **Location:** `App.tsx`
-  - **Fix:** `<a href="#main-content">Skip to main content</a>`
-  - **Effort:** 🟢 Small (15 min)
+- [x] **A7:** Add skip link — _Fixed 2025-12-18_
+  - **Fix:** Added skip link in `App.tsx`
 
 - [ ] **A8:** Audit for generic link text
   - **Location:** Various
   - **Fix:** Replace "Click here" with descriptive text
   - **Effort:** 🟡 Medium (1 hour - needs code search)
 
-- [ ] **V5:** Increase mobile search box width
-  - **Location:** `Toolbar.css:292-294`
-  - **Fix:** Change `min-width: 150px` to `180px`
-  - **Effort:** 🟢 Small (5 min)
+- [x] **V5:** Increase mobile search box width — _Fixed 2025-12-18_
+  - **Fix:** Changed `min-width: 150px` → `180px` in `Toolbar.css`
 
 - [ ] **V6:** Verify heading hierarchy
   - **Location:** Various
