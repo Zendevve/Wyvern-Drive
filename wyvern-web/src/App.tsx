@@ -129,6 +129,14 @@ function AuthenticatedApp() {
 
   return (
     <div className="app">
+      {/* Accessibility: Skip link for keyboard users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[9999] focus:top-4 focus:left-4 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-lg"
+      >
+        Skip to main content
+      </a>
+
       <Sidebar />
       <div className="app-body">
         <header className="app-header">
@@ -140,7 +148,7 @@ function AuthenticatedApp() {
           </div>
         </header>
 
-        <main className="main-content">
+        <main id="main-content" className="main-content" role="main">
           <Routes>
             <Route path="/" element={<FileManager />} />
             <Route path="photos" element={<PhotoTimeline />} />

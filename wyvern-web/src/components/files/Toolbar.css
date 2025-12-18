@@ -300,7 +300,8 @@
 
 @media (max-width: 640px) {
   .search-box {
-    min-width: 150px;
+    min-width: 180px;
+    /* Fixed: increased from 150px for better usability */
   }
 
   .filter-chip span {

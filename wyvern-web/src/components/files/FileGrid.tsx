@@ -139,37 +139,52 @@ export function FileGrid({ files, viewMode }: FileGridProps) {
   }, [viewMode])
 
   return (
-    <div
-      className={`relative min-h-[calc(100vh-140px)] outline-none ${viewMode === 'grid'
+    <>
+      {/* Accessibility: Announce file count to screen readers */}
+      <div
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {hasFilter
+          ? `Showing ${items.length} filtered ${items.length === 1 ? 'item' : 'items'}`
+          : `${items.length} ${items.length === 1 ? 'item' : 'items'} in current folder`
+        }
+      </div>
+
+      <div
+        className={`relative min-h-[calc(100vh-140px)] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background-base ${viewMode === 'grid'
           ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4 content-start'
           : 'flex flex-col gap-1'
-        }`}
-      ref={containerRef}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onClick={handleBackgroundClick}
-      onKeyDown={handleKeyDown}
-      role="grid"
-      tabIndex={0}
-      aria-label="File list"
-    >
-      {items.map((item) => (
-        <FileItem key={item.id} file={item} viewMode={viewMode} />
-      ))}
+          }`}
+        ref={containerRef}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onClick={handleBackgroundClick}
+        onKeyDown={handleKeyDown}
+        role="grid"
+        tabIndex={0}
+        aria-label={`File list, ${items.length} items`}
+      >
+        {items.map((item) => (
+          <FileItem key={item.id} file={item} viewMode={viewMode} />
+        ))}
 
-      {isSelecting && selectionBox && (
-        <div
-          className="absolute bg-blue-500/20 border border-blue-500/50 z-50 pointer-events-none"
-          style={{
-            left: Math.min(selectionBox.startX, selectionBox.currentX),
-            top: Math.min(selectionBox.startY, selectionBox.currentY),
-            width: Math.abs(selectionBox.currentX - selectionBox.startX),
-            height: Math.abs(selectionBox.currentY - selectionBox.startY)
-          }}
-        />
-      )}
-    </div>
+        {isSelecting && selectionBox && (
+          <div
+            className="absolute bg-blue-500/20 border border-blue-500/50 z-50 pointer-events-none"
+            style={{
+              left: Math.min(selectionBox.startX, selectionBox.currentX),
+              top: Math.min(selectionBox.startY, selectionBox.currentY),
+              width: Math.abs(selectionBox.currentX - selectionBox.startX),
+              height: Math.abs(selectionBox.currentY - selectionBox.startY)
+            }}
+          />
+        )}
+      </div>
+    </>
   )
 }
