@@ -452,6 +452,11 @@ export const useFileStore = create<FileStore>()(
             alert(`Failed to upload ${file.name}`)
           }
 
+          // UX6: Trigger success toast (Peak-End Rule - celebrate completion)
+          import('../components/ui/SuccessToasts').then(({ addSuccessToast }) => {
+            addSuccessToast(file.name, 'upload')
+          }).catch(() => { }) // Ignore if import fails
+
           set((state) => {
             const newProgress = new Map(state.uploadProgress)
             newProgress.delete(tempId)

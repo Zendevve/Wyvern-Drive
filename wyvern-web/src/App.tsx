@@ -16,6 +16,7 @@ import { VersionHistoryModal } from './components/files/VersionHistoryModal'
 import { ProgressToasts } from './components/ui/ProgressToasts'
 import { GlobalSearch } from './components/ui/GlobalSearch'
 import { OfflineIndicator } from './components/ui/OfflineIndicator'
+import { SuccessToasts } from './components/ui/SuccessToasts'
 import { InstallPrompt, UpdatePrompt } from './components/ui/PWAPrompts'
 import { AudioPlayer } from './components/AudioPlayer'
 import { MediaPlayer } from './components/MediaPlayer'
@@ -161,6 +162,7 @@ function AuthenticatedApp() {
       <MoveModal />
       <VersionHistoryModal />
       <ProgressToasts />
+      <SuccessToasts />
       <AudioPlayer />
 
       {playingFile && (
