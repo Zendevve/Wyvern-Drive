@@ -6,7 +6,7 @@
 
 | # | Phase | Goal | Requirements | Plans |
 |---|-------|------|--------------|-------|
-| 1 | Core Storage Engine | File upload/download with encryption works end-to-end | STRG-01, STRG-02, STRG-03, INFRA-01, INFRA-02, INFRA-03, INFRA-04 | 1 |
+| 1 | Core Storage Engine | File upload/download with encryption works end-to-end | Complete    | 2026-06-03 |
 | 2 | File Management | Folder system, versioning, search, virtual scrolling | FILE-01, FILE-02, FILE-03, FILE-04, STRG-04 | 1 |
 | 3 | Media & Sharing | In-browser streaming, persistent player, secure sharing, photo timeline | MEDIA-01, MEDIA-02, SHAR-01, SHAR-02 | 1 |
 | 4 | Polish & Ship | Production UI, accessibility, PWA, test coverage | UI-01, UI-02, UI-03, TEST-01, TEST-02 | 1 |
@@ -35,7 +35,7 @@
 6. Rate limit errors (429) trigger automatic backoff and retry
 7. App deployed as static files with no backend server
 
-**Plans:** 1 (project scaffolding + storage engine implementation)
+**Plans:** 1/1 plans complete
 
 ---
 
