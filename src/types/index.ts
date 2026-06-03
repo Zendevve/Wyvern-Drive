@@ -67,3 +67,16 @@ export interface WebhookConfig {
   guildId: string | null;
   name: string;
 }
+
+export interface ShareRecord {
+  id: string;
+  fileId: string;
+  fileName: string;
+  encryptedKey: string;
+  salt: string;
+  nonce: string;
+  expiresAt: number;
+  hasPassword: boolean;
+  createdAt: Date;
+  accessCount: number;
+}
