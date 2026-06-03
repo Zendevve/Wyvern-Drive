@@ -45,7 +45,7 @@ async function deriveShareKey(password: string, salt: Uint8Array): Promise<Crypt
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt,
+      salt: salt.buffer as ArrayBuffer,
       iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256',
     },
@@ -57,12 +57,13 @@ async function deriveShareKey(password: string, salt: Uint8Array): Promise<Crypt
 }
 
 async function encryptFileKey(fileKey: CryptoKey, shareKey: CryptoKey): Promise<{ cipher: Uint8Array; nonce: Uint8Array }> {
-  const rawKey = await crypto.subtle.exportKey('raw', fileKey);
+  const rawKeyBuffer = await crypto.subtle.exportKey('raw', fileKey);
+  const rawKey = new Uint8Array(rawKeyBuffer);
   const nonce = crypto.getRandomValues(new Uint8Array(12));
   const cipher = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', nonce },
+    { name: 'AES-GCM', iv: nonce as unknown as BufferSource, tagLength: 128 },
     shareKey,
-    rawKey
+    rawKey.buffer as ArrayBuffer
   );
   return { cipher: new Uint8Array(cipher), nonce };
 }
@@ -75,10 +76,12 @@ async function decryptFileKey(
 ): Promise<CryptoKey | null> {
   try {
     const shareKey = await deriveShareKey(password, salt);
+    const dataBuf = new ArrayBuffer(encryptedKey.length);
+    new Uint8Array(dataBuf).set(encryptedKey);
     const rawKey = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', nonce },
+      { name: 'AES-GCM', iv: nonce as unknown as BufferSource, tagLength: 128 },
       shareKey,
-      encryptedKey
+      dataBuf
     );
     return crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
   } catch {
@@ -88,7 +91,7 @@ async function decryptFileKey(
 
 export async function generateShareLink(
   fileId: string,
-  fileName: string,
+  _fileName: string,
   fileKey: CryptoKey,
   password?: string,
   expiresIn?: number

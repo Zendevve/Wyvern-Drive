@@ -7,3 +7,37 @@
   --color-discord-text: #dcddde;
   --color-discord-muted: #72767d;
 }
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #4a4d52 transparent;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: #4a4d52;
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #5865F2;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: #5865F2;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+  }
+}

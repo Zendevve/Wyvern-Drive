@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ShareRecord } from '../types';
-import { putShare, getAllShares, deleteShare, getSharesByFileId } from '../lib/db';
+import { putShare, getAllShares, deleteShare } from '../lib/db';
 
 interface ShareState {
   shares: ShareRecord[];
