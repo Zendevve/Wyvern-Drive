@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+@theme {
+  --color-blurple: #5865F2;
+  --color-dark-bg: #2C2F33;
+  --color-darker-bg: #23272A;
+  --color-discord-text: #dcddde;
+  --color-discord-muted: #72767d;
+}
