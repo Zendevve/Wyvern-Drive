@@ -42,18 +42,20 @@ export function FileActions({ fileId, fileName, status }: FileActionsProps) {
   };
 
   return (
-    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+    <div className="flex flex-wrap items-center gap-1 sm:gap-2" onClick={(e) => e.stopPropagation()}>
       <button
         onClick={handleDownload}
         disabled={isDownloading || status !== 'complete'}
-        className="px-3 py-1 bg-blurple hover:bg-blurple/80 disabled:opacity-50 rounded text-sm"
+        aria-label="Download"
+        className="px-3 py-1 bg-blurple hover:bg-blurple/80 disabled:opacity-50 rounded text-sm min-h-[44px]"
       >
         {isDownloading ? 'Downloading...' : 'Download'}
       </button>
       <button
         onClick={() => setShowShare(true)}
         disabled={status !== 'complete'}
-        className="px-3 py-1 bg-dark-bg hover:bg-dark-bg/80 disabled:opacity-50 rounded text-sm border border-gray-700"
+        aria-label="Share"
+        className="px-3 py-1 bg-dark-bg hover:bg-dark-bg/80 disabled:opacity-50 rounded text-sm border border-gray-700 min-h-[44px]"
       >
         Share
       </button>

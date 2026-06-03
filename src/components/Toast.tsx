@@ -35,16 +35,16 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const variantStyles = {
     default: 'bg-dark-bg border-gray-600',
-    success: 'bg-green-900/50 border-green-600',
-    error: 'bg-red-900/50 border-red-600',
+    success: 'bg-green-900/50 border-success',
+    error: 'bg-red-900/50 border-error',
   };
 
   return (
     <ToastContext.Provider value={{ toast: addToast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 space-y-2">
+      <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 space-y-2">
         {toasts.map(t => (
-          <div key={t.id} className={`border rounded-lg px-4 py-3 shadow-lg ${variantStyles[t.variant]} min-w-64`}>
+          <div key={t.id} role="alert" className={`border rounded-lg px-4 py-3 shadow-lg ${variantStyles[t.variant]} min-w-64`}>
             <p className="font-medium">{t.title}</p>
             {t.description && <p className="text-sm text-discord-muted">{t.description}</p>}
           </div>

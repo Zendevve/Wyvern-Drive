@@ -34,6 +34,7 @@ export function PhotoThumbnail({ file, onClick }: PhotoThumbnailProps) {
   return (
     <button
       onClick={onClick}
+      aria-label={`View ${file.name}`}
       className="aspect-square bg-dark-bg rounded overflow-hidden hover:ring-2 hover:ring-blurple transition-all"
     >
       {blobUrl ? (

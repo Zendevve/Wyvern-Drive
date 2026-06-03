@@ -48,8 +48,11 @@ export function DropZone() {
     <div
       onDrop={onDrop}
       onDragOver={onDragOver}
-      className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-blurple transition-colors cursor-pointer"
-      onClick={() => inputRef.current?.click()}
+      role="button"
+      tabIndex={0}
+      aria-label="Upload files by clicking or dropping files here"
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
+      className="border-2 border-dashed border-gray-600 rounded-lg min-h-[120px] sm:min-h-[160px] p-4 sm:p-6 text-center hover:border-blurple transition-colors cursor-pointer"
     >
       <p className="text-discord-muted mb-2">Drag and drop files here</p>
       <p className="text-sm text-discord-muted mb-4">or</p>

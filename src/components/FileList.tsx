@@ -61,6 +61,10 @@ export function FileList() {
           {filteredFiles.map(file => (
             <div
               key={file.id}
+              tabIndex={0}
+              role="button"
+              aria-label={`Open ${file.name}`}
+              onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && isPreviewable(file.mimeType)) { e.preventDefault(); setPreviewFile(file); } }}
               className={`flex items-center justify-between bg-dark-bg p-3 rounded hover:bg-dark-bg/80 ${isPreviewable(file.mimeType) ? 'cursor-pointer' : ''}`}
               onClick={() => isPreviewable(file.mimeType) && setPreviewFile(file)}
             >
