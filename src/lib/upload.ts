@@ -60,6 +60,7 @@ export async function uploadFile(
     chunkSize: DEFAULT_CHUNK_SIZE,
     totalChunks,
     checksum,
+    versionHistory: [],
   };
 
   await putFile(fileRecord);

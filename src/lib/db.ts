@@ -1,5 +1,5 @@
 import { openDB, type IDBPDatabase } from 'idb';
-import type { FileRecord, ChunkRecord, AppConfig } from '../types';
+import type { FileRecord, ChunkRecord, FolderRecord, AppConfig } from '../types';
 
 const DB_NAME = 'wyvern-drive';
 const DB_VERSION = 1;
@@ -81,4 +81,49 @@ export async function deleteFile(id: string): Promise<void> {
   }
   await tx.objectStore('files').delete(id);
   await tx.done;
+}
+
+export async function putFolder(folder: FolderRecord): Promise<void> {
+  const db = await getDb();
+  await db.put('folders', folder);
+}
+
+export async function getFolder(id: string): Promise<FolderRecord | undefined> {
+  const db = await getDb();
+  return db.get('folders', id);
+}
+
+export async function getAllFolders(): Promise<FolderRecord[]> {
+  const db = await getDb();
+  return db.getAll('folders');
+}
+
+export async function getFoldersByParentId(parentId: string | null): Promise<FolderRecord[]> {
+  const db = await getDb();
+  return db.getAllFromIndex('folders', 'parentId', parentId);
+}
+
+export async function deleteFolder(id: string): Promise<void> {
+  const db = await getDb();
+  const children = await getFoldersByParentId(id);
+  for (const child of children) {
+    await deleteFolder(child.id);
+  }
+  const files = await db.getAllFromIndex('files', 'folderId', id);
+  for (const file of files) {
+    await deleteFile(file.id);
+  }
+  await db.delete('folders', id);
+}
+
+export async function getFolderPath(folderId: string): Promise<FolderRecord[]> {
+  const path: FolderRecord[] = [];
+  let currentId: string | null = folderId;
+  while (currentId) {
+    const folder = await getFolder(currentId);
+    if (!folder) break;
+    path.unshift(folder);
+    currentId = folder.parentId;
+  }
+  return path;
 }

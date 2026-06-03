@@ -1,3 +1,10 @@
+export interface FileVersion {
+  version: number;
+  timestamp: Date;
+  chunkRefs: string[];
+  checksum: string;
+}
+
 export interface FileRecord {
   id: string;
   name: string;
@@ -13,6 +20,7 @@ export interface FileRecord {
   chunkSize: number;
   totalChunks: number;
   checksum: string;
+  versionHistory: FileVersion[];
 }
 
 export interface ChunkRecord {

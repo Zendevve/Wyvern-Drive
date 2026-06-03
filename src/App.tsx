@@ -3,7 +3,7 @@ import { useAuthStore } from './stores/auth-store';
 import { PasswordModal } from './components/PasswordModal';
 import { SettingsPanel } from './components/SettingsPanel';
 import { DropZone } from './components/DropZone';
-import { FileList } from './components/FileList';
+import { FileBrowser } from './components/FileBrowser';
 import { UploadProgressList } from './components/UploadProgress';
 import { ToastProvider } from './components/Toast';
 
@@ -35,10 +35,10 @@ export default function App() {
             </button>
           </header>
           {showSettings && <div className="p-4"><SettingsPanel /></div>}
-          <main className="max-w-4xl mx-auto p-4">
+          <main className="max-w-6xl mx-auto p-4">
             <DropZone />
             <UploadProgressList />
-            <FileList />
+            <FileBrowser />
           </main>
         </div>
       )}
