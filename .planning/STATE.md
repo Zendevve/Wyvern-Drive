@@ -28,7 +28,7 @@ None yet.
 
 ### Pending Todos
 
-None yet.
+- [ ] [Ensure complete self hosted local architecture](file:///d:/COMPROG/Wyvern%20Drive/.planning/todos/pending/2026-06-03-ensure-complete-self-hosted-local-architecture.md)
 
 ### Blockers/Concerns
 
