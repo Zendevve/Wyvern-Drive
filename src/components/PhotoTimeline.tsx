@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useFileStore } from '../stores/file-store';
 import { isImageFile } from '../lib/media';
 import { MediaPreviewModal } from './MediaPreviewModal';
+import { PhotoThumbnail } from './PhotoThumbnail';
 import type { FileRecord } from '../types';
 
 export function PhotoTimeline() {
@@ -37,19 +38,11 @@ export function PhotoTimeline() {
           <h3 className="text-sm font-medium text-discord-muted mb-2">{date}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
             {photos.map(photo => (
-              <button
+              <PhotoThumbnail
                 key={photo.id}
+                file={photo}
                 onClick={() => setSelectedFile(photo)}
-                className="aspect-square bg-dark-bg rounded overflow-hidden hover:ring-2 hover:ring-blurple transition-all"
-              >
-                <img
-                  src=""
-                  alt={photo.name}
-                  loading="lazy"
-                  className="w-full h-full object-cover"
-                  data-file-id={photo.id}
-                />
-              </button>
+              />
             ))}
           </div>
         </div>
