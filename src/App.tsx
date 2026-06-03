@@ -206,8 +206,14 @@ export default function App() {
       {!isUnlocked && <PasswordModal />}
       {isUnlocked && (
         <div className="min-h-screen bg-darker-bg text-discord-text">
-          <header className="flex items-center justify-between p-4 border-b border-gray-700">
-            <h1 className="text-2xl font-bold">Wyvern Drive</h1>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-blurple focus:text-white focus:px-4 focus:py-2 focus:rounded"
+          >
+            Skip to content
+          </a>
+          <header role="banner" className="flex items-center justify-between p-4 sm:p-6 border-b border-border">
+            <h1 className="text-xl sm:text-2xl font-bold">Wyvern Drive</h1>
             <button
               onClick={() => setShowSettings(!showSettings)}
               className="p-2 hover:bg-dark-bg rounded"
@@ -216,7 +222,7 @@ export default function App() {
             </button>
           </header>
           {showSettings && <div className="p-4"><SettingsPanel /></div>}
-          <main className="max-w-6xl mx-auto p-4">
+          <main id="main-content" role="main" className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
             <DropZone />
             <UploadProgressList />
             <FileBrowser />

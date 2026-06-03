@@ -118,14 +118,15 @@ export function AudioPlayer() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={previous} className="text-discord-muted hover:text-discord-text px-1">⏮</button>
+          <button onClick={previous} aria-label="Previous track" className="text-discord-muted hover:text-discord-text px-1 min-h-[44px] min-w-[44px]">⏮</button>
           <button
             onClick={() => isPlaying ? pause() : resume()}
-            className="bg-blurple hover:bg-blurple/80 rounded-full w-8 h-8 flex items-center justify-center"
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+            className="bg-blurple hover:bg-blurple/80 rounded-full w-8 h-8 flex items-center justify-center min-h-[44px] min-w-[44px]"
           >
             {isPlaying ? '⏸' : '▶'}
           </button>
-          <button onClick={next} className="text-discord-muted hover:text-discord-text px-1">⏭</button>
+          <button onClick={next} aria-label="Next track" className="text-discord-muted hover:text-discord-text px-1 min-h-[44px] min-w-[44px]">⏭</button>
         </div>
 
         <div className="flex items-center gap-2 flex-1">

@@ -6,12 +6,34 @@
   --color-darker-bg: #23272A;
   --color-discord-text: #dcddde;
   --color-discord-muted: #72767d;
+  --color-success: #3ba55d;
+  --color-warning: #faa81a;
+  --color-error: #ed4245;
+  --color-info: #5865F2;
+  --color-surface: #36393f;
+  --color-surface-hover: #40444b;
+  --color-border: #4f545c;
+  --color-border-strong: #72767d;
 }
 
 @layer base {
   * {
     scrollbar-width: thin;
     scrollbar-color: #4a4d52 transparent;
+  }
+
+  *:focus-visible {
+    outline: 2px solid #5865F2;
+    outline-offset: 2px;
+  }
+
+  html {
+    font-size: 16px;
+  }
+  @media (max-width: 640px) {
+    html {
+      font-size: 14px;
+    }
   }
 
   input[type="range"] {

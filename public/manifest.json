@@ -1,0 +1,16 @@
+{
+  "name": "Wyvern Drive",
+  "short_name": "Wyvern Drive",
+  "description": "Secure Discord-powered cloud storage",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#23272A",
+  "theme_color": "#23272A",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
