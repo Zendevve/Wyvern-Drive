@@ -134,9 +134,23 @@ function initializeSchema(db: Database.Database): void {
       file_id INTEGER NOT NULL,
       password_hash TEXT, -- nullable
       expires_at TEXT, -- nullable
+      storage_path TEXT, -- nullable
+      download_count INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
     )
   `).run();
+
+  // Try to add storage_path and download_count columns if they do not exist
+  try {
+    db.prepare('ALTER TABLE shares ADD COLUMN storage_path TEXT').run();
+  } catch (e) {
+    // Column already exists or other error
+  }
+  try {
+    db.prepare('ALTER TABLE shares ADD COLUMN download_count INTEGER DEFAULT 0').run();
+  } catch (e) {
+    // Column already exists or other error
+  }
 }

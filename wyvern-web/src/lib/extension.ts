@@ -17,13 +17,15 @@ const downloadQueue: Array<{
 }> = []
 
 // Listen for the extension's ready signal (covers fast extension load)
-window.addEventListener('message', (event) => {
-  if (event.source !== window) return
-  if (event.data.type === 'WYVERN_EXTENSION_READY' || event.data.type === 'WYVERN_PONG') {
-    extensionReady = true
-    console.log('[Wyvern] Extension detected and ready')
-  }
-})
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return
+    if (event.data.type === 'WYVERN_EXTENSION_READY' || event.data.type === 'WYVERN_PONG') {
+      extensionReady = true
+      console.log('[Wyvern] Extension detected and ready')
+    }
+  })
+}
 
 /**
  * Actively probe for the extension (sends ping, waits for pong)

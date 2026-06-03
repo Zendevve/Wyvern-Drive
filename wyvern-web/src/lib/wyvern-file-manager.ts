@@ -53,9 +53,9 @@ import {
 } from './upload-state'
 import JSZip from 'jszip'
 
-// Supabase Edge Function API endpoint
-const API_URL = 'https://lrqnovltirjsoqfvtxxu.supabase.co/functions/v1/api'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxycW5vdmx0aXJqc29xZnZ0eHh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NzQ0MjcsImV4cCI6MjA4MTE1MDQyN30.rpusoKvKGgWHofrM15aqWMh5F6A8yx78u_n2vgXxm1Q'
+// Local API endpoint
+const API_URL = 'http://localhost:3001/api'
+const SUPABASE_ANON_KEY = 'mock-anon-key'
 
 /** Build headers for Supabase API requests */
 const getHeaders = (contentType: string | null = 'application/json') => {

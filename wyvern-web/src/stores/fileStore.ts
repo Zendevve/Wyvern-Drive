@@ -279,23 +279,10 @@ export const useFileStore = create<FileStore>()(
           // CRITICAL: Set both fileManager AND userId - loadFiles needs userId!
           set({ fileManager: manager, userId: manager.getUserId() })
 
-          // SYNC: Persist webhooks to Supabase profile (for Share Link refreshing)
-          // This enables the backend to access the user's webhooks when serving shared files
-          try {
-            const { error } = await supabase
-              .from('profiles')
-              .upsert({
-                id: manager.getUserId(),
-                webhook_urls: urls,
-                server_boost_level: serverBoostLevel,
-                updated_at: new Date().toISOString()
-              }, { onConflict: 'id' })
-
-            if (error) console.error('[FileStore] Failed to sync webhooks to profile:', error)
-            else console.log('[FileStore] Synced webhooks to profile for sharing support')
-          } catch (e) {
-            console.error('[FileStore] Profile sync error:', e)
-          }
+          // NOTE: Profile sync disabled - user_profiles.id expects auth.users UUID,
+          // but manager.getUserId() returns a webhook-derived hash. Webhooks are 
+          // persisted in localStorage which is sufficient for current functionality.
+          // Future: implement proper profile sync using Supabase auth user ID.
         })();
 
         (window as unknown as { __wyvernInitPromise?: Promise<void> }).__wyvernInitPromise = initPromise

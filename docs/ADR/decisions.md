@@ -67,3 +67,27 @@ Discord free: 25MB limit. Nitro: 50MB+ limit.
 - ✅ Works for all users
 - ✅ Faster uploads for Nitro users
 - ⚠️ Detection adds complexity
+
+---
+
+# ADR-004: Fully Local Self-Hosted Architecture
+
+**Status:** Accepted
+**Date:** 2026-06-03
+
+## Context
+The system originally had a dependency on Supabase Cloud for user authentication, webhook URL persistence, and global user profiles. To achieve a zero-cloud-dependency, completely self-hosted local setup, we needed to move all database and authentication capabilities to the local Express/SQLite server and remove the Supabase Cloud requirement.
+
+## Decision
+- Implement local authentication endpoints (`/api/auth/signup`, `/api/auth/login`, `/api/auth/session`, `/api/auth/logout`) on the Express backend, backed by SQLite `users` table and secure password hashing (argon2).
+- Replicate profile storage on the Express backend with `/api/profiles/:id` endpoint for webhook URLs and settings persistence.
+- Replicate Supabase share metadata tables on SQLite and implement share creation/fetch endpoints on the local backend.
+- Replace Supabase React UI dependencies (`@supabase/auth-ui-react`, `@supabase/auth-ui-shared`) in the frontend with a custom, highly polished, premium, and fully accessible AuthScreen component.
+- Implement a mock client-side adapter in `wyvern-web/src/lib/supabase.ts` that redirects authentication, profiling, and state management requests to the local Express server, preserving the rest of the frontend file logic.
+- Add a concurrent dev script manager (`dev.js`) to launch both components concurrently from the root directory.
+
+## Consequences
+- ✅ 100% self-hosted, cloud-independent local operation.
+- ✅ Custom accessible AuthScreen matching our "Linear" design system aesthetics.
+- ✅ Full test suite for both local backend SQLite/routes and frontend fileStore selection logic.
+- ⚠️ Authentication tokens are signed locally; local server must remain running to service active sessions.

@@ -14,6 +14,7 @@ import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
 import { getCachedThumbnail, setCachedThumbnail, getLoadingPromise, setLoadingPromise } from '../../lib/thumbnailCache'
 import { PreviewModal } from '../files/PreviewModal'
+import { supabase } from '../../lib/supabase'
 import './PhotoTimeline.css'
 
 // Types
@@ -153,21 +154,42 @@ function PhotoThumbnail({ photo, onClick }: { photo: WyvernFile; onClick: () => 
             // Manually refresh single chunk to avoid circular dep with WyvernFileManager
             // (Ideally we should expose refreshChunkUrls as static or singleton, but for now we re-implement quick fetch)
             try {
-              const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:54321/functions/v1'}/refresh-urls`, {
+              // Get webhook URL from local storage
+              let webhookUrl: string | undefined
+              try {
+                // Webhooks are stored in 'wyvern-saved-webhooks' as an array
+                const savedWebhooks = JSON.parse(localStorage.getItem('wyvern-saved-webhooks') || '[]')
+                if (Array.isArray(savedWebhooks) && savedWebhooks.length > 0) {
+                  webhookUrl = savedWebhooks[0]
+                }
+              } catch { /* ignore */ }
+
+              // Use the same URL pattern as chunkFetcher.ts
+              const apiUrl = 'http://localhost:3001/api/refresh-urls'
+              console.log('[PhotoThumbnail] Calling refresh API:', apiUrl, 'webhookUrl present:', !!webhookUrl)
+
+              const res = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${localStorage.getItem('sb-access-token') || ''}`
+                  'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`
                 },
-                body: JSON.stringify({ chunks: [chunk] })
+                body: JSON.stringify({ chunks: [chunk], webhookUrl })
               })
+              console.log('[PhotoThumbnail] Refresh response:', res.status, res.statusText)
+
               if (res.ok) {
-                const { refreshed } = await res.json()
+                const data = await res.json()
+                console.log('[PhotoThumbnail] Refresh result:', data)
+                const { refreshed } = data
                 if (refreshed[chunk.i]) {
                   chunk.u = refreshed[chunk.i]
                   // Retry fetch with new URL
                   return await fetchViaExtension(chunk.u)
                 }
+              } else {
+                const errorText = await res.text()
+                console.error('[PhotoThumbnail] Refresh failed:', res.status, errorText)
               }
             } catch (refreshErr) {
               console.error('Refresh failed', refreshErr)

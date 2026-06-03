@@ -1,9 +1,8 @@
-import { useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { Auth } from '@supabase/auth-ui-react'
-import { ThemeSupa } from '@supabase/auth-ui-shared'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { Lock, ArrowUpRight } from 'lucide-react'
+import { Lock, Mail, AlertCircle, Loader2 } from 'lucide-react'
+import './AuthScreen.css'
 
 interface AuthScreenProps {
   defaultView?: 'sign_in' | 'sign_up'
@@ -11,14 +10,21 @@ interface AuthScreenProps {
 
 export function AuthScreen({ defaultView = 'sign_in' }: AuthScreenProps) {
   const navigate = useNavigate()
+  const [view, setView] = useState<'sign_in' | 'sign_up'>(defaultView)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Listen for auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
         navigate('/app')
       }
     })
 
+    // Check current session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         navigate('/app')
@@ -28,140 +34,143 @@ export function AuthScreen({ defaultView = 'sign_in' }: AuthScreenProps) {
     return () => subscription.unsubscribe()
   }, [navigate])
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+
+    try {
+      if (view === 'sign_up') {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        })
+        if (signUpError) throw signUpError
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+        if (signInError) throw signInError
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred during authentication')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-bg-app flex flex-col items-center justify-center p-6 overflow-y-auto">
+    <div className="auth-screen">
       {/* Subtle Grid Background */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-[0.03]"
         style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)', backgroundSize: '60px 60px' }}>
       </div>
 
-      {/* Gradient Orb */}
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full bg-gradient-to-b from-white/[0.02] to-transparent blur-3xl pointer-events-none z-0"></div>
-
-      {/* Prismatic Blur */}
-      <div className="fixed top-[20%] right-[30%] w-[30%] h-[30%] bg-blue-500/5 blur-[100px] rounded-full opacity-20 pointer-events-none"></div>
-
-      <div className="relative z-10 w-full max-w-md">
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 text-white font-medium mb-12 justify-center">
+      {/* Left Panel */}
+      <div className="auth-panel-left">
+        <div className="brand-header">
           <div className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/30 flex items-center justify-center text-accent">
             <Lock size={16} />
           </div>
-          <span className="text-lg font-[Playfair_Display] tracking-tight">Wyvern</span>
-        </Link>
-
-        {/* Card */}
-        <div className="bg-bg-card border border-border-card rounded-2xl p-8 relative overflow-hidden">
-          {/* Subtle top sheen */}
-          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-accent/20 to-transparent"></div>
-
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-[Playfair_Display] text-white mb-2">
-              {defaultView === 'sign_up' ? 'Create account' : 'Welcome back'}
-            </h1>
-            <p className="text-white/40 text-sm">
-              {defaultView === 'sign_up' ? 'Start storing files securely' : 'Sign in to access your vault'}
-            </p>
-          </div>
-
-          <Auth
-            supabaseClient={supabase}
-            appearance={{
-              theme: ThemeSupa,
-              variables: {
-                default: {
-                  colors: {
-                    brand: '#8B5CF6',
-                    brandAccent: '#7C3AED',
-                    brandButtonText: '#ffffff',
-                    defaultButtonBackground: 'rgba(255,255,255,0.05)',
-                    defaultButtonBackgroundHover: 'rgba(255,255,255,0.1)',
-                    inputBackground: 'rgba(255,255,255,0.03)',
-                    inputBorder: 'rgba(255,255,255,0.08)',
-                    inputBorderHover: 'rgba(255,255,255,0.15)',
-                    inputBorderFocus: 'rgba(255,255,255,0.3)',
-                    inputText: '#ffffff',
-                    inputLabelText: 'rgba(255,255,255,0.5)',
-                    inputPlaceholder: 'rgba(255,255,255,0.25)',
-                  },
-                  borderWidths: {
-                    buttonBorderWidth: '0px',
-                    inputBorderWidth: '1px',
-                  },
-                  radii: {
-                    borderRadiusButton: '10px',
-                    buttonBorderRadius: '10px',
-                    inputBorderRadius: '10px',
-                  },
-                  fontSizes: {
-                    baseBodySize: '14px',
-                    baseInputSize: '14px',
-                    baseLabelSize: '12px',
-                    baseButtonSize: '14px',
-                  },
-                  fonts: {
-                    bodyFontFamily: 'inherit',
-                    buttonFontFamily: 'inherit',
-                    inputFontFamily: 'inherit',
-                    labelFontFamily: 'inherit',
-                  },
-                },
-              },
-              style: {
-                button: {
-                  fontWeight: '500',
-                  padding: '14px 16px',
-                },
-                input: {
-                  padding: '14px 16px',
-                  background: 'rgba(255,255,255,0.03)',
-                },
-                anchor: {
-                  color: 'rgba(255,255,255,0.5)',
-                },
-                label: {
-                  marginBottom: '6px',
-                },
-              },
-            }}
-            providers={[]}
-            redirectTo={`${window.location.origin}/app`}
-            view={defaultView}
-            showLinks={true}
-            localization={{
-              variables: {
-                sign_in: {
-                  email_label: 'Email',
-                  password_label: 'Password',
-                  email_input_placeholder: 'you@example.com',
-                  password_input_placeholder: 'Your password',
-                  button_label: 'Sign In',
-                  loading_button_label: 'Signing in...',
-                  link_text: "Don't have an account? Sign up",
-                },
-                sign_up: {
-                  email_label: 'Email',
-                  password_label: 'Password',
-                  email_input_placeholder: 'you@example.com',
-                  password_input_placeholder: 'At least 8 characters',
-                  button_label: 'Create Account',
-                  loading_button_label: 'Creating account...',
-                  link_text: 'Already have an account? Sign in',
-                },
-              },
-            }}
-          />
-
-          <p className="text-xs text-white/30 text-center mt-8">
-            By continuing, you agree to store files on your own Discord server.
+          <span className="text-lg font-[Playfair_Display] tracking-tight text-white ml-2">Wyvern</span>
+        </div>
+        <div className="hero-content">
+          <h1 className="font-[Playfair_Display]">Secure Vault</h1>
+          <p className="hero-subtitle">
+            A self-hosted, end-to-end encrypted file manager using Discord channels for reliable data storage and local SQLite database for blazing fast retrieval.
           </p>
         </div>
+        <div className="panel-footer">
+          <p>&copy; {new Date().getFullYear()} Wyvern Drive. Fully self-hosted.</p>
+        </div>
+      </div>
 
-        {/* Back to home */}
-        <div className="text-center mt-8">
-          <Link to="/" className="text-white/40 text-sm hover:text-white/60 transition-colors inline-flex items-center gap-1">
-            Back to home <ArrowUpRight size={12} />
-          </Link>
+      {/* Right Panel */}
+      <div className="auth-panel-right relative z-10">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h2>{view === 'sign_up' ? 'Create Account' : 'Welcome Back'}</h2>
+            <p>{view === 'sign_up' ? 'Start storing files securely' : 'Sign in to access your vault'}</p>
+          </div>
+
+          {error && (
+            <div className="auth-error-message" role="alert" id="auth-error-msg">
+              <AlertCircle size={16} aria-hidden="true" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <div className="auth-form-field">
+              <label htmlFor="email-input">Email</label>
+              <div className="auth-input-wrapper">
+                <Mail className="input-icon" size={16} />
+                <input
+                  id="email-input"
+                  type="email"
+                  className="auth-input"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "auth-error-msg" : undefined}
+                />
+              </div>
+            </div>
+
+            <div className="auth-form-field">
+              <label htmlFor="password-input">Password</label>
+              <div className="auth-input-wrapper">
+                <Lock className="input-icon" size={16} />
+                <input
+                  id="password-input"
+                  type="password"
+                  className="auth-input"
+                  placeholder={view === 'sign_up' ? 'At least 8 characters' : 'Your password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "auth-error-msg" : undefined}
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="auth-submit-btn" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" size={16} />
+                  <span>{view === 'sign_up' ? 'Creating Account...' : 'Signing In...'}</span>
+                </>
+              ) : (
+                <span>{view === 'sign_up' ? 'Create Account' : 'Sign In'}</span>
+              )}
+            </button>
+          </form>
+
+          <div className="auth-switch-prompt">
+            {view === 'sign_up' ? (
+              <>
+                Already have an account?
+                <button type="button" className="auth-switch-btn" onClick={() => setView('sign_in')}>
+                  Sign In
+                </button>
+              </>
+            ) : (
+              <>
+                Don't have an account?
+                <button type="button" className="auth-switch-btn" onClick={() => setView('sign_up')}>
+                  Sign Up
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="auth-footer">
+            <p>Your webhooks and keys never leave this host.</p>
+          </div>
         </div>
       </div>
     </div>

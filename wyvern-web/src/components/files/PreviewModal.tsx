@@ -8,7 +8,7 @@ import { useAudioPlayer } from '../../stores/audioPlayerStore'
 import { decryptChunk } from '../../lib/encryption'
 import { restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
-import { fetchViaExtension } from '../../lib/extension'
+import { fetchChunkWithRetry } from '../../lib/chunkFetcher'
 import './PreviewModal.css'
 
 interface PreviewModalProps {
@@ -126,7 +126,7 @@ export function PreviewModal({ file, onClose, onNavigate, hasPrev, hasNext }: Pr
         const fileParts: ArrayBuffer[] = []
 
         for (const chunk of chunks) {
-          let data = await fetchViaExtension(chunk.u)
+          let data = await fetchChunkWithRetry(chunk)
 
           // Decrypt first if needed
           if (file.encrypted && decryptionKey && chunk.v) {

@@ -108,3 +108,13 @@
 - 📦 **Virtual File Grid**: Efficient rendering for 500+ files
 - 🗜️ **Compact Chunk Metadata**: Short keys reduce JSON size by ~27%
 
+
+### Phase 07.1: Localhost database and API backend migration (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 7
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 07.1 to break down)

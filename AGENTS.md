@@ -8,7 +8,7 @@
 ## Project Overview
 
 **Name:** Wyvern Drive
-**Stack:** Vite + React 18 + TypeScript (web), Supabase (backend), Chrome Extension (Manifest V3)
+**Stack:** Vite + React 18 + TypeScript (web), Express + SQLite Localhost (backend), Chrome Extension (Manifest V3)
 **Purpose:** Discord-based cloud storage with encryption, folder operations, and file versioning
 
 Follows **[MCAF](https://mcaf.managed-code.com/)** (Managed Code AI Framework)
@@ -217,7 +217,7 @@ If no new rule is detected → do not update the file.
 
 ### Patterns
 
-- **File upload:** encrypt → chunk (25MB) → upload to Discord → store metadata in Supabase
+- **File upload:** encrypt → chunk (25MB) → upload to Discord → store metadata in SQLite (Local Backend)
 - **File download:** fetch metadata → download chunks → decrypt → merge to Blob
 - **Errors:** try/catch with typed error classes, user-facing messages
 - **State:** Zustand for global state, React hooks for local state
@@ -360,7 +360,7 @@ A task is complete when:
 ## Critical (NEVER VIOLATE)
 
 - **Never commit secrets, keys, connection strings** (use `.env` files, gitignored)
-- **Never mock internal systems** in integration tests (Supabase, file manager)
+- **Never mock internal systems** in integration tests (SQLite database, file manager)
 - **Never skip tests** to make PR green
 - **Never force push to main**
 - **Never approve or merge** (human decision)

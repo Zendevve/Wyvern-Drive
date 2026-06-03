@@ -2,7 +2,6 @@ import { useState, useEffect, memo } from 'react'
 import type { WyvernFile, WyvernFolder, ChunkInfo, LegacyChunkInfo } from '../../lib/types'
 import { normalizeChunk } from '../../lib/types'
 import { useFileStore } from '../../stores/fileStore'
-import { fetchViaExtension } from '../../lib/extension'
 import {
   getCachedThumbnail,
   setCachedThumbnail,
@@ -15,6 +14,7 @@ import { isPreviewable, isImageFile, isVideoFile } from '../../lib/thumbnails'
 import { getMimeType } from '../../lib/mimeTypes'
 import { decryptChunk, restoreEncryptionContext } from '../../lib/encryption'
 import { decompressData } from '../../lib/compression'
+import { fetchChunkWithRetry } from '../../lib/chunkFetcher'
 import {
   Loader, Folder, File, FileText, Image, Music, Video, Archive, Code, Cog,
   AlertTriangle, Download, Share2, MoreHorizontal
@@ -88,7 +88,7 @@ function FileItemComponent({ file, viewMode }: FileItemProps) {
       const fileParts: ArrayBuffer[] = []
 
       for (const chunk of chunksToFetch) {
-        let data = await fetchViaExtension(chunk.u)
+        let data = await fetchChunkWithRetry(chunk)
         if (wyvernFile.encrypted && decryptionKey && chunk.v) {
           const iv = new Uint8Array(chunk.v)
           data = await decryptChunk(data, decryptionKey, iv)

@@ -42,56 +42,51 @@ describe('FileStore Selection', () => {
   })
 
   it('selects a single file', () => {
-    const store = useFileStore.getState()
-    store.selectFile('1')
-    expect(store.selectedIds.has('1')).toBe(true)
-    expect(store.selectedIds.size).toBe(1)
+    useFileStore.getState().selectFile('1')
+    const state = useFileStore.getState()
+    expect(state.selectedIds.has('1')).toBe(true)
+    expect(state.selectedIds.size).toBe(1)
   })
 
   it('clears previous selection when selecting single file', () => {
     useFileStore.setState({ selectedIds: new Set(['2', '3']) })
-    const store = useFileStore.getState()
-    store.selectFile('1')
-    expect(store.selectedIds.has('1')).toBe(true)
-    expect(store.selectedIds.has('2')).toBe(false)
-    expect(store.selectedIds.size).toBe(1)
+    useFileStore.getState().selectFile('1')
+    const state = useFileStore.getState()
+    expect(state.selectedIds.has('1')).toBe(true)
+    expect(state.selectedIds.has('2')).toBe(false)
+    expect(state.selectedIds.size).toBe(1)
   })
 
   it('toggles selection', () => {
-    const store = useFileStore.getState()
+    useFileStore.getState().toggleSelection('1')
+    expect(useFileStore.getState().selectedIds.has('1')).toBe(true)
 
-    // Select
-    store.toggleSelection('1')
-    expect(store.selectedIds.has('1')).toBe(true)
-
-    // Deselect
-    store.toggleSelection('1')
-    expect(store.selectedIds.has('1')).toBe(false)
+    useFileStore.getState().toggleSelection('1')
+    expect(useFileStore.getState().selectedIds.has('1')).toBe(false)
   })
 
   it('toggles selection additively', () => {
-    const store = useFileStore.getState()
-    store.toggleSelection('1')
-    store.toggleSelection('2')
-    expect(store.selectedIds.size).toBe(2)
-    expect(store.selectedIds.has('1')).toBe(true)
-    expect(store.selectedIds.has('2')).toBe(true)
+    useFileStore.getState().toggleSelection('1')
+    useFileStore.getState().toggleSelection('2')
+    const state = useFileStore.getState()
+    expect(state.selectedIds.size).toBe(2)
+    expect(state.selectedIds.has('1')).toBe(true)
+    expect(state.selectedIds.has('2')).toBe(true)
   })
 
   it('clears selection', () => {
     useFileStore.setState({ selectedIds: new Set(['1', '2']) })
-    const store = useFileStore.getState()
-    store.clearSelection()
-    expect(store.selectedIds.size).toBe(0)
+    useFileStore.getState().clearSelection()
+    expect(useFileStore.getState().selectedIds.size).toBe(0)
   })
 
   it('selects all', () => {
-    const store = useFileStore.getState()
-    store.selectAll()
-    expect(store.selectedIds.size).toBe(3)
-    expect(store.selectedIds.has('1')).toBe(true)
-    expect(store.selectedIds.has('2')).toBe(true)
-    expect(store.selectedIds.has('3')).toBe(true)
+    useFileStore.getState().selectAll()
+    const state = useFileStore.getState()
+    expect(state.selectedIds.size).toBe(3)
+    expect(state.selectedIds.has('1')).toBe(true)
+    expect(state.selectedIds.has('2')).toBe(true)
+    expect(state.selectedIds.has('3')).toBe(true)
   })
 
   it('navigating clears selection', () => {
@@ -112,27 +107,25 @@ describe('FileStore Range Selection', () => {
 
   it('selects range correctly', () => {
     // Mock order is: Folder A (1), File B (2), File C (3) due to sort logic (folders first)
-    const store = useFileStore.getState()
+    useFileStore.getState().selectFile('1')
+    useFileStore.getState().setRangeSelection('1', '3')
 
-    // Select 1 then range to 3 should select 1, 2, 3
-    store.selectFile('1')
-    store.setRangeSelection('1', '3')
-
-    expect(store.selectedIds.size).toBe(3)
-    expect(store.selectedIds.has('1')).toBe(true)
-    expect(store.selectedIds.has('2')).toBe(true)
-    expect(store.selectedIds.has('3')).toBe(true)
+    const state = useFileStore.getState()
+    expect(state.selectedIds.size).toBe(3)
+    expect(state.selectedIds.has('1')).toBe(true)
+    expect(state.selectedIds.has('2')).toBe(true)
+    expect(state.selectedIds.has('3')).toBe(true)
   })
 
   it('selects range correctly reverse', () => {
     // Select 3 then range to 1 should select 3, 2, 1
-    const store = useFileStore.getState()
-    store.selectFile('3')
-    store.setRangeSelection('3', '1')
+    useFileStore.getState().selectFile('3')
+    useFileStore.getState().setRangeSelection('3', '1')
 
-    expect(store.selectedIds.size).toBe(3)
-    expect(store.selectedIds.has('1')).toBe(true)
-    expect(store.selectedIds.has('2')).toBe(true)
-    expect(store.selectedIds.has('3')).toBe(true)
+    const state = useFileStore.getState()
+    expect(state.selectedIds.size).toBe(3)
+    expect(state.selectedIds.has('1')).toBe(true)
+    expect(state.selectedIds.has('2')).toBe(true)
+    expect(state.selectedIds.has('3')).toBe(true)
   })
 })

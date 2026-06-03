@@ -866,7 +866,7 @@ Deno.serve(async (req: Request) => {
         await Promise.all(batch.map(async (chunk) => {
           if (!chunk.m || !chunk.cid) {
             // Try to extract from URL if missing
-            const ids = extractDiscordIds(chunk.url || '') // Assuming fallback extraction
+            const ids = extractDiscordIds(chunk.u || '') // Use short format (consistent with client)
             if (ids) {
               chunk.m = ids.messageId
               chunk.cid = ids.channelId

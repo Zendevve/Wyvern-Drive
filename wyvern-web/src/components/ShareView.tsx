@@ -32,8 +32,8 @@ interface LargeFileResponse {
   chunks?: ChunkData[]  // API should return chunks for extension-based download
 }
 
-const API_URL = 'https://lrqnovltirjsoqfvtxxu.supabase.co/functions/v1/api'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxycW5vdmx0aXJqc29xZnZ0eHh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NzQ0MjcsImV4cCI6MjA4MTE1MDQyN30.rpusoKvKGgWHofrM15aqWMh5F6A8yx78u_n2vgXxm1Q'
+const API_URL = 'http://localhost:3001/api'
+const SUPABASE_ANON_KEY = 'mock-anon-key'
 
 // Threshold for extension-based downloads (files >=100MB require extension)
 const EXTENSION_DOWNLOAD_THRESHOLD = 100 * 1024 * 1024

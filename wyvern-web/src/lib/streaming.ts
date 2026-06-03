@@ -126,8 +126,8 @@ async function fetchAllChunks(shareId: string): Promise<ChunkData[]> {
     // Supabase helper `invoke` is for POST mainly.
     // Let's use direct fetching like in ShareView
 
-    const API_URL = import.meta.env.VITE_SUPABASE_URL + '/functions/v1/api'
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+    const API_URL = 'http://localhost:3001/api'
+    const anonKey = 'mock-anon-key'
 
     const url = new URL(`${API_URL}/share/${shareId}/chunks`)
     url.searchParams.set('page', page.toString())

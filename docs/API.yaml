@@ -28,6 +28,8 @@ tags:
     description: Public share link management
   - name: Streaming
     description: Range-request video/audio streaming
+  - name: Utilities
+    description: URL management and system maintenance
 
 paths:
   /:
@@ -48,6 +50,66 @@ paths:
                   name:
                     type: string
                     example: Wyvern Drive API
+
+  /refresh-urls:
+    post:
+      tags: [Utilities]
+      summary: Batch refresh expired Discord URLs
+      description: |
+        Refreshes expired Discord CDN URLs for file chunks.
+        Uses webhook-based refresh (primary) or bot token fallback.
+        Only chunks with message ID (m) and channel ID (cid) can be refreshed.
+      operationId: refreshUrls
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chunks]
+              properties:
+                chunks:
+                  type: array
+                  description: Chunks needing URL refresh
+                  items:
+                    type: object
+                    required: [i, u]
+                    properties:
+                      i:
+                        type: integer
+                        description: Chunk index
+                      u:
+                        type: string
+                        description: Current (possibly expired) Discord CDN URL
+                      m:
+                        type: string
+                        description: Discord message ID (required for refresh)
+                      cid:
+                        type: string
+                        description: Discord channel ID (required for refresh)
+                webhookUrl:
+                  type: string
+                  description: Optional webhook URL for refresh (uses user's webhook)
+      responses:
+        '200':
+          description: Refreshed URLs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  refreshed:
+                    type: object
+                    additionalProperties:
+                      type: string
+                    description: Map of chunk index to new URL
+                    example:
+                      "0": "https://cdn.discordapp.com/attachments/..."
+                      "1": "https://cdn.discordapp.com/attachments/..."
+        '400':
+          description: Invalid chunks array
+        '500':
+          $ref: '#/components/responses/ServerError'
 
   /files/{userId}:
     get:
