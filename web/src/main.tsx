@@ -3,7 +3,8 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App';
-import { initAuthUnauthorizedHandler } from './store/auth';
+import { initAuthUnauthorizedHandler, useAuthStore } from './store/auth';
+import { useToastsStore } from './store/toasts';
 import './styles/global.css';
 import './styles/components.css';
 
@@ -15,6 +16,14 @@ const queryClient = new QueryClient({
       staleTime: 30_000
     }
   }
+});
+
+let previousStatus = useAuthStore.getState().status;
+useAuthStore.subscribe((state) => {
+  if (previousStatus === 'authenticated' && state.status === 'unauthenticated') {
+    useToastsStore.getState().push({ kind: 'info', message: 'Session expired — please reconnect.' });
+  }
+  previousStatus = state.status;
 });
 
 initAuthUnauthorizedHandler();

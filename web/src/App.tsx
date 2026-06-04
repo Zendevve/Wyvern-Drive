@@ -5,6 +5,7 @@ import { AuthPage } from './pages/AuthPage';
 import { DrivePage } from './pages/DrivePage';
 import { ToastHost } from './components/Toast';
 import { AppShell } from './components/AppShell';
+import { UploadQueuePanel } from './components/UploadQueuePanel';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const status = useAuthStore((s) => s.status);
@@ -44,6 +45,7 @@ export function App() {
       <AppShell>
         <DriveRoute />
       </AppShell>
+      <UploadQueuePanel />
       <ToastHost />
     </PrivateRoute>
   );
