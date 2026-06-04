@@ -108,6 +108,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | TEST-02 | Phase 4 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 28 total
 - Mapped to phases: 28
 - Unmapped: 0 ✓
