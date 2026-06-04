@@ -3,6 +3,8 @@ import multipart from '@fastify/multipart';
 import { authPlugin } from './plugins/auth';
 import { authRoutes } from './routes/auth';
 import { uploadRoutes } from './routes/upload';
+import { downloadRoutes } from './routes/download';
+import { deleteRoutes } from './routes/delete';
 
 export function buildApp() {
   const app = Fastify({
@@ -18,6 +20,8 @@ export function buildApp() {
   app.register(authPlugin);
   app.register(authRoutes);
   app.register(uploadRoutes);
+  app.register(downloadRoutes);
+  app.register(deleteRoutes);
 
   app.get('/status', async () => {
     return {
