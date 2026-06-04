@@ -12,6 +12,22 @@ vi.mock('@discordjs/rest', () => {
           if (path.includes('invalid')) {
             throw new Error('Invalid Webhook');
           }
+          if (path.includes('messages/')) {
+            const messageId = path.split('/').pop();
+            return {
+              id: messageId || 'msg_9876543210',
+              channel_id: '111111111',
+              attachments: [
+                {
+                  id: 'att_refreshed',
+                  filename: 'refreshed-chunk.bin',
+                  size: 100,
+                  url: `https://cdn.discordapp.com/attachments/111111111/${messageId}/refreshed-chunk.bin`,
+                  proxy_url: `https://media.discordapp.net/attachments/111111111/${messageId}/refreshed-chunk.bin`,
+                }
+              ]
+            };
+          }
           return {
             id: '1234567890',
             name: 'Test Webhook',
@@ -43,15 +59,30 @@ vi.mock('@discordjs/rest', () => {
   };
 });
 
-// Global mock for axios
 vi.mock('axios', () => {
   return {
     default: {
       get: vi.fn().mockImplementation(async (url: string, config: any) => {
+        if (url.includes('expired') && !url.includes('refreshed')) {
+          const err = new Error('Forbidden') as any;
+          err.response = { status: 403 };
+          throw err;
+        }
+
+        let content = 'mocked chunk content';
+        const range = config?.headers?.Range || config?.headers?.range;
+        if (range) {
+          const match = range.match(/bytes=(\d+)-(\d+)/);
+          if (match) {
+            const start = parseInt(match[1], 10);
+            const end = parseInt(match[2], 10);
+            content = content.substring(start, end + 1);
+          }
+        }
+
         const { Readable } = require('stream');
         const s = new Readable();
-        // Return some dummy chunk content based on the requested range or URL
-        s.push('mocked chunk content');
+        s.push(content);
         s.push(null);
         return {
           data: s,

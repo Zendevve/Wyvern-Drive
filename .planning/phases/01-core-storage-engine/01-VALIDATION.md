@@ -38,12 +38,12 @@ created: 2026-06-04
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 1-01-01 | 01 | 0 | Project Config | — | N/A | unit | `npm run test` | ❌ W0 | ⬜ pending |
-| 1-01-02 | 01 | 1 | JWT Auth | T-1-02 | JWT signature verification | unit | `npm run test` | ❌ W0 | ⬜ pending |
-| 1-01-03 | 01 | 1 | Upload/Chunking | T-1-03 | Reject chunks > 24MB | unit | `npm run test` | ❌ W0 | ⬜ pending |
-| 1-01-04 | 01 | 2 | Download/Stream | — | N/A | unit | `npm run test` | ❌ W0 | ⬜ pending |
-| 1-01-05 | 01 | 2 | CDN Refresh | — | N/A | unit | `npm run test` | ❌ W0 | ⬜ pending |
-| 1-01-06 | 01 | 2 | Deletion | — | N/A | unit | `npm run test` | ❌ W0 | ⬜ pending |
+| 1-01-01 | 01 | 0 | Project Config | — | N/A | unit | `npm run test` | ✅ | ✅ green |
+| 1-01-02 | 01 | 1 | JWT Auth | T-1-02 | JWT signature verification | unit | `npm run test` | ✅ | ✅ green |
+| 1-01-03 | 01 | 1 | Upload/Chunking | T-1-03 | Reject chunks > 24MB | unit | `npm run test` | ✅ | ✅ green |
+| 1-01-04 | 01 | 2 | Download/Stream | — | N/A | unit | `npm run test` | ✅ | ✅ green |
+| 1-01-05 | 01 | 2 | CDN Refresh | — | N/A | unit | `npm run test` | ✅ | ✅ green |
+| 1-01-06 | 01 | 2 | Deletion | — | N/A | unit | `npm run test` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
