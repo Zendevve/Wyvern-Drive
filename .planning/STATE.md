@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Milestone complete
-last_updated: "2026-06-04T15:42:00.000Z"
+last_updated: "2026-06-04T16:00:00.000Z"
 progress:
   total_phases: 10
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 16
-  completed_plans: 10
-  percent: 62
+  completed_plans: 11
+  percent: 68
 ---
 
 # Project State: Wyvern Drive
@@ -19,7 +19,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03)
 
 **Core value:** Files stored securely via Discord CDN — zero cost, unlimited, encrypted
-**Current focus:** Phase 7 ready (Phase 6 Theme Unifier complete — 6 components unified onto theme tokens, banned em-dash removed from PasswordModal, light+dark surface tokens added)
+**Current focus:** Phase 7 complete (Phase 6 Theme Unifier complete — 6 components unified onto theme tokens, banned em-dash removed from PasswordModal, light+dark surface tokens added. Phase 7 Iconography complete — @phosphor-icons/react@2.1.10 installed, 10 components migrated off emoji, icon-map.ts resolver, all 28 tests pass, build green.)
 
 ## Phase Progress
 
@@ -31,12 +31,12 @@ See: .planning/PROJECT.md (updated 2026-06-03)
 | 4. Polish & Ship | ✓ Complete | 5 (UI-01..03, TEST-01..02) | 1/1 |
 | 5. Professional UI Redesign | ✓ Complete | 6 (UI-04..09) | 5/5 |
 | 6. Theme Unifier | ✓ Complete (1/1) | UI-01, UI-02 | 1/1 |
-| 7. Iconography | ⧗ Planned (1 plan) | UI-02 | 0/1 |
+| 7. Iconography | ✓ Complete (1/1) | UI-02 | 1/1 |
 | 8. Motion & Performance | ⧗ Planned (1 plan) | UI-01, UI-02 | 0/1 |
 | 9. Visual Discipline | ⧗ Planned (1 plan) | UI-01, UI-02 | 0/1 |
 | 10. AGENTS.md | ⧗ Planned (1 plan) | UI-01, UI-02 | 0/1 |
 
-**Total:** 28 requirements | 5/10 phases complete | 10/16 plans complete
+**Total:** 28 requirements | 6/10 phases complete | 11/16 plans complete
 
 ## Test Coverage
 
@@ -66,6 +66,8 @@ See: .planning/PROJECT.md (updated 2026-06-03)
 | IndexedDB via `idb` library | Better API than raw IndexedDB | ✓ Good |
 | Manual service worker | Avoids vite-plugin-pwa dependency | ✓ Good |
 | Vitest + Playwright for tests | Modern, fast, good DX | ✓ Good |
+| @phosphor-icons/react for UI icons | MIT, tree-shakable, weight variants (regular=1.5 stroke) | ✓ Good |
+| Centralised icon-map.ts for file types | Single source of truth, callers compose size/className | ✓ Good |
 
 ## Accumulated Context
 
