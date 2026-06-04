@@ -3,7 +3,7 @@ phase: 1
 slug: core-storage-engine
 status: approved
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-06-04
 ---
 
