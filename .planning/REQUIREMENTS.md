@@ -42,10 +42,12 @@ Requirements for initial release.
 ## v2 Requirements
 
 ### Sharing & Collaboration
+
 - **SHARE-01**: User can generate shareable public links for individual files.
 - **SHARE-02**: Shareable links can be configured with an optional expiry timestamp.
 
 ### Encryption
+
 - **CRYPTO-01**: Client-side AES-256-GCM encryption of chunks before upload, using a user-specified passphrase.
 - **CRYPTO-02**: Client-side decryption during chunk reassembly (passphrase is never sent to the server).
 
@@ -83,6 +85,7 @@ Requirements for initial release.
 | UI-06 | Phase 3 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 20 total
 - Mapped to phases: 20
 - Unmapped: 0 ✓
