@@ -128,7 +128,7 @@ function ShareAccess() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
+    <div className="min-h-[100dvh] bg-background text-foreground flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm text-center shadow-sm">
         {status === 'loading' && <p className="text-text-muted">Loading share...</p>}
         {status === 'expired' && (
