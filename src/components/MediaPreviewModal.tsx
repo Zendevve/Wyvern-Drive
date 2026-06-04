@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { X } from '@phosphor-icons/react';
 import { useAuthStore } from '../stores/auth-store';
 import { getWebhookUrl } from '../stores/file-store';
 import {
@@ -74,7 +75,9 @@ export function MediaPreviewModal({ file, isOpen, onClose }: MediaPreviewModalPr
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <Dialog.Title className="font-bold truncate">{file.name}</Dialog.Title>
             <Dialog.Close asChild>
-              <button onClick={handleClose} className="text-discord-muted hover:text-discord-text text-xl">✕</button>
+              <button onClick={handleClose} aria-label="Close preview" className="text-discord-muted hover:text-discord-text p-1">
+                <X size={20} weight="regular" aria-hidden="true" />
+              </button>
             </Dialog.Close>
           </div>
 

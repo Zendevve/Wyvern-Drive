@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { Lock, X } from '@phosphor-icons/react';
 import { v4 as uuidv4 } from 'uuid';
 import { useShareStore } from '../stores/share-store';
 import { useAuthStore } from '../stores/auth-store';
@@ -162,8 +163,8 @@ export function ShareModal({ file, isOpen, onClose }: ShareModalProps) {
                 <p className="text-sm font-medium mb-2">Existing shares</p>
                 {existingShares.map(share => (
                   <div key={share.id} className="flex items-center justify-between py-1">
-                    <span className="text-xs text-text-muted">
-                      {share.hasPassword ? '🔒 ' : ''}
+                    <span className="text-xs text-text-muted inline-flex items-center gap-1">
+                      {share.hasPassword && <Lock size={12} weight="regular" className="inline" aria-hidden="true" />}
                       {share.expiresAt > 0 ? `Expires ${new Date(share.expiresAt).toLocaleDateString()}` : 'No expiry'}
                     </span>
                     <button onClick={() => handleRevoke(share.id)} className="text-xs text-destructive hover:underline">
@@ -176,7 +177,12 @@ export function ShareModal({ file, isOpen, onClose }: ShareModalProps) {
           </div>
 
           <Dialog.Close asChild>
-            <button className="absolute top-4 right-4 text-text-muted hover:text-foreground">✕</button>
+            <button
+              aria-label="Close share dialog"
+              className="absolute top-4 right-4 text-text-muted hover:text-foreground p-1"
+            >
+              <X size={16} weight="regular" aria-hidden="true" />
+            </button>
           </Dialog.Close>
         </Dialog.Content>
       </Dialog.Portal>

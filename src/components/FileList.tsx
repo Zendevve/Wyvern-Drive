@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Folder } from '@phosphor-icons/react';
 import { useFileStore } from '../stores/file-store';
 import { useFolderStore } from '../stores/folder-store';
 import { useSearchStore } from '../stores/search-store';
@@ -7,19 +8,8 @@ import { isPreviewable } from '../lib/media';
 import { FileActions } from './FileActions';
 import { MediaPreviewModal } from './MediaPreviewModal';
 import { PhotoTimeline } from './PhotoTimeline';
+import { getFileIcon } from './icon-map';
 import type { FileRecord } from '../types';
-
-function getFileIcon(mimeType: string) {
-  if (mimeType.startsWith('image/')) return '🖼️';
-  if (mimeType.startsWith('video/')) return '🎥';
-  if (mimeType.startsWith('audio/')) return '🎵';
-  if (mimeType === 'application/pdf') return '📕';
-  if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('rar') || mimeType.includes('gzip')) return '📦';
-  if (mimeType.includes('word') || mimeType.includes('office') || mimeType.includes('document')) return '📄';
-  if (mimeType.includes('excel') || mimeType.includes('sheet')) return '📊';
-  if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return '📈';
-  return '💾';
-}
 
 function getFileIconBg(mimeType: string) {
   if (mimeType.startsWith('image/')) return 'bg-blue-500/10 text-blue-500';
@@ -139,7 +129,7 @@ export function FileList() {
                     onClick={(e) => { e.stopPropagation(); setCurrentFolder(folder.id); }}
                     className="flex items-center gap-3 p-3 bg-card border border-border/80 hover:border-primary/40 hover:bg-card-hover rounded-xl cursor-pointer transition-all duration-200 group shadow-xs"
                   >
-                    <span className="text-2xl transform group-hover:scale-110 transition-transform duration-300">📁</span>
+                    <Folder size={28} weight="regular" className="text-primary transform group-hover:scale-110 transition-transform duration-300" aria-hidden="true" />
                     <span className="text-sm font-medium text-foreground truncate">{folder.name}</span>
                   </div>
                 ))}
@@ -167,9 +157,12 @@ export function FileList() {
                         }`}
                       >
                         {/* File Format Large Visual */}
-                        <div className={`h-24 rounded-xl flex items-center justify-center text-4xl mb-3 transition-colors ${getFileIconBg(file.mimeType)}`}>
+                        <div className={`h-24 rounded-xl flex items-center justify-center mb-3 transition-colors ${getFileIconBg(file.mimeType)}`}>
                           <span className="transform group-hover:scale-110 transition-transform duration-300">
-                            {getFileIcon(file.mimeType)}
+                            {(() => {
+                              const Icon = getFileIcon(file.mimeType);
+                              return <Icon size={32} weight="regular" aria-hidden="true" />;
+                            })()}
                           </span>
                         </div>
 
@@ -218,7 +211,10 @@ export function FileList() {
                               }`}
                             >
                               <td className="py-3 px-4 text-xl">
-                                {getFileIcon(file.mimeType)}
+                                {(() => {
+                                  const Icon = getFileIcon(file.mimeType);
+                                  return <Icon size={20} weight="regular" aria-hidden="true" />;
+                                })()}
                               </td>
                               <td className="py-3 px-4 font-semibold text-foreground truncate max-w-xs">
                                 {file.name}

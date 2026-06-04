@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Folder, CaretDown, CaretRight } from '@phosphor-icons/react';
 import { useFolderStore } from '../stores/folder-store';
 
 export function FolderTree() {
@@ -42,14 +43,15 @@ export function FolderTree() {
           {children.length > 0 ? (
             <button
               onClick={(e) => { e.stopPropagation(); toggleExpand(folder.id); }}
-              className="text-[9px] w-3 flex items-center justify-center text-text-muted hover:text-foreground cursor-pointer"
+              aria-label={isExpanded ? 'Collapse folder' : 'Expand folder'}
+              className="w-3 flex items-center justify-center text-text-muted hover:text-foreground cursor-pointer"
             >
-              {isExpanded ? '▼' : '▶'}
+              {isExpanded ? <CaretDown size={10} weight="regular" aria-hidden="true" /> : <CaretRight size={10} weight="regular" aria-hidden="true" />}
             </button>
           ) : (
             <span className="w-3" />
           )}
-          <span aria-hidden="true" className="text-sm shrink-0">📁</span>
+          <Folder size={14} weight="regular" className="text-text-muted shrink-0" aria-hidden="true" />
           <span className="truncate">{folder.name}</span>
         </div>
         {isExpanded && children.map(child => renderFolder(child, depth + 1))}
@@ -70,7 +72,7 @@ export function FolderTree() {
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrentFolder(null); } }}
       >
         <span className="w-3" />
-        <span aria-hidden="true" className="text-sm shrink-0">📁</span>
+        <Folder size={14} weight="regular" className="text-text-muted shrink-0" aria-hidden="true" />
         <span>Root</span>
       </div>
       {rootFolders.map(folder => renderFolder(folder))}

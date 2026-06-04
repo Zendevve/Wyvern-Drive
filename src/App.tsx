@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Cloud, HardDrives, Image, Gear, Sun, Moon, Lock } from '@phosphor-icons/react';
 import { useAuthStore } from './stores/auth-store';
 import { useThemeStore } from './stores/theme-store';
 import { useWebhookStore } from './stores/webhook-store';
@@ -245,7 +246,7 @@ export default function App() {
             {/* Sidebar Brand Header */}
             <div className="h-16 flex items-center justify-between px-4 border-b border-border">
               <div className="flex items-center gap-2 overflow-hidden">
-                <span className="text-xl shrink-0" aria-hidden="true">🐉</span>
+                <Cloud size={20} weight="regular" className="text-primary shrink-0" aria-hidden="true" />
                 {sidebarOpen && (
                   <span className="font-semibold tracking-tight text-foreground truncate">
                     Wyvern Drive
@@ -266,13 +267,14 @@ export default function App() {
               <div>
                 <button
                   onClick={() => setActiveView('drive')}
+                  aria-label="My Drive"
                   className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
                     activeView === 'drive'
                       ? 'bg-primary/10 text-primary'
                       : 'text-text-muted hover:text-foreground hover:bg-card-hover'
                   }`}
                 >
-                  <span className="text-base shrink-0" aria-hidden="true">💾</span>
+                  <HardDrives size={18} weight="regular" className="shrink-0" aria-hidden="true" />
                   {sidebarOpen && <span>My Drive</span>}
                 </button>
                 {activeView === 'drive' && sidebarOpen && (
@@ -284,25 +286,27 @@ export default function App() {
 
               <button
                 onClick={() => setActiveView('photos')}
+                aria-label="Photos"
                 className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
                   activeView === 'photos'
                     ? 'bg-primary/10 text-primary'
                     : 'text-text-muted hover:text-foreground hover:bg-card-hover'
                 }`}
               >
-                <span className="text-base shrink-0" aria-hidden="true">🖼️</span>
+                <Image size={18} weight="regular" className="shrink-0" aria-hidden="true" />
                 {sidebarOpen && <span>Photos</span>}
               </button>
 
               <button
                 onClick={() => setActiveView('settings')}
+                aria-label="Settings"
                 className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
                   activeView === 'settings'
                     ? 'bg-primary/10 text-primary'
                     : 'text-text-muted hover:text-foreground hover:bg-card-hover'
                 }`}
               >
-                <span className="text-base shrink-0" aria-hidden="true">⚙️</span>
+                <Gear size={18} weight="regular" className="shrink-0" aria-hidden="true" />
                 {sidebarOpen && <span>Settings</span>}
               </button>
             </nav>
@@ -325,16 +329,21 @@ export default function App() {
                 aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
                 className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-text-muted hover:text-foreground hover:bg-card-hover transition-colors cursor-pointer"
               >
-                <span className="text-base shrink-0" aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span>
+                {theme === 'dark' ? (
+                  <Sun size={18} weight="regular" className="shrink-0" aria-hidden="true" />
+                ) : (
+                  <Moon size={18} weight="regular" className="shrink-0" aria-hidden="true" />
+                )}
                 {sidebarOpen && <span>{theme === 'dark' ? 'Light Theme' : 'Dark Theme'}</span>}
               </button>
 
               {/* Lock database */}
               <button
                 onClick={lock}
+                aria-label="Lock Drive"
                 className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
               >
-                <span className="text-base shrink-0" aria-hidden="true">🔒</span>
+                <Lock size={18} weight="regular" className="shrink-0" aria-hidden="true" />
                 {sidebarOpen && <span>Lock Drive</span>}
               </button>
             </div>

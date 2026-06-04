@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { X } from '@phosphor-icons/react';
 import { useAuthStore } from '../stores/auth-store';
 import { getWebhookUrl } from '../stores/file-store';
 import { loadMediaBlob, createMediaBlobUrl, revokeMediaBlobUrl } from '../lib/media';
@@ -57,7 +58,12 @@ export function LightboxModal({ file, isOpen, onClose, onNavigate }: LightboxMod
         <Dialog.Overlay className="fixed inset-0 bg-black/90 z-50" />
         <Dialog.Content className="fixed inset-0 z-50 flex flex-col items-center justify-center">
           <Dialog.Close asChild>
-            <button className="absolute top-4 right-4 text-white/70 hover:text-white text-2xl z-10">✕</button>
+            <button
+              aria-label="Close lightbox"
+              className="absolute top-4 right-4 text-white/70 hover:text-white z-10 p-1"
+            >
+              <X size={28} weight="regular" aria-hidden="true" />
+            </button>
           </Dialog.Close>
 
           <div className="flex-1 flex items-center justify-center w-full p-4">

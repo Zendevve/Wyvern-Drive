@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { X } from '@phosphor-icons/react';
 import { getVersions, restoreVersion } from '../lib/versioning';
 import { useAuthStore } from '../stores/auth-store';
 import { getWebhookUrl } from '../stores/file-store';
@@ -32,7 +33,9 @@ export function VersionHistory({ fileId, onClose }: Props) {
     <div className="bg-darker-bg p-4 rounded-lg">
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-bold">Version History</h3>
-        <button onClick={onClose} className="text-discord-muted hover:text-discord-text text-sm">✕</button>
+        <button onClick={onClose} aria-label="Close version history" className="text-discord-muted hover:text-discord-text p-1">
+          <X size={14} weight="regular" aria-hidden="true" />
+        </button>
       </div>
       {versions.length === 0 && (
         <p className="text-discord-muted text-sm">No version history</p>

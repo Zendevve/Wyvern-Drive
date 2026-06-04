@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X } from '@phosphor-icons/react';
 import { useFileStore } from '../stores/file-store';
 import { useAuthStore } from '../stores/auth-store';
 import { useWebhookStore } from '../stores/webhook-store';
@@ -6,6 +7,7 @@ import { formatFileSize, formatDate } from '../utils/format';
 import { useToast } from './Toast';
 import { generateShareLink, ONE_HOUR, ONE_DAY, SEVEN_DAYS, THIRTY_DAYS } from '../lib/sharing';
 import { createVersion, restoreVersion } from '../lib/versioning';
+import { getFileIcon } from './icon-map';
 
 export function FileDetailsDrawer() {
   const selectedFileId = useFileStore(s => s.selectedFileId);
@@ -97,7 +99,7 @@ export function FileDetailsDrawer() {
           aria-label="Close details"
           className="p-1.5 hover:bg-card-hover rounded-lg text-text-muted hover:text-foreground cursor-pointer transition-colors"
         >
-          ✕
+          <X size={16} weight="regular" aria-hidden="true" />
         </button>
       </div>
 
@@ -105,8 +107,11 @@ export function FileDetailsDrawer() {
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         {/* File Overview */}
         <div className="flex flex-col items-center text-center pb-4 border-b border-border/60">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-4xl mb-3">
-            {file.mimeType.startsWith('image/') ? '🖼️' : file.mimeType.startsWith('video/') ? '🎥' : file.mimeType.startsWith('audio/') ? '🎵' : '📄'}
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
+            {(() => {
+              const Icon = getFileIcon(file.mimeType);
+              return <Icon size={32} weight="regular" className="text-primary" aria-hidden="true" />;
+            })()}
           </div>
           <h4 className="font-semibold text-foreground truncate max-w-full px-2" title={file.name}>
             {file.name}

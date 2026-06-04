@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
+import { MusicNotes, Play, Pause, SkipBack, SkipForward, SpeakerHigh, CaretDown, CaretUp, X } from '@phosphor-icons/react';
 import { useAudioStore } from '../stores/audio-store';
 import { useAuthStore } from '../stores/auth-store';
 import { getWebhookUrl } from '../stores/file-store';
@@ -132,25 +133,28 @@ export function AudioPlayer() {
               <button
                 onClick={() => setIsExpanded(false)}
                 aria-label="Collapse player"
-                className="p-1 hover:bg-card-hover rounded-lg text-text-muted hover:text-foreground cursor-pointer text-xs"
+                className="p-1 hover:bg-card-hover rounded-lg text-text-muted hover:text-foreground cursor-pointer"
               >
-                ▼
+                <CaretDown size={12} weight="regular" aria-hidden="true" />
               </button>
               <button
                 onClick={close}
                 aria-label="Close player"
-                className="p-1 hover:bg-card-hover rounded-lg text-text-muted hover:text-foreground cursor-pointer text-xs"
+                className="p-1 hover:bg-card-hover rounded-lg text-text-muted hover:text-foreground cursor-pointer"
               >
-                ✕
+                <X size={12} weight="regular" aria-hidden="true" />
               </button>
             </div>
           </div>
 
           {/* Album Art Icon Design */}
           <div className="h-32 bg-gradient-to-tr from-primary/20 via-primary/5 to-transparent rounded-xl flex items-center justify-center relative overflow-hidden group border border-border/40">
-            <span className={`text-5xl transform transition-transform duration-1000 ${isPlaying ? 'rotate-180 animate-[spin_6s_linear_infinite]' : ''}`}>
-              🎵
-            </span>
+            <MusicNotes
+              size={48}
+              weight="regular"
+              aria-hidden="true"
+              className={`text-primary transform transition-transform duration-1000 ${isPlaying ? 'rotate-180 animate-[spin_6s_linear_infinite]' : ''}`}
+            />
           </div>
 
           {/* Track metadata details */}
@@ -182,29 +186,33 @@ export function AudioPlayer() {
             <button
               onClick={previous}
               aria-label="Previous track"
-              className="p-2 hover:bg-card-hover text-foreground hover:text-primary rounded-full transition-colors cursor-pointer text-sm"
+              className="p-2 hover:bg-card-hover text-foreground hover:text-primary rounded-full transition-colors cursor-pointer"
             >
-              ⏮
+              <SkipBack size={18} weight="regular" aria-hidden="true" />
             </button>
             <button
               onClick={() => isPlaying ? pause() : resume()}
               aria-label={isPlaying ? 'Pause' : 'Play'}
-              className="bg-primary hover:bg-primary-hover text-white rounded-full w-10 h-10 flex items-center justify-center transition-all shadow-md cursor-pointer text-lg"
+              className="bg-primary hover:bg-primary-hover text-white rounded-full w-10 h-10 flex items-center justify-center transition-all shadow-md cursor-pointer"
             >
-              {isPlaying ? '⏸' : '▶'}
+              {isPlaying ? (
+                <Pause size={20} weight="regular" aria-hidden="true" />
+              ) : (
+                <Play size={20} weight="regular" aria-hidden="true" />
+              )}
             </button>
             <button
               onClick={next}
               aria-label="Next track"
-              className="p-2 hover:bg-card-hover text-foreground hover:text-primary rounded-full transition-colors cursor-pointer text-sm"
+              className="p-2 hover:bg-card-hover text-foreground hover:text-primary rounded-full transition-colors cursor-pointer"
             >
-              ⏭
+              <SkipForward size={18} weight="regular" aria-hidden="true" />
             </button>
           </div>
 
           {/* Volume Control */}
           <div className="flex items-center gap-2 border-t border-border/40 pt-3">
-            <span className="text-xs text-text-muted shrink-0">🔊</span>
+            <SpeakerHigh size={14} weight="regular" className="text-text-muted shrink-0" aria-hidden="true" />
             <input
               type="range"
               min={0}
@@ -220,8 +228,8 @@ export function AudioPlayer() {
         /* Mini Mode Layout */
         <div className="flex items-center justify-between gap-3 relative">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className={`w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-sm shrink-0 ${isPlaying ? 'animate-[spin_8s_linear_infinite]' : ''}`}>
-              🎵
+            <div className={`w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 ${isPlaying ? 'animate-[spin_8s_linear_infinite]' : ''}`}>
+              <MusicNotes size={14} weight="regular" className="text-primary" aria-hidden="true" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-foreground text-xs truncate" title={currentTrack.name}>
@@ -235,16 +243,20 @@ export function AudioPlayer() {
             <button
               onClick={() => isPlaying ? pause() : resume()}
               aria-label={isPlaying ? 'Pause' : 'Play'}
-              className="w-7 h-7 bg-primary hover:bg-primary-hover text-white rounded-full flex items-center justify-center transition-all cursor-pointer text-xs"
+              className="w-7 h-7 bg-primary hover:bg-primary-hover text-white rounded-full flex items-center justify-center transition-all cursor-pointer"
             >
-              {isPlaying ? '⏸' : '▶'}
+              {isPlaying ? (
+                <Pause size={14} weight="regular" aria-hidden="true" />
+              ) : (
+                <Play size={14} weight="regular" aria-hidden="true" />
+              )}
             </button>
             <button
               onClick={() => setIsExpanded(true)}
               aria-label="Expand player"
-              className="p-1 hover:bg-card-hover rounded-lg text-text-muted hover:text-foreground cursor-pointer text-xs"
+              className="p-1 hover:bg-card-hover rounded-lg text-text-muted hover:text-foreground cursor-pointer"
             >
-              ▲
+              <CaretUp size={12} weight="regular" aria-hidden="true" />
             </button>
           </div>
 

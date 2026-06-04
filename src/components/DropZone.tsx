@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
+import { UploadSimple } from '@phosphor-icons/react';
 import { useAuthStore } from '../stores/auth-store';
 import { useUploadStore } from '../stores/upload-store';
 import { useFileStore, getWebhookUrl } from '../stores/file-store';
@@ -92,7 +93,9 @@ export function DropZone() {
         {/* Glow effect */}
         <div className="absolute inset-0 bg-radial from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
-        <div className="text-3xl mb-3 transform group-hover:-translate-y-1 transition-transform duration-300">📥</div>
+        <div className="text-3xl mb-3 transform group-hover:-translate-y-1 transition-transform duration-300">
+          <UploadSimple size={28} weight="regular" className="text-text-muted group-hover:text-primary transition-colors" aria-hidden="true" />
+        </div>
         <p className="text-foreground font-medium mb-1">Drag & drop files here</p>
         <p className="text-xs text-text-muted">or click to browse from your device</p>
         
@@ -109,7 +112,9 @@ export function DropZone() {
       {isDragging && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/60 backdrop-blur-md border-4 border-dashed border-primary animate-in fade-in duration-200">
           <div className="bg-card border border-border rounded-3xl p-8 flex flex-col items-center gap-4 max-w-sm text-center shadow-2xl scale-in duration-200">
-            <div className="text-5xl animate-bounce">📥</div>
+            <div className="text-5xl animate-bounce text-primary">
+              <UploadSimple size={48} weight="regular" aria-hidden="true" />
+            </div>
             <h3 className="text-xl font-semibold text-foreground">Drop files to upload</h3>
             <p className="text-sm text-text-muted">Release to upload files securely to your encrypted storage.</p>
           </div>
