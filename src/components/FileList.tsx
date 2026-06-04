@@ -9,6 +9,7 @@ import { FileActions } from './FileActions';
 import { MediaPreviewModal } from './MediaPreviewModal';
 import { PhotoTimeline } from './PhotoTimeline';
 import { getFileIcon } from './icon-map';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { FileRecord } from '../types';
 
 function getFileIconBg(mimeType: string) {
@@ -21,6 +22,7 @@ function getFileIconBg(mimeType: string) {
 }
 
 export function FileList() {
+  const reduced = useReducedMotion();
   const files = useFileStore(s => s.files);
   const isLoading = useFileStore(s => s.isLoading);
   const selectedFileId = useFileStore(s => s.selectedFileId);
@@ -54,7 +56,7 @@ export function FileList() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <p className="text-text-muted text-sm animate-pulse">Loading files and folders...</p>
+        <p className={`text-text-muted text-sm${reduced ? '' : ' animate-pulse'}`}>Loading files and folders...</p>
       </div>
     );
   }
@@ -86,7 +88,7 @@ export function FileList() {
           <button
             onClick={() => setViewMode('grid')}
             aria-label="Grid view"
-            className={`p-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all ${
+            className={`p-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
               viewMode === 'grid' ? 'bg-primary text-white shadow-xs' : 'text-text-muted hover:text-foreground'
             }`}
           >
@@ -95,7 +97,7 @@ export function FileList() {
           <button
             onClick={() => setViewMode('list')}
             aria-label="List view"
-            className={`p-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all ${
+            className={`p-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
               viewMode === 'list' ? 'bg-primary text-white shadow-xs' : 'text-text-muted hover:text-foreground'
             }`}
           >
@@ -104,7 +106,7 @@ export function FileList() {
           <button
             onClick={() => setViewMode('timeline')}
             aria-label="Timeline view"
-            className={`p-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all ${
+            className={`p-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
               viewMode === 'timeline' ? 'bg-primary text-white shadow-xs' : 'text-text-muted hover:text-foreground'
             }`}
           >
@@ -127,7 +129,7 @@ export function FileList() {
                   <div
                     key={folder.id}
                     onClick={(e) => { e.stopPropagation(); setCurrentFolder(folder.id); }}
-                    className="flex items-center gap-3 p-3 bg-card border border-border/80 hover:border-primary/40 hover:bg-card-hover rounded-xl cursor-pointer transition-all duration-200 group shadow-xs"
+                    className="flex items-center gap-3 p-3 bg-card border border-border/80 hover:border-primary/40 hover:bg-card-hover rounded-xl cursor-pointer transition-[transform,colors] duration-200 group shadow-xs"
                   >
                     <Folder size={28} weight="regular" className="text-primary transform group-hover:scale-110 transition-transform duration-300" aria-hidden="true" />
                     <span className="text-sm font-medium text-foreground truncate">{folder.name}</span>

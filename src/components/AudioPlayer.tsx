@@ -4,8 +4,10 @@ import { useAudioStore } from '../stores/audio-store';
 import { useAuthStore } from '../stores/auth-store';
 import { getWebhookUrl } from '../stores/file-store';
 import { loadMediaBlob, createMediaBlobUrl } from '../lib/media';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 export function AudioPlayer() {
+  const reduced = useReducedMotion();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const isVisible = useAudioStore(s => s.isVisible);
@@ -153,7 +155,7 @@ export function AudioPlayer() {
               size={48}
               weight="regular"
               aria-hidden="true"
-              className={`text-primary transform transition-transform duration-1000 ${isPlaying ? 'rotate-180 animate-[spin_6s_linear_infinite]' : ''}`}
+              className={`text-primary transform transition-transform duration-1000 ${isPlaying && !reduced ? 'rotate-180 animate-[spin_6s_linear_infinite]' : ''}`}
             />
           </div>
 
@@ -193,7 +195,7 @@ export function AudioPlayer() {
             <button
               onClick={() => isPlaying ? pause() : resume()}
               aria-label={isPlaying ? 'Pause' : 'Play'}
-              className="bg-primary hover:bg-primary-hover text-white rounded-full w-10 h-10 flex items-center justify-center transition-all shadow-md cursor-pointer"
+              className="bg-primary hover:bg-primary-hover text-white rounded-full w-10 h-10 flex items-center justify-center transition-colors shadow-md cursor-pointer"
             >
               {isPlaying ? (
                 <Pause size={20} weight="regular" aria-hidden="true" />
@@ -228,7 +230,7 @@ export function AudioPlayer() {
         /* Mini Mode Layout */
         <div className="flex items-center justify-between gap-3 relative">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className={`w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 ${isPlaying ? 'animate-[spin_8s_linear_infinite]' : ''}`}>
+            <div className={`w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 ${isPlaying && !reduced ? 'animate-[spin_8s_linear_infinite]' : ''}`}>
               <MusicNotes size={14} weight="regular" className="text-primary" aria-hidden="true" />
             </div>
             <div className="min-w-0 flex-1">
@@ -243,7 +245,7 @@ export function AudioPlayer() {
             <button
               onClick={() => isPlaying ? pause() : resume()}
               aria-label={isPlaying ? 'Pause' : 'Play'}
-              className="w-7 h-7 bg-primary hover:bg-primary-hover text-white rounded-full flex items-center justify-center transition-all cursor-pointer"
+              className="w-7 h-7 bg-primary hover:bg-primary-hover text-white rounded-full flex items-center justify-center transition-colors cursor-pointer"
             >
               {isPlaying ? (
                 <Pause size={14} weight="regular" aria-hidden="true" />

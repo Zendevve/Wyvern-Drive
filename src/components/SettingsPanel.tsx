@@ -69,7 +69,7 @@ export function SettingsPanel() {
           <button
             onClick={handleValidate}
             disabled={!urlInput || isSaving}
-            className="px-5 py-2.5 bg-card hover:bg-card-hover text-foreground border border-border hover:border-text-muted/30 disabled:opacity-50 rounded-xl text-sm font-medium transition-all cursor-pointer"
+            className="px-5 py-2.5 bg-card hover:bg-card-hover text-foreground border border-border hover:border-text-muted/30 disabled:opacity-50 rounded-xl text-sm font-medium transition-colors cursor-pointer"
           >
             Test Connection
           </button>

@@ -114,3 +114,17 @@
     border: none;
   }
 }
+
+/* Accessibility: collapse all infinite / looping animations when the user
+   has requested reduced motion. Hover and state-change transitions are
+   not affected (those are user-initiated). */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-bounce,
+  .animate-spin,
+  .animate-in,
+  .animate-\[spin_6s_linear_infinite\],
+  .animate-\[spin_8s_linear_infinite\] {
+    animation: none !important;
+  }
+}

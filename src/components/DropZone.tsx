@@ -4,8 +4,10 @@ import { useAuthStore } from '../stores/auth-store';
 import { useUploadStore } from '../stores/upload-store';
 import { useFileStore, getWebhookUrl } from '../stores/file-store';
 import { uploadFile } from '../lib/upload';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 export function DropZone() {
+  const reduced = useReducedMotion();
   const key = useAuthStore(s => s.derivedKey);
   const startUpload = useUploadStore(s => s.startUpload);
   const updateProgress = useUploadStore(s => s.updateProgress);
@@ -88,7 +90,7 @@ export function DropZone() {
         aria-label="Upload files by clicking or dropping files here"
         onClick={() => inputRef.current?.click()}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
-        className="group relative border-2 border-dashed border-border hover:border-primary/50 bg-card/50 hover:bg-card/80 rounded-2xl min-h-[160px] p-6 text-center flex flex-col items-center justify-center transition-all duration-300 cursor-pointer shadow-sm overflow-hidden"
+        className="group relative border-2 border-dashed border-border hover:border-primary/50 bg-card/50 hover:bg-card/80 rounded-2xl min-h-[160px] p-6 text-center flex flex-col items-center justify-center transition-[transform,colors] duration-300 cursor-pointer shadow-sm overflow-hidden"
       >
         {/* Glow effect */}
         <div className="absolute inset-0 bg-radial from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
@@ -112,7 +114,7 @@ export function DropZone() {
       {isDragging && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/60 backdrop-blur-md border-4 border-dashed border-primary animate-in fade-in duration-200">
           <div className="bg-card border border-border rounded-3xl p-8 flex flex-col items-center gap-4 max-w-sm text-center shadow-2xl scale-in duration-200">
-            <div className="text-5xl animate-bounce text-primary">
+            <div className={`text-5xl text-primary${reduced ? '' : ' animate-bounce'}`}>
               <UploadSimple size={48} weight="regular" aria-hidden="true" />
             </div>
             <h3 className="text-xl font-semibold text-foreground">Drop files to upload</h3>

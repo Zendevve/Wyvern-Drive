@@ -17,8 +17,10 @@ import { FileDetailsDrawer } from './components/FileDetailsDrawer';
 import { parseShareLink, verifySharePassword, accessShare } from './lib/sharing';
 import { getFile } from './lib/db';
 import { getWebhookUrl } from './stores/file-store';
+import { useReducedMotion } from './hooks/useReducedMotion';
 
 function ShareAccess() {
+  const reduced = useReducedMotion();
   const [status, setStatus] = useState<'loading' | 'password' | 'downloading' | 'expired' | 'error' | 'ready'>('loading');
   const [fileName, setFileName] = useState('');
   const [password, setPassword] = useState('');
@@ -161,7 +163,7 @@ function ShareAccess() {
             </button>
           </>
         )}
-        {status === 'downloading' && <p className="text-text-muted animate-pulse">Decrypting and assembling...</p>}
+        {status === 'downloading' && <p className={`text-text-muted${reduced ? '' : ' animate-pulse'}`}>Decrypting and assembling...</p>}
         {status === 'ready' && (
           <>
             <p className="font-bold mb-2">{fileName || 'Shared File'}</p>
@@ -227,7 +229,7 @@ export default function App() {
     <ToastProvider>
       {!isUnlocked && <PasswordModal />}
       {isUnlocked && (
-        <div className="flex h-screen overflow-hidden bg-background text-foreground select-none">
+        <div className="flex h-[100dvh] overflow-hidden bg-background text-foreground select-none">
           <a
             href="#main-content"
             className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-primary focus:text-white focus:px-4 focus:py-2 focus:rounded"
@@ -268,7 +270,7 @@ export default function App() {
                 <button
                   onClick={() => setActiveView('drive')}
                   aria-label="My Drive"
-                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
                     activeView === 'drive'
                       ? 'bg-primary/10 text-primary'
                       : 'text-text-muted hover:text-foreground hover:bg-card-hover'
@@ -287,7 +289,7 @@ export default function App() {
               <button
                 onClick={() => setActiveView('photos')}
                 aria-label="Photos"
-                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
                   activeView === 'photos'
                     ? 'bg-primary/10 text-primary'
                     : 'text-text-muted hover:text-foreground hover:bg-card-hover'
@@ -300,7 +302,7 @@ export default function App() {
               <button
                 onClick={() => setActiveView('settings')}
                 aria-label="Settings"
-                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
                   activeView === 'settings'
                     ? 'bg-primary/10 text-primary'
                     : 'text-text-muted hover:text-foreground hover:bg-card-hover'
