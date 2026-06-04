@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@700,600&f[]=satoshi@400,500,700&display=swap');
 
 @theme {
   --color-background: var(--background);
@@ -9,37 +10,53 @@
   --color-text-muted: var(--text-muted);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
+  --color-destructive: var(--destructive);
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
+  --font-display: 'Clash Display', sans-serif;
+  --font-body: 'Satoshi', sans-serif;
 }
 
 :root {
-  --background: #f4f4f5;
-  --foreground: #09090b;
-  --card: #ffffff;
-  --card-hover: #fafafa;
-  --border: #e4e4e7;
-  --text-muted: #71717a;
-  --primary: #5865F2;
-  --primary-hover: #4752c4;
+  --background: #FAFAFA;
+  --foreground: #0A0A0C;
+  --card: #F0F0F3;
+  --card-hover: #E6E6E9;
+  --border: rgba(10, 10, 12, 0.08);
+  --text-muted: #6B6B70;
+  --primary: #FF5A00;
+  --primary-hover: #E04E00;
+  --destructive: #FF3366;
 }
 
 .dark {
-  --background: #09090b;
-  --foreground: #f4f4f5;
-  --card: #18181b;
-  --card-hover: #27272a;
-  --border: #27272a;
-  --text-muted: #a1a1aa;
+  --background: #0A0A0C;
+  --foreground: #FAFAFA;
+  --card: #1C1C21;
+  --card-hover: #25252B;
+  --border: rgba(255, 255, 255, 0.08);
+  --text-muted: #A1A1AA;
+  --primary: #FF5A00;
+  --primary-hover: #FF7A33;
+  --destructive: #FF3366;
 }
 
 @layer base {
   body {
+    font-family: 'Satoshi', system-ui, -apple-system, sans-serif;
     background-color: var(--background);
+    background-image:
+      radial-gradient(circle at 80% 10%, rgba(255, 90, 0, 0.05), transparent 50%),
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+    background-attachment: fixed;
     color: var(--foreground);
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: 'Clash Display', sans-serif;
+    letter-spacing: -0.02em;
   }
 
   * {
