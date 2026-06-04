@@ -11,7 +11,7 @@
 | 3 | Media & Sharing | In-browser streaming, persistent player, secure sharing, photo timeline | Complete | 2026-06-03 |
 | 4 | Polish & Ship | Production UI, accessibility, PWA, test coverage | Complete | 2026-06-03 |
 | 5 | Professional UI Redesign | 5/5 | Complete    | 2026-06-04 |
-| 6 | Theme Unifier | Migrate orphan Discord-purple classes onto theme tokens; add light+dark semantic surfaces; fix banned em-dash | Planned | 1 plan |
+| 6 | Theme Unifier | Migrate orphan Discord-purple classes onto theme tokens; add light+dark semantic surfaces; fix banned em-dash | Complete | 1 plan |
 | 7 | Iconography | Replace every emoji-as-icon with @phosphor-icons/react; centralise file-type resolver | Planned | 1 plan |
 | 8 | Motion & Performance | 100dvh shell, prefers-reduced-motion gate, self-hosted fonts, image perf, transition-all hygiene | Planned | 1 plan |
 | 9 | Visual Discipline | Document shape scale, z-index scale, semantic colors; replace neon glows and hardcoded color literals | Planned | 1 plan |
@@ -188,7 +188,7 @@ Plans:
 
 Plans:
 
-- [ ] 06-01-PLAN.md — Theme token migration + new semantic surface tokens
+- [x] 06-01-PLAN.md — Theme token migration + new semantic surface tokens
 
 ---
 
