@@ -35,7 +35,7 @@ export function PhotoThumbnail({ file, onClick }: PhotoThumbnailProps) {
     <button
       onClick={onClick}
       aria-label={`View ${file.name}`}
-      className="aspect-square bg-dark-bg rounded overflow-hidden hover:ring-2 hover:ring-blurple transition-all"
+      className="aspect-square bg-card rounded overflow-hidden hover:ring-2 hover:ring-primary transition-all"
     >
       {blobUrl ? (
         <img
@@ -45,7 +45,7 @@ export function PhotoThumbnail({ file, onClick }: PhotoThumbnailProps) {
           className="w-full h-full object-cover"
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-discord-muted text-xs">
+        <div className="w-full h-full flex items-center justify-center text-text-muted text-xs">
           Loading...
         </div>
       )}

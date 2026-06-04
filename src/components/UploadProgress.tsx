@@ -38,13 +38,13 @@ export function UploadProgressList() {
         }[upload.status];
 
         return (
-          <div key={upload.fileId} className="bg-dark-bg rounded-lg p-3">
+          <div key={upload.fileId} className="bg-card rounded-lg p-3">
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm font-medium truncate">{upload.fileName}</span>
-              <span className="text-xs text-discord-muted">{statusText}</span>
+              <span className="text-xs text-text-muted">{statusText}</span>
             </div>
             <div
-              className="h-1.5 bg-gray-700 rounded"
+              className="h-1.5 bg-border rounded"
               role="progressbar"
               aria-valuemin={0}
               aria-valuemax={100}
@@ -53,7 +53,7 @@ export function UploadProgressList() {
             >
               <div
                 className={`h-full rounded transition-all ${
-                  upload.status === 'failed' ? 'bg-red-500' : 'bg-blurple'
+                  upload.status === 'failed' ? 'bg-destructive' : 'bg-primary'
                 }`}
                 style={{ width: `${progress}%` }}
               />

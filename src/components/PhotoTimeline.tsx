@@ -26,7 +26,7 @@ export function PhotoTimeline() {
   }
 
   if (images.length === 0) {
-    return <p className="text-discord-muted p-4">No photos found</p>;
+    return <p className="text-text-muted p-4">No photos found</p>;
   }
 
   return (
@@ -35,7 +35,7 @@ export function PhotoTimeline() {
 
       {Array.from(grouped.entries()).map(([date, photos]) => (
         <div key={date} className="mb-6">
-          <h3 className="text-sm font-medium text-discord-muted mb-2">{date}</h3>
+          <h3 className="text-sm font-medium text-text-muted mb-2">{date}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
             {photos.map(photo => (
               <PhotoThumbnail

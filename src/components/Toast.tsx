@@ -34,9 +34,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, [toasts]);
 
   const variantStyles = {
-    default: 'bg-dark-bg border-gray-600',
-    success: 'bg-green-900/50 border-success',
-    error: 'bg-red-900/50 border-error',
+    default: 'bg-card border-border',
+    success: 'bg-surface-success border-success text-foreground',
+    error: 'bg-surface-error border-error text-foreground',
   };
 
   return (
@@ -46,7 +46,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         {toasts.map(t => (
           <div key={t.id} role="alert" className={`border rounded-lg px-4 py-3 shadow-lg ${variantStyles[t.variant]} min-w-64`}>
             <p className="font-medium">{t.title}</p>
-            {t.description && <p className="text-sm text-discord-muted">{t.description}</p>}
+            {t.description && <p className="text-sm text-text-muted">{t.description}</p>}
           </div>
         ))}
       </div>

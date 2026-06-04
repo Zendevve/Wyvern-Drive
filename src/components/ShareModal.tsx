@@ -98,7 +98,7 @@ export function ShareModal({ file, isOpen, onClose }: ShareModalProps) {
     <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/80 z-50" />
-        <Dialog.Content aria-label={`Share ${file.name}`} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-darker-bg rounded-lg p-6 w-[90vw] max-w-md">
+        <Dialog.Content aria-label={`Share ${file.name}`} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-card rounded-lg p-6 w-[90vw] max-w-md">
           <Dialog.Title className="text-lg font-bold mb-4">Share &quot;{file.name}&quot;</Dialog.Title>
 
           <div className="space-y-4">
@@ -108,7 +108,7 @@ export function ShareModal({ file, isOpen, onClose }: ShareModalProps) {
                 id="usePassword"
                 checked={usePassword}
                 onChange={(e) => setUsePassword(e.target.checked)}
-                className="accent-blurple"
+                className="accent-primary"
               />
               <label htmlFor="usePassword" className="text-sm">Password protect</label>
             </div>
@@ -119,16 +119,16 @@ export function ShareModal({ file, isOpen, onClose }: ShareModalProps) {
                 placeholder="Enter password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-dark-bg border border-gray-700 rounded px-3 py-2 text-sm"
+                className="w-full bg-background border border-border rounded px-3 py-2 text-sm"
               />
             )}
 
             <div>
-              <label className="text-sm text-discord-muted block mb-1">Expiry</label>
+              <label className="text-sm text-text-muted block mb-1">Expiry</label>
               <select
                 value={expiry}
                 onChange={(e) => setExpiry(Number(e.target.value))}
-                className="w-full bg-dark-bg border border-gray-700 rounded px-3 py-2 text-sm"
+                className="w-full bg-background border border-border rounded px-3 py-2 text-sm"
               >
                 {EXPIRY_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -139,7 +139,7 @@ export function ShareModal({ file, isOpen, onClose }: ShareModalProps) {
             <button
               onClick={handleGenerate}
               disabled={generating || (usePassword && !password)}
-              className="w-full bg-blurple hover:bg-blurple/80 disabled:opacity-50 rounded py-2 font-medium"
+              className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 rounded py-2 font-medium"
             >
               {generating ? 'Generating...' : 'Generate Link'}
             </button>
@@ -149,24 +149,24 @@ export function ShareModal({ file, isOpen, onClose }: ShareModalProps) {
                 <input
                   readOnly
                   value={generatedLink}
-                  className="flex-1 bg-dark-bg border border-gray-700 rounded px-3 py-2 text-xs font-mono"
+                  className="flex-1 bg-background border border-border rounded px-3 py-2 text-xs font-mono"
                 />
-                <button onClick={handleCopy} className="bg-blurple hover:bg-blurple/80 rounded px-3 py-2 text-sm">
+                <button onClick={handleCopy} className="bg-primary hover:bg-primary-hover rounded px-3 py-2 text-sm">
                   Copy
                 </button>
               </div>
             )}
 
             {existingShares.length > 0 && (
-              <div className="border-t border-gray-700 pt-3 mt-3">
+              <div className="border-t border-border pt-3 mt-3">
                 <p className="text-sm font-medium mb-2">Existing shares</p>
                 {existingShares.map(share => (
                   <div key={share.id} className="flex items-center justify-between py-1">
-                    <span className="text-xs text-discord-muted">
+                    <span className="text-xs text-text-muted">
                       {share.hasPassword ? '🔒 ' : ''}
                       {share.expiresAt > 0 ? `Expires ${new Date(share.expiresAt).toLocaleDateString()}` : 'No expiry'}
                     </span>
-                    <button onClick={() => handleRevoke(share.id)} className="text-xs text-red-400 hover:underline">
+                    <button onClick={() => handleRevoke(share.id)} className="text-xs text-destructive hover:underline">
                       Revoke
                     </button>
                   </div>
@@ -176,7 +176,7 @@ export function ShareModal({ file, isOpen, onClose }: ShareModalProps) {
           </div>
 
           <Dialog.Close asChild>
-            <button className="absolute top-4 right-4 text-discord-muted hover:text-discord-text">✕</button>
+            <button className="absolute top-4 right-4 text-text-muted hover:text-foreground">✕</button>
           </Dialog.Close>
         </Dialog.Content>
       </Dialog.Portal>
