@@ -41,7 +41,10 @@ export function PhotoThumbnail({ file, onClick }: PhotoThumbnailProps) {
         <img
           src={blobUrl}
           alt={file.name}
+          width={256}
+          height={256}
           loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover"
         />
       ) : (

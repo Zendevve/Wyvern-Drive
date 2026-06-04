@@ -69,7 +69,7 @@ export function LightboxModal({ file, isOpen, onClose, onNavigate }: LightboxMod
           <div className="flex-1 flex items-center justify-center w-full p-4">
             {loading && <p className="text-white/50">Decrypting...</p>}
             {!loading && blobUrl && (
-              <img src={blobUrl} alt={file.name} className="max-w-full max-h-[80vh] object-contain" />
+              <img src={blobUrl} alt={file.name} width={1280} height={720} loading="lazy" decoding="async" className="max-w-full max-h-[80vh] object-contain" />
             )}
           </div>
 
