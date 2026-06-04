@@ -7,6 +7,7 @@ import {
   isImageFile, isVideoFile, isPdfFile, isPreviewable,
   loadMediaBlob, createMediaBlobUrl, revokeMediaBlobUrl, MAX_PREVIEW_SIZE
 } from '../lib/media';
+import { Z_INDEX } from '../constants/tokens';
 import type { FileRecord } from '../types';
 
 interface MediaPreviewModalProps {
@@ -70,20 +71,20 @@ export function MediaPreviewModal({ file, isOpen, onClose }: MediaPreviewModalPr
   return (
     <Dialog.Root open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/80 z-50" />
-        <Dialog.Content aria-label={`Preview ${file.name}`} className="fixed inset-4 md:inset-12 z-50 bg-darker-bg rounded-lg flex flex-col overflow-hidden w-[95vw] sm:w-[80vw]">
-          <div className="flex items-center justify-between p-4 border-b border-gray-700">
-            <Dialog.Title className="font-bold truncate">{file.name}</Dialog.Title>
+        <Dialog.Overlay className={`fixed inset-0 bg-black/80 ${Z_INDEX.modal}`} />
+        <Dialog.Content aria-label={`Preview ${file.name}`} className={`fixed inset-4 md:inset-12 ${Z_INDEX.modal} bg-background rounded-xl border border-border flex flex-col overflow-hidden w-[95vw] sm:w-[80vw]`}>
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <Dialog.Title className="font-bold truncate text-foreground">{file.name}</Dialog.Title>
             <Dialog.Close asChild>
-              <button onClick={handleClose} aria-label="Close preview" className="text-discord-muted hover:text-discord-text p-1">
+              <button onClick={handleClose} aria-label="Close preview" className="text-text-muted hover:text-foreground p-1 transition-colors">
                 <X size={20} weight="regular" aria-hidden="true" />
               </button>
             </Dialog.Close>
           </div>
 
           <div className="flex-1 flex items-center justify-center overflow-auto p-4">
-            {loading && <p className="text-discord-muted">Decrypting...</p>}
-            {error && <p className="text-red-400">{error}</p>}
+            {loading && <p className="text-text-muted">Decrypting...</p>}
+            {error && <p className="text-destructive font-medium">{error}</p>}
             {!loading && !error && blobUrl && isImageFile(file.mimeType) && (
               <img src={blobUrl} alt={file.name} className="max-w-full max-h-full object-contain" />
             )}

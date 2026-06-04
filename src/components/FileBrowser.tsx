@@ -17,7 +17,7 @@ export function FileBrowser() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card p-4 rounded-2xl border border-border/80 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border/80 shadow-sm">
         <Breadcrumbs />
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           <div className="flex-1 md:flex-initial min-w-[220px]">

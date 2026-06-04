@@ -1,5 +1,22 @@
 @import "tailwindcss";
 
+/* ============================================================
+ * Wyvern Drive design tokens
+ *
+ * Shape scale (use Tailwind classes from src/constants/tokens.ts):
+ *   - SHAPE_SCALE.input  : rounded-lg   (form controls, small buttons)
+ *   - SHAPE_SCALE.card   : rounded-xl   (cards, modals, panels)
+ *   - SHAPE_SCALE.pill   : rounded-full (chips, dots, round buttons)
+ *
+ * Z-index scale (use Z_INDEX.* from src/constants/tokens.ts):
+ *   z-0 base → z-10 raised → z-20 dropdown → z-30 sticky
+ *   → z-40 overlay → z-50 modal → z-[60] toast → z-[100] skip-link
+ *
+ * Semantic colors:
+ *   - color: --color-success / --color-warning / --color-error / --color-destructive / --color-primary
+ *   - surface (tinted): --color-surface-success / --color-surface-warning / --color-surface-error
+ *   - foreground: --color-foreground / --color-text-muted / --color-border / --color-card
+ * ============================================================ */
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

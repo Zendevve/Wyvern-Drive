@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth-store';
 import { getWebhookUrl } from '../stores/file-store';
 import { loadMediaBlob, createMediaBlobUrl, revokeMediaBlobUrl } from '../lib/media';
 import { formatDate, formatFileSize } from '../utils/format';
+import { Z_INDEX } from '../constants/tokens';
 import type { FileRecord } from '../types';
 
 interface LightboxModalProps {
@@ -55,12 +56,12 @@ export function LightboxModal({ file, isOpen, onClose, onNavigate }: LightboxMod
   return (
     <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/90 z-50" />
-        <Dialog.Content className="fixed inset-0 z-50 flex flex-col items-center justify-center">
+        <Dialog.Overlay className={`fixed inset-0 bg-black/90 ${Z_INDEX.modal}`} />
+        <Dialog.Content className={`fixed inset-0 ${Z_INDEX.modal} flex flex-col items-center justify-center`}>
           <Dialog.Close asChild>
             <button
               aria-label="Close lightbox"
-              className="absolute top-4 right-4 text-white/70 hover:text-white z-10 p-1"
+              className={`absolute top-4 right-4 text-white/70 hover:text-white ${Z_INDEX.raised} p-1`}
             >
               <X size={28} weight="regular" aria-hidden="true" />
             </button>

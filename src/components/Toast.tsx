@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { Z_INDEX } from '../constants/tokens';
 
 interface Toast {
   id: string;
@@ -42,7 +43,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast: addToast }}>
       {children}
-      <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 space-y-2">
+      <div role="status" aria-live="polite" className={`fixed bottom-4 right-4 ${Z_INDEX.toast} space-y-2`}>
         {toasts.map(t => (
           <div key={t.id} role="alert" className={`border rounded-lg px-4 py-3 shadow-lg ${variantStyles[t.variant]} min-w-64`}>
             <p className="font-medium">{t.title}</p>

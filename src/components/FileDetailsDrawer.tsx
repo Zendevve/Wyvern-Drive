@@ -107,7 +107,7 @@ export function FileDetailsDrawer() {
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         {/* File Overview */}
         <div className="flex flex-col items-center text-center pb-4 border-b border-border/60">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
+          <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
             {(() => {
               const Icon = getFileIcon(file.mimeType);
               return <Icon size={32} weight="regular" className="text-primary" aria-hidden="true" />;

@@ -35,7 +35,7 @@ export function PhotoThumbnail({ file, onClick }: PhotoThumbnailProps) {
     <button
       onClick={onClick}
       aria-label={`View ${file.name}`}
-      className="aspect-square bg-card rounded overflow-hidden hover:ring-2 hover:ring-primary transition-shadow"
+      className="aspect-square bg-card rounded-xl overflow-hidden hover:ring-2 hover:ring-primary transition-shadow"
     >
       {blobUrl ? (
         <img

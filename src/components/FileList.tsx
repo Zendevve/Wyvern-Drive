@@ -10,15 +10,16 @@ import { MediaPreviewModal } from './MediaPreviewModal';
 import { PhotoTimeline } from './PhotoTimeline';
 import { getFileIcon } from './icon-map';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { SEMANTIC_COLORS } from '../constants/tokens';
 import type { FileRecord } from '../types';
 
 function getFileIconBg(mimeType: string) {
-  if (mimeType.startsWith('image/')) return 'bg-blue-500/10 text-blue-500';
-  if (mimeType.startsWith('video/')) return 'bg-amber-500/10 text-amber-500';
-  if (mimeType.startsWith('audio/')) return 'bg-purple-500/10 text-purple-500';
-  if (mimeType === 'application/pdf') return 'bg-rose-500/10 text-rose-500';
-  if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('rar') || mimeType.includes('gzip')) return 'bg-orange-500/10 text-orange-500';
-  return 'bg-primary/10 text-primary';
+  if (mimeType.startsWith('image/')) return `${SEMANTIC_COLORS.info.soft} ${SEMANTIC_COLORS.info.text}`;
+  if (mimeType.startsWith('video/')) return `${SEMANTIC_COLORS.warning.soft} ${SEMANTIC_COLORS.warning.text}`;
+  if (mimeType.startsWith('audio/')) return `${SEMANTIC_COLORS.info.soft} ${SEMANTIC_COLORS.info.text}`;
+  if (mimeType === 'application/pdf') return `${SEMANTIC_COLORS.error.soft} ${SEMANTIC_COLORS.error.text}`;
+  if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('rar') || mimeType.includes('gzip')) return `${SEMANTIC_COLORS.warning.soft} ${SEMANTIC_COLORS.warning.text}`;
+  return `${SEMANTIC_COLORS.info.soft} ${SEMANTIC_COLORS.info.text}`;
 }
 
 export function FileList() {
@@ -154,7 +155,7 @@ export function FileList() {
                         key={file.id}
                         onClick={(e) => handleFileClick(e, file)}
                         onDoubleClick={(e) => handleFileDoubleClick(e, file)}
-                        className={`group relative flex flex-col p-3 bg-card border hover:bg-card-hover rounded-2xl cursor-pointer transition-all duration-200 shadow-xs ${
+                        className={`group relative flex flex-col p-3 bg-card border hover:bg-card-hover rounded-xl cursor-pointer transition-all duration-200 shadow-xs ${
                           isSelected ? 'border-primary bg-primary/5 ring-2 ring-primary' : 'border-border/80'
                         }`}
                       >
@@ -188,7 +189,7 @@ export function FileList() {
                 </div>
               ) : (
                 /* List View */
-                <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-xs">
+                <div className="bg-card border border-border rounded-xl overflow-hidden shadow-xs">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
@@ -243,7 +244,7 @@ export function FileList() {
             </div>
           ) : (
             currentFolders.length === 0 && (
-              <div className="text-center py-12 bg-card border border-border/80 border-dashed rounded-2xl">
+              <div className="text-center py-12 bg-card border border-border/80 border-dashed rounded-xl">
                 <p className="text-text-muted text-sm">No files or folders here yet.</p>
               </div>
             )

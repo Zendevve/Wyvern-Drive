@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useWebhookStore } from '../stores/webhook-store';
+import { SEMANTIC_COLORS } from '../constants/tokens';
 
 export function SettingsPanel() {
   const { webhookUrl, status, setWebhookUrl, validate } = useWebhookStore();
@@ -32,13 +33,13 @@ export function SettingsPanel() {
   };
 
   const statusColors = {
-    unknown: 'bg-amber-500',
-    valid: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]',
-    invalid: 'bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]',
+    unknown: SEMANTIC_COLORS.warning.bg,
+    valid: SEMANTIC_COLORS.success.bg,
+    invalid: SEMANTIC_COLORS.error.bg,
   };
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-6 shadow-sm max-w-2xl">
+    <div className="bg-card border border-border rounded-xl p-6 shadow-sm max-w-2xl">
       <fieldset className="border-0 p-0 m-0">
         <legend className="text-xl font-semibold tracking-tight text-foreground mb-4">
           Discord Webhook Configuration
@@ -49,7 +50,7 @@ export function SettingsPanel() {
         </p>
 
         <div className="flex items-center gap-2 mb-4">
-          <div className={`w-2.5 h-2.5 rounded-full ${statusColors[status]} transition-all duration-300`} />
+          <div className={`w-2.5 h-2.5 rounded-full ring-2 ring-card ${statusColors[status]} transition-all duration-300`} />
           <span className="text-sm font-medium text-foreground">
             Status: {status === 'valid' ? 'Connected' : status === 'invalid' ? 'Disconnected' : 'Checking connection...'}
           </span>
@@ -86,9 +87,9 @@ export function SettingsPanel() {
         {message && (
           <p className={`text-sm mt-4 font-medium ${
             message.includes('successfully') || message.includes('verified')
-              ? 'text-emerald-500'
+              ? 'text-success'
               : message.includes('Invalid') || message.includes('Failed')
-              ? 'text-rose-500'
+              ? 'text-destructive'
               : 'text-text-muted'
           }`}>
             {message}

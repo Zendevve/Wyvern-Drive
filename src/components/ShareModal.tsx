@@ -6,6 +6,7 @@ import { useShareStore } from '../stores/share-store';
 import { useAuthStore } from '../stores/auth-store';
 import { generateShareLink, ONE_HOUR, ONE_DAY, SEVEN_DAYS, THIRTY_DAYS } from '../lib/sharing';
 import { useToast } from './Toast';
+import { Z_INDEX } from '../constants/tokens';
 import type { FileRecord } from '../types';
 
 interface ShareModalProps {
@@ -98,8 +99,8 @@ export function ShareModal({ file, isOpen, onClose }: ShareModalProps) {
   return (
     <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/80 z-50" />
-        <Dialog.Content aria-label={`Share ${file.name}`} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-card rounded-lg p-6 w-[90vw] max-w-md">
+        <Dialog.Overlay className={`fixed inset-0 bg-black/80 ${Z_INDEX.modal}`} />
+        <Dialog.Content aria-label={`Share ${file.name}`} className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 ${Z_INDEX.modal} bg-card rounded-lg p-6 w-[90vw] max-w-md`}>
           <Dialog.Title className="text-lg font-bold mb-4">Share &quot;{file.name}&quot;</Dialog.Title>
 
           <div className="space-y-4">

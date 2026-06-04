@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth-store';
 import { getWebhookUrl } from '../stores/file-store';
 import { loadMediaBlob, createMediaBlobUrl } from '../lib/media';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Z_INDEX } from '../constants/tokens';
 
 export function AudioPlayer() {
   const reduced = useReducedMotion();
@@ -114,7 +115,7 @@ export function AudioPlayer() {
 
   return (
     <div
-      className={`fixed bottom-6 right-6 z-40 bg-card/85 backdrop-blur-md border border-border rounded-2xl shadow-xl transition-all duration-300 ease-in-out select-none ${
+      className={`fixed bottom-6 right-6 ${Z_INDEX.overlay} bg-card/85 backdrop-blur-md border border-border rounded-xl shadow-xl transition-all duration-300 ease-in-out select-none ${
         isExpanded ? 'w-80 p-5' : 'w-64 px-4 py-3'
       }`}
     >

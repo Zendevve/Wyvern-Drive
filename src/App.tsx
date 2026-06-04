@@ -18,6 +18,7 @@ import { parseShareLink, verifySharePassword, accessShare } from './lib/sharing'
 import { getFile } from './lib/db';
 import { getWebhookUrl } from './stores/file-store';
 import { useReducedMotion } from './hooks/useReducedMotion';
+import { SEMANTIC_COLORS, Z_INDEX } from './constants/tokens';
 
 function ShareAccess() {
   const reduced = useReducedMotion();
@@ -129,17 +130,17 @@ function ShareAccess() {
 
   return (
     <div className="min-h-[100dvh] bg-background text-foreground flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm text-center shadow-sm">
+      <div className="bg-card border border-border rounded-xl p-6 w-full max-w-sm text-center shadow-sm">
         {status === 'loading' && <p className="text-text-muted">Loading share...</p>}
         {status === 'expired' && (
           <>
-            <p className="text-rose-500 font-bold mb-2">Link Expired</p>
+            <p className="text-destructive font-bold mb-2">Link Expired</p>
             <p className="text-text-muted text-sm">This share link has expired.</p>
           </>
         )}
         {status === 'error' && (
           <>
-            <p className="text-rose-500 font-bold mb-2">Error</p>
+            <p className="text-destructive font-bold mb-2">Error</p>
             <p className="text-text-muted text-sm">Failed to load shared file.</p>
           </>
         )}
@@ -167,7 +168,7 @@ function ShareAccess() {
         {status === 'ready' && (
           <>
             <p className="font-bold mb-2">{fileName || 'Shared File'}</p>
-            <p className="text-emerald-500 text-sm mb-3">Download complete!</p>
+            <p className="text-success text-sm mb-3">Download complete!</p>
             <button
               onClick={handleDirectDownload}
               className="bg-primary hover:bg-primary-hover text-white rounded px-4 py-2 text-sm transition-colors"
@@ -220,9 +221,9 @@ export default function App() {
   }
 
   const statusColors = {
-    unknown: 'bg-amber-500',
-    valid: 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]',
-    invalid: 'bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]',
+    unknown: SEMANTIC_COLORS.warning.bg,
+    valid: SEMANTIC_COLORS.success.bg,
+    invalid: SEMANTIC_COLORS.error.bg,
   };
 
   return (
@@ -232,7 +233,7 @@ export default function App() {
         <div className="flex h-[100dvh] overflow-hidden bg-background text-foreground select-none">
           <a
             href="#main-content"
-            className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-primary focus:text-white focus:px-4 focus:py-2 focus:rounded"
+            className={`sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:${Z_INDEX.skipLink} focus:bg-primary focus:text-white focus:px-4 focus:py-2 focus:rounded`}
           >
             Skip to content
           </a>
@@ -317,7 +318,7 @@ export default function App() {
             <div className="p-3 border-t border-border space-y-2">
               {/* Webhook Status Dot */}
               <div className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs text-text-muted bg-background/50 border border-border/50">
-                <div className={`w-2 h-2 rounded-full ${statusColors[webhookStatus]} transition-colors duration-300`} />
+                <div className={`w-2 h-2 rounded-full ring-2 ring-card ${statusColors[webhookStatus]} transition-colors duration-300`} />
                 {sidebarOpen && (
                   <span className="truncate">
                     {webhookStatus === 'valid' ? 'Discord Connected' : webhookStatus === 'invalid' ? 'Discord Error' : 'Checking connection...'}
@@ -343,7 +344,7 @@ export default function App() {
               <button
                 onClick={lock}
                 aria-label="Lock Drive"
-                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
               >
                 <Lock size={18} weight="regular" className="shrink-0" aria-hidden="true" />
                 {sidebarOpen && <span>Lock Drive</span>}
