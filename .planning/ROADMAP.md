@@ -12,8 +12,8 @@
 | 4 | Polish & Ship | Production UI, accessibility, PWA, test coverage | Complete | 2026-06-03 |
 | 5 | Professional UI Redesign | 5/5 | Complete    | 2026-06-04 |
 | 6 | Theme Unifier | Migrate orphan Discord-purple classes onto theme tokens; add light+dark semantic surfaces; fix banned em-dash | Complete | 1 plan |
-| 7 | Iconography | Replace every emoji-as-icon with @phosphor-icons/react; centralise file-type resolver | Planned | 1 plan |
-| 8 | Motion & Performance | 100dvh shell, prefers-reduced-motion gate, self-hosted fonts, image perf, transition-all hygiene | Planned | 1 plan |
+| 7 | Iconography | Replace every emoji-as-icon with @phosphor-icons/react; centralise file-type resolver | Complete | 1 plan |
+| 8 | Motion & Performance | 100dvh shell, prefers-reduced-motion gate, self-hosted fonts, image perf, transition-all hygiene | Complete | 1 plan |
 | 9 | Visual Discipline | Document shape scale, z-index scale, semantic colors; replace neon glows and hardcoded color literals | Planned | 1 plan |
 | 10 | AGENTS.md | Durable design discipline rule set for the repo | Planned | 1 plan |
 
@@ -211,9 +211,7 @@ Plans:
 
 Plans:
 
-- [ ] 07-01-PLAN.md — Install Phosphor + replace emoji-as-icon across 9 components
-
----
+- [x] 07-01-PLAN.md — Install Phosphor + replace emoji-as-icon across 9 components
 
 ### Phase 8: Motion & Performance
 
@@ -239,7 +237,7 @@ Plans:
 
 Plans:
 
-- [ ] 08-01-PLAN.md — Viewport + motion gate + transition-all hygiene + self-hosted fonts + image perf
+- [x] 08-01-PLAN.md — Viewport + motion gate + transition-all hygiene + self-hosted fonts + image perf
 
 ---
 
