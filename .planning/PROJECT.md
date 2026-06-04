@@ -8,32 +8,49 @@ Wyvern Drive is a self-hosted, browser-based cloud storage solution that transfo
 
 Files are stored securely (encrypted client-side) and can be retrieved reliably via Discord's CDN — zero cost, unlimited storage, complete privacy.
 
+## Current Milestone: v2.0 Competitor Domination
+
+**Goal:** Address every weakness the competitors (Disbox, Discloud) exposed and adopt their best ideas, making Wyvern Drive the definitive Discord-based storage client.
+
+**Target features:**
+- Concurrent upload pipeline (true parallel chunks via refactored RateLimiter)
+- Service Worker streaming (Range request decryption for video/audio seeking)
+- Encrypted metadata sync (multi-device backup/restore via Discord)
+- Hardened rate limiter (concurrent queue + millisecond-safe backoff)
+- CDN link refresh optimization (batch prefetch near expiry)
+
 ## Requirements
 
-### Validated
+### Validated (v1.0)
 
-(None yet — ship to validate)
+- [x] Client-side AES-256-GCM encryption — keys never leave browser (Phase 1)
+- [x] Unlimited file storage using Discord CDN via webhooks (Phase 1)
+- [x] Smart chunking — 8MB chunks with parallel uploads (Phase 1)
+- [x] Virtual scrolling — smooth performance with 10,000+ files (Phase 2)
+- [x] Full folder system — create, rename, move, nested folders (Phase 2)
+- [x] Drag & drop — intuitive file organization (Phase 2)
+- [x] File versioning — keep history of document changes (Phase 2)
+- [x] Advanced search — filter by name, type, date (Phase 2)
+- [x] In-browser media streaming — preview images, videos, audio (Phase 3)
+- [x] Persistent player — continuous playback across navigation (Phase 3)
+- [x] Secure sharing — password-protected, time-limited links (Phase 3)
+- [x] Photo timeline — Google Photos-style gallery view (Phase 3)
+- [x] Discord-inspired dark theme, fully responsive (Phase 4)
+- [x] WCAG AA compliant, keyboard navigable (Phase 4)
+- [x] PWA ready — installable as native app on mobile/desktop (Phase 4)
+- [x] Integration tests with mocked Discord API (Phase 4)
+- [x] Self-hosted deployment — static files, no backend server (Phase 1)
+- [x] Environment-based Discord webhook configuration (Phase 1)
+- [x] Professional UI redesign — sidebar, grid/list, details drawer, floating player (Phase 5)
+- [x] Theme tokens, iconography, motion/perf, visual discipline, AGENTS.md (Phases 6-10)
 
-### Active
+### Active (v2.0)
 
-- [ ] Client-side AES-256-GCM encryption — keys never leave browser
-- [ ] Unlimited file storage using Discord CDN via webhooks
-- [ ] Smart chunking — dynamic 25MB chunks with parallel uploads
-- [ ] Virtual scrolling — smooth performance with 10,000+ files
-- [ ] Full folder system — create, rename, move, nested folders
-- [ ] Drag & drop — intuitive file organization
-- [ ] File versioning — keep history of document changes
-- [ ] Advanced search — filter by name, type, date
-- [ ] In-browser media streaming — preview images, videos, audio
-- [ ] Persistent player — continuous playback across navigation
-- [ ] Secure sharing — password-protected, time-limited links
-- [ ] Photo timeline — Google Photos-style gallery view
-- [ ] Discord-inspired dark theme, fully responsive
-- [ ] WCAG AA compliant, keyboard navigable
-- [ ] PWA ready — installable as native app on mobile/desktop
-- [ ] Integration tests with mocked Discord API
-- [ ] Self-hosted deployment (static files — no backend server)
-- [ ] Environment-based Discord webhook configuration
+- [ ] Concurrent upload pipeline — true parallel chunk uploads
+- [ ] Service Worker media streaming — Range request decryption
+- [ ] Encrypted metadata sync — multi-device backup/restore
+- [ ] Hardened rate limiter — concurrent queue + ms-safe backoff
+- [ ] CDN link refresh optimization — batch prefetch
 
 ### Out of Scope
 
@@ -45,9 +62,10 @@ Files are stored securely (encrypted client-side) and can be retrieved reliably 
 
 ## Context
 
-- Previous codebase archived to `archive-v1` branch — this is a greenfield rebuild
+- v1.0 milestone complete — 10 phases, 28 requirements, all verified
+- Competitor research (Spikes 001-005) identified key gaps and advantages
 - Discord webhooks allow sending files up to 25MB per message
-- Discord CDN serves files but URLs may have expiration
+- Discord CDN URLs expire after 24 hours — message IDs stored for refresh
 - Browser-native encryption via Web Crypto API (AES-256-GCM)
 - File metadata stored client-side (IndexedDB)
 - Self-hosted: static files served via any web server or CDN
@@ -66,10 +84,15 @@ Files are stored securely (encrypted client-side) and can be retrieved reliably 
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Discord webhooks as storage backend | Free, unlimited CDN, no server needed | — Pending |
-| Client-side encryption (AES-256-GCM) | Privacy — keys never leave browser | — Pending |
-| Self-hosted deployment | User control, no third-party trust | — Pending |
-| Coarse granularity for phases | Feature set is comprehensive, fewer broader phases | — Pending |
+| Discord webhooks as storage backend | Free, unlimited CDN, no server needed | Validated (v1.0) |
+| Client-side encryption (AES-256-GCM) | Privacy — keys never leave browser | Validated (v1.0) |
+| Self-hosted deployment | User control, no third-party trust | Validated (v1.0) |
+| @phosphor-icons/react for UI icons | MIT, tree-shakable, weight variants | Validated (Phase 7) |
+| Self-hosted Clash Display + Satoshi fonts | No render-blocking third-party imports | Validated (Phase 8) |
+| useReducedMotion hook for animation gating | Plain React + matchMedia; no framer-motion dep | Validated (Phase 8) |
+| tokens.ts exports Tailwind class strings | Callers compose className directly | Validated (Phase 9) |
+| Service Worker for encrypted media streaming | Enables Range requests on encrypted chunks without a backend | Pending (v2.0) |
+| Encrypted IndexedDB export to Discord | Solves multi-device sync without a server | Pending (v2.0) |
 
 ## Evolution
 
@@ -89,4 +112,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-03 after initialization*
+*Last updated: 2026-06-04 — Milestone v2.0 started*

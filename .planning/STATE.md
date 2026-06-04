@@ -1,42 +1,38 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: Milestone complete
-last_updated: "2026-06-04T16:47:00.000Z"
+milestone: v2.0
+milestone_name: Competitor Domination
+status: planning
+last_updated: "2026-06-04T17:01:00.000Z"
 progress:
-  total_phases: 10
-  completed_phases: 10
-  total_plans: 14
-  completed_plans: 14
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State: Wyvern Drive
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-03)
+See: .planning/PROJECT.md (updated 2026-06-04)
 
-**Core value:** Files stored securely via Discord CDN — zero cost, unlimited, encrypted
-**Current focus:** Milestone Complete. All 10 phases including the AGENTS.md design discipline rule set have been successfully implemented, verified, and compiled with zero errors.
+**Core value:** Files stored securely via Discord CDN - zero cost, unlimited, encrypted
+**Current focus:** Milestone v2.0 - Competitor Domination. Addressing gaps identified in competitor spikes (Disbox, Discloud) to make Wyvern Drive the definitive solution.
+
+## Current Position
+
+Phase: Not started (defining requirements)
+Plan: -
+Status: Defining requirements
+Last activity: 2026-06-04 - Milestone v2.0 started
 
 ## Phase Progress
 
 | Phase | Status | Requirements | Plans |
 |-------|--------|--------------|-------|
-| 1. Core Storage Engine | ✓ Complete | 7 (STRG-01..03, INFRA-01..04) | 1/1 |
-| 2. File Management | ✓ Complete | 5 (FILE-01..04, STRG-04) | 1/1 |
-| 3. Media & Sharing | ✓ Complete | 4 (MEDIA-01..02, SHAR-01..02) | 1/1 |
-| 4. Polish & Ship | ✓ Complete | 5 (UI-01..03, TEST-01..02) | 1/1 |
-| 5. Professional UI Redesign | ✓ Complete | 6 (UI-04..09) | 5/5 |
-| 6. Theme Unifier | ✓ Complete (1/1) | UI-01, UI-02 | 1/1 |
-| 7. Iconography | ✓ Complete (1/1) | UI-02 | 1/1 |
-| 8. Motion & Performance | ✓ Complete (1/1) | UI-01, UI-02 | 1/1 |
-| 9. Visual Discipline | ✓ Complete (1/1) | UI-01, UI-02 | 1/1 |
-| 10. AGENTS.md | ✓ Complete (1/1) | UI-01, UI-02 | 1/1 |
-
-**Total:** 28 requirements | 10/10 phases complete | 14/14 plans complete
+| (Requirements being defined) | | | |
 
 ## Test Coverage
 
@@ -58,28 +54,28 @@ See: .planning/PROJECT.md (updated 2026-06-03)
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Discord webhooks as storage backend | Free, unlimited CDN, no server needed | ✓ Good |
-| Client-side AES-256-GCM encryption | Privacy — keys never leave browser | ✓ Good |
-| 8MB default chunk size | Discord default limit is 10MB (25MB requires Nitro) | ✓ Good |
-| PBKDF2 600K iterations | OWASP 2023 recommendation | ✓ Good |
-| Vite + React (not Next.js) | No server needed — pure client-side app | ✓ Good |
-| IndexedDB via `idb` library | Better API than raw IndexedDB | ✓ Good |
-| Manual service worker | Avoids vite-plugin-pwa dependency | ✓ Good |
-| Vitest + Playwright for tests | Modern, fast, good DX | ✓ Good |
-| @phosphor-icons/react for UI icons | MIT, tree-shakable, weight variants (regular=1.5 stroke) | ✓ Good |
-| Centralised icon-map.ts for file types | Single source of truth, callers compose size/className | ✓ Good |
-| Self-host Clash Display + Satoshi via @font-face | Removes render-blocking third-party @import; preload links bias browser priority queue; Fontshare Free License allows self-hosting | ✓ Good |
-| useReducedMotion hook (matchMedia, no dependency) | Plain React + matchMedia; no framer-motion dep needed for 5 callsites; gate is also enforced at CSS layer so utility-class animations die even if a callsite is missed | ✓ Good |
-| 100dvh for app shell | Accounts for mobile browser chrome show/hide without a layout jump | ✓ Good |
-| tokens.ts exports Tailwind class strings (not raw CSS) | Lets callers compose className={...SHAPE_SCALE.card} directly; no extra import for raw values; classes are still discoverable by Tailwind JIT | ✓ Good |
+| Discord webhooks as storage backend | Free, unlimited CDN, no server needed | Validated (v1.0) |
+| Client-side AES-256-GCM encryption | Privacy - keys never leave browser | Validated (v1.0) |
+| 8MB default chunk size | Discord default limit is 10MB (25MB requires Nitro) | Validated (v1.0) |
+| PBKDF2 600K iterations | OWASP 2023 recommendation | Validated (v1.0) |
+| Vite + React (not Next.js) | No server needed - pure client-side app | Validated (v1.0) |
+| IndexedDB via `idb` library | Better API than raw IndexedDB | Validated (v1.0) |
+| Manual service worker | Avoids vite-plugin-pwa dependency | Validated (v1.0) |
+| Vitest + Playwright for tests | Modern, fast, good DX | Validated (v1.0) |
+| @phosphor-icons/react for UI icons | MIT, tree-shakable, weight variants (regular=1.5 stroke) | Validated (Phase 7) |
+| Self-host Clash Display + Satoshi via @font-face | Removes render-blocking third-party @import | Validated (Phase 8) |
+| useReducedMotion hook (matchMedia, no dependency) | Plain React + matchMedia; no framer-motion dep | Validated (Phase 8) |
+| tokens.ts exports Tailwind class strings (not raw CSS) | Lets callers compose className directly | Validated (Phase 9) |
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
-- Phase 5 added: Professional UI Redesign (user requested premium layout parity with Google Drive, MEGA, and Dropbox)
-- Phases 6-10 added: Design discipline pass — theme unifier, iconography, motion & performance, visual discipline, AGENTS.md. Triggered by an audit of orphan Discord-purple classes, emoji-as-icon, neon glows, viewport, fonts, and image perf. Each phase is a single plan, 2-3 tasks, ~50% context. No marketing-page rules are introduced (this is a dashboard/product UI). The only new dependency is `@phosphor-icons/react` in Phase 7.
+- v1.0 complete: 10 phases, 28 requirements, all verified and compiled
+- Competitor spikes (001-005) completed: analyzed Disbox (web, server, extension) and Discloud (phongna07)
+- Key findings: Discloud has fatal CDN expiry bug + rate-limit ms bug; Disbox leaks webhook URLs to central server; neither has encryption
+- v2.0 targets: concurrent uploads, SW streaming, encrypted sync, hardened rate limiter, CDN refresh optimization
 
 ---
 *Created: 2026-06-03*
-*Last updated: 2026-06-04 — Phase 5 added*
+*Last updated: 2026-06-04 - Milestone v2.0 started*
