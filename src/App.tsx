@@ -222,7 +222,7 @@ export default function App() {
             </button>
           </header>
           {showSettings && <div className="p-4"><SettingsPanel /></div>}
-          <main id="main-content" role="main" className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
+          <main id="main-content" role="main" tabIndex={-1} className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8 focus:outline-none">
             <DropZone />
             <UploadProgressList />
             <FileBrowser />
