@@ -4,7 +4,7 @@ import { downloadChunkStream, refreshAttachmentUrl } from '../services/discord';
 import { Readable } from 'stream';
 
 export function extractMessageIdFromUrl(url: string): string {
-  const match = url.match(/\/attachments\/\d+\/(\d+)\//);
+  const match = url.match(/\/attachments\/\d+\/([a-zA-Z0-9_]+)\//);
   if (!match) {
     throw new Error('Could not extract message ID from Discord attachment URL');
   }
@@ -29,32 +29,43 @@ export async function downloadRoutes(app: FastifyInstance) {
     '/download',
     {
       preHandler: authenticate,
-      schema: {
-        body: {
-          type: 'object',
-          required: ['filename', 'mimeType', 'size', 'chunks'],
-          properties: {
-            filename: { type: 'string' },
-            mimeType: { type: 'string' },
-            size: { type: 'integer' },
-            chunks: {
-              type: 'array',
-              items: {
-                type: 'object',
-                required: ['index', 'url', 'size'],
-                properties: {
-                  index: { type: 'integer' },
-                  url: { type: 'string' },
-                  size: { type: 'integer' },
-                },
-              },
-            },
-          },
-        },
-      },
     },
     async (request, reply) => {
-      const { filename, mimeType, size, chunks } = request.body;
+      let body = request.body;
+
+      if (!body) {
+        // Read raw request body stream manually (Fastify does not parse bodies on GET by default)
+        const rawBody = await new Promise<string>((resolve, reject) => {
+          let data = '';
+          request.raw.on('data', (chunk) => {
+            data += chunk;
+          });
+          request.raw.on('end', () => {
+            resolve(data);
+          });
+          request.raw.on('error', (err) => {
+            reject(err);
+          });
+        });
+
+        if (rawBody) {
+          try {
+            body = JSON.parse(rawBody);
+          } catch (e) {
+            return reply.status(400).send({ error: 'Invalid JSON body' });
+          }
+        }
+      }
+
+      if (!body || typeof body !== 'object') {
+        return reply.status(400).send({ error: 'Missing or invalid request body' });
+      }
+
+      const { filename, mimeType, size, chunks } = body;
+      if (!filename || !mimeType || typeof size !== 'number' || !Array.isArray(chunks)) {
+        return reply.status(400).send({ error: 'Invalid metadata fields in request body' });
+      }
+
       const webhookUrl = request.webhookUrl;
 
       // Sort chunks by index to ensure correct reassembly order
