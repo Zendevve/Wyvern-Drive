@@ -44,26 +44,50 @@ autonomous: true
     <criterion>src/index.css contains '.dark' block with variables for dark theme</criterion>
   </acceptance_criteria>
   <action>
-    Edit `src/index.css` to add theme variables.
-    Define :root with variables:
-    --background: #f4f4f5;
-    --foreground: #09090b;
-    --card: #ffffff;
-    --card-hover: #fafafa;
-    --border: #e4e4e7;
-    --text-muted: #71717a;
-    --primary: #5865F2;
-    --primary-hover: #4752c4;
-    
-    Define .dark block with variables:
-    --background: #09090b;
-    --foreground: #f4f4f5;
-    --card: #18181b;
-    --card-hover: #27272a;
-    --border: #27272a;
-    --text-muted: #a1a1aa;
-    
-    Apply background-color: var(--background) and color: var(--foreground) globally to body.
+    Edit `src/index.css` to add theme variables, custom typography, and atmospheric background layers per the UI-SPEC.md (Vault/Editorial aesthetic).
+
+    1. **Import Fonts** at the top of the file:
+       ```css
+       @import url('https://api.fontshare.com/v2/css?f[]=clash-display@700,600&f[]=satoshi@400,500,700&display=swap');
+       ```
+
+    2. Define :root with variables:
+       --background: #FAFAFA; /* Alabaster */
+       --foreground: #0A0A0C; /* Deep Obsidian */
+       --card: #F0F0F3; /* Porcelain */
+       --card-hover: #E6E6E9;
+       --border: rgba(10, 10, 12, 0.08);
+       --text-muted: #6B6B70;
+       --primary: #FF5A00; /* Signal Orange */
+       --primary-hover: #E04E00;
+       --destructive: #FF3366; /* Vermilion */
+       --font-display: 'Clash Display', sans-serif;
+       --font-body: 'Satoshi', sans-serif;
+       
+    3. Define .dark block with variables:
+       --background: #0A0A0C; /* Deep Obsidian */
+       --foreground: #FAFAFA; /* Alabaster */
+       --card: #1C1C21; /* Gunmetal */
+       --card-hover: #25252B;
+       --border: rgba(255, 255, 255, 0.08);
+       --text-muted: #A1A1AA;
+       --primary: #FF5A00; /* Signal Orange */
+       --primary-hover: #FF7A33;
+       --destructive: #FF3366; /* Vermilion */
+       
+    4. Apply globally to body:
+       font-family: var(--font-body);
+       background-color: var(--background);
+       color: var(--foreground);
+
+    5. **Add atmospheric background layers** (apply to body or main wrapper):
+       ```css
+       background-image:
+         radial-gradient(circle at 80% 10%, rgba(255, 90, 0, 0.05), transparent 50%),
+         url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+       ```
+
+    6. Headings (h1, h2, h3) must use `font-family: var(--font-display); letter-spacing: -0.02em;`.
   </action>
 </task>
 
