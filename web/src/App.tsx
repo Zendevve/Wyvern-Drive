@@ -4,6 +4,7 @@ import { useAuthStore } from './store/auth';
 import { AuthPage } from './pages/AuthPage';
 import { DrivePage } from './pages/DrivePage';
 import { ToastHost } from './components/Toast';
+import { AppShell } from './components/AppShell';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const status = useAuthStore((s) => s.status);
@@ -29,18 +30,21 @@ export function App() {
     return <div className="splash" aria-busy />;
   }
 
-  return (
-    <>
-      {status === 'authenticated' ? <AppShell /> : <AuthPage />}
-      <ToastHost />
-    </>
-  );
-}
+  if (status !== 'authenticated') {
+    return (
+      <>
+        <AuthPage />
+        <ToastHost />
+      </>
+    );
+  }
 
-function AppShell() {
   return (
     <PrivateRoute>
-      <DriveRoute />
+      <AppShell>
+        <DriveRoute />
+      </AppShell>
+      <ToastHost />
     </PrivateRoute>
   );
 }
