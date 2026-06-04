@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { authRoutes } from './routes/auth';
 
 export function buildApp() {
   const app = Fastify({
@@ -11,6 +12,8 @@ export function buildApp() {
       timestamp: new Date().toISOString()
     };
   });
+
+  app.register(authRoutes);
 
   return app;
 }
