@@ -109,8 +109,10 @@ date: 2026-06-04
 ## Automated Test Results
 
 - `npm run test` (in `web/`) → 6 test files, **33/33 tests passing** in ~7–11 s.
+- `npm test` (at repo root) → 8 test files, **45/45 backend tests passing** in ~11 s.
+  - The root `vitest.config.ts` explicitly `exclude`s `web/**` so each suite runs in its proper environment (node for backend, jsdom for web).
 - `npm run build` (in `web/`) → exits 0; produces `dist/index.html` (0.77 kB) + `dist/assets/index-*.css` (17.51 kB) + `dist/assets/index-*.js` (224.65 kB).
-- Backend tests untouched: still 45/45 passing.
+- **Combined: 78/78 tests pass across the full project.**
 
 ## Manual-Only Verifications
 
@@ -125,5 +127,6 @@ date: 2026-06-04
 - [x] No outstanding gaps
 - [x] Backward compatibility preserved — backend code (Phase 1 + Phase 2) is unchanged
 - [x] `.gitignore` covers `web/dist/` and `*.tsbuildinfo` so builds don't pollute git
+- [x] Root `vitest.config.ts` `exclude`s `web/**` so backend tests don't trip on the web-only jsdom setup
 
 **Result: PASSED** — Phase 3 ready to close out the v1.0 MVP milestone.
