@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Milestone complete
-last_updated: "2026-06-04T16:20:00.000Z"
+last_updated: "2026-06-04T16:40:00.000Z"
 progress:
   total_phases: 10
-  completed_phases: 5
+  completed_phases: 9
   total_plans: 16
-  completed_plans: 13
-  percent: 81
+  completed_plans: 14
+  percent: 87
 ---
 
 # Project State: Wyvern Drive
@@ -19,7 +19,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-03)
 
 **Core value:** Files stored securely via Discord CDN — zero cost, unlimited, encrypted
-**Current focus:** Phase 8 complete (Phase 7 Iconography complete — @phosphor-icons/react@2.1.10 installed, 10 components migrated off emoji, icon-map.ts resolver, all 28 tests pass, build green. Phase 8 Motion & Performance complete — useReducedMotion hook, h-[100dvh] shell, @media (prefers-reduced-motion: reduce) CSS gate, 5 JSX-driven infinite animations gated, 9 transition-all narrowed, 5 woff2 fonts self-hosted with preload links, 2 <img> tags hardened with width/height/decoding/loading. All 28 tests pass, build clean.)
+**Current focus:** Phase 9 complete (Visual Discipline — src/constants/tokens.ts exports SHAPE_SCALE (input/card/pill), Z_INDEX (base/raised/dropdown/sticky/overlay/modal/toast/skipLink), SEMANTIC_COLORS (success/error/warning/info). Two neon status-dot glows removed (App.tsx sidebar, SettingsPanel) replaced with saturated solid + 2px ring-card. All rounded-2xl/3xl in components migrated to rounded-xl. All hardcoded text-rose/text-emerald/text-amber/text-red/bg-blue/bg-purple/bg-orange/bg-rose literals migrated to text-success/text-destructive/text-warning/bg-primary/bg-warning/bg-destructive. All z-10/z-40/z-50/z-[100] in App.tsx + components migrated to Z_INDEX constants. src/index.css has documentation comment block. All 28 tests pass, build clean.)
 
 ## Phase Progress
 
@@ -33,10 +33,10 @@ See: .planning/PROJECT.md (updated 2026-06-03)
 | 6. Theme Unifier | ✓ Complete (1/1) | UI-01, UI-02 | 1/1 |
 | 7. Iconography | ✓ Complete (1/1) | UI-02 | 1/1 |
 | 8. Motion & Performance | ✓ Complete (1/1) | UI-01, UI-02 | 1/1 |
-| 9. Visual Discipline | ⧗ Planned (1 plan) | UI-01, UI-02 | 0/1 |
+| 9. Visual Discipline | ✓ Complete (1/1) | UI-01, UI-02 | 1/1 |
 | 10. AGENTS.md | ⧗ Planned (1 plan) | UI-01, UI-02 | 0/1 |
 
-**Total:** 28 requirements | 8/10 phases complete | 13/16 plans complete
+**Total:** 28 requirements | 9/10 phases complete | 14/16 plans complete
 
 ## Test Coverage
 
@@ -71,6 +71,7 @@ See: .planning/PROJECT.md (updated 2026-06-03)
 | Self-host Clash Display + Satoshi via @font-face | Removes render-blocking third-party @import; preload links bias browser priority queue; Fontshare Free License allows self-hosting | ✓ Good |
 | useReducedMotion hook (matchMedia, no dependency) | Plain React + matchMedia; no framer-motion dep needed for 5 callsites; gate is also enforced at CSS layer so utility-class animations die even if a callsite is missed | ✓ Good |
 | 100dvh for app shell | Accounts for mobile browser chrome show/hide without a layout jump | ✓ Good |
+| tokens.ts exports Tailwind class strings (not raw CSS) | Lets callers compose className={...SHAPE_SCALE.card} directly; no extra import for raw values; classes are still discoverable by Tailwind JIT | ✓ Good |
 
 ## Accumulated Context
 
