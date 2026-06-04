@@ -8,6 +8,7 @@
 ## Phases
 
 ### Phase 1: Core Storage Engine
+**Status:** Planned
 **Goal:** Basic stateless backend API containing chunking, Discord webhook upload, dynamic CDN URL refresh, rate limiting, and chunk reassembly.
 **Mode:** mvp
 **Success Criteria:**

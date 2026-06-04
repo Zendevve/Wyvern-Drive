@@ -8,13 +8,13 @@ See: .planning/PROJECT.md (updated 2026-06-04)
 
 ## Milestone Tracker
 - [ ] Milestone 1: MVP Release
-  - [ ] Phase 1: Core Storage Engine (Context gathered)
+  - [/] Phase 1: Core Storage Engine (Planned)
   - [ ] Phase 2: Virtual Filesystem Metadata Layer (Pending)
   - [ ] Phase 3: React Single Page Application UI (Pending)
 
 ## Current Work
 - Active phase: Phase 1: Core Storage Engine
-- Active plan: None (Pending plan generation)
+- Active plan: 01-01, 01-02, 01-03
 
 ---
 *Last updated: 2026-06-04 after context gathering*
