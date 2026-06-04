@@ -32,6 +32,7 @@ export function FolderActions() {
       ) : (
         <button
           onClick={() => setIsCreating(true)}
+          aria-label="New folder"
           className="px-3 py-1 bg-dark-bg hover:bg-dark-bg/80 rounded text-sm"
         >
           + New Folder

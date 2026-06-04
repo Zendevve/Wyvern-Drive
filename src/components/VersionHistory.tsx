@@ -37,19 +37,21 @@ export function VersionHistory({ fileId, onClose }: Props) {
       {versions.length === 0 && (
         <p className="text-discord-muted text-sm">No version history</p>
       )}
-      {versions.map(v => (
-        <div key={v.version} className="flex items-center justify-between py-1 border-t border-gray-700">
-          <span className="text-sm">
-            v{v.version} — {new Date(v.timestamp).toLocaleString()}
-          </span>
-          <button
-            onClick={() => handleRestore(v.version)}
-            className="text-xs text-blurple hover:underline"
-          >
-            Restore
-          </button>
-        </div>
-      ))}
+      <ul role="list" className="divide-y divide-gray-700">
+        {versions.map(v => (
+          <li key={v.version} className="flex items-center justify-between py-1" aria-label={`Version ${v.version} — ${new Date(v.timestamp).toLocaleString()}`}>
+            <span className="text-sm">
+              v{v.version} — {new Date(v.timestamp).toLocaleString()}
+            </span>
+            <button
+              onClick={() => handleRestore(v.version)}
+              className="text-xs text-blurple hover:underline"
+            >
+              Restore
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

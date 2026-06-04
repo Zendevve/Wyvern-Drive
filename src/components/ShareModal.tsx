@@ -98,7 +98,7 @@ export function ShareModal({ file, isOpen, onClose }: ShareModalProps) {
     <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/80 z-50" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-darker-bg rounded-lg p-6 w-full max-w-md">
+        <Dialog.Content aria-label={`Share ${file.name}`} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-darker-bg rounded-lg p-6 w-[90vw] max-w-md">
           <Dialog.Title className="text-lg font-bold mb-4">Share &quot;{file.name}&quot;</Dialog.Title>
 
           <div className="space-y-4">

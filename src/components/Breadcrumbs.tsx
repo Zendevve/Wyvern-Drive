@@ -13,24 +13,29 @@ export function Breadcrumbs() {
   }, [currentFolderId, getFolderPath]);
 
   return (
-    <nav className="flex items-center gap-1 text-sm text-discord-muted mb-4">
-      <button
-        onClick={() => setCurrentFolder(null)}
-        className="hover:text-discord-text transition-colors"
-      >
-        Root
-      </button>
-      {path.map((folder) => (
-        <span key={folder.id} className="flex items-center gap-1">
-          <span>/</span>
+    <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-sm text-discord-muted mb-4">
+      <ol className="flex items-center gap-1">
+        <li>
           <button
-            onClick={() => setCurrentFolder(folder.id)}
+            onClick={() => setCurrentFolder(null)}
             className="hover:text-discord-text transition-colors"
           >
-            {folder.name}
+            Root
           </button>
-        </span>
-      ))}
+        </li>
+        {path.map((folder) => (
+          <li key={folder.id} className="flex items-center gap-1">
+            <span aria-hidden="true">/</span>
+            <button
+              onClick={() => setCurrentFolder(folder.id)}
+              className="hover:text-discord-text transition-colors"
+              aria-current={folder.id === path[path.length - 1]?.id ? 'page' : undefined}
+            >
+              {folder.name}
+            </button>
+          </li>
+        ))}
+      </ol>
     </nav>
   );
 }

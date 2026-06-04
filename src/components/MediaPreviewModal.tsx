@@ -70,7 +70,7 @@ export function MediaPreviewModal({ file, isOpen, onClose }: MediaPreviewModalPr
     <Dialog.Root open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/80 z-50" />
-        <Dialog.Content className="fixed inset-4 md:inset-12 z-50 bg-darker-bg rounded-lg flex flex-col overflow-hidden">
+        <Dialog.Content aria-label={`Preview ${file.name}`} className="fixed inset-4 md:inset-12 z-50 bg-darker-bg rounded-lg flex flex-col overflow-hidden w-[95vw] sm:w-[80vw]">
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
             <Dialog.Title className="font-bold truncate">{file.name}</Dialog.Title>
             <Dialog.Close asChild>

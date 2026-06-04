@@ -23,6 +23,7 @@ export function SearchBar() {
         value={localQuery}
         onChange={(e) => handleChange(e.target.value)}
         placeholder="Search files..."
+        aria-label="Search files"
         className="flex-1 bg-dark-bg border border-gray-600 rounded px-3 py-2 text-sm"
       />
     </div>

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import { useAudioStore } from '../stores/audio-store';
 import { useAuthStore } from '../stores/auth-store';
 import { getWebhookUrl } from '../stores/file-store';
@@ -27,15 +27,20 @@ export function AudioPlayer() {
   const duration = useAudioStore(s => s.duration);
 
   const key = useAuthStore(s => s.derivedKey);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const loadTrack = useCallback(async () => {
     if (!currentTrack || !key) return;
     const webhookUrl = getWebhookUrl();
     if (!webhookUrl) return;
 
-    const blob = await loadMediaBlob(currentTrack.id, key, webhookUrl);
-    const url = createMediaBlobUrl(blob);
-    setBlobUrl(url);
+    try {
+      const blob = await loadMediaBlob(currentTrack.id, key, webhookUrl);
+      const url = createMediaBlobUrl(blob);
+      setBlobUrl(url);
+    } catch (err) {
+      console.error('Failed to load audio track:', err);
+    }
   }, [currentTrack?.id, key]);
 
   useEffect(() => {
@@ -96,6 +101,7 @@ export function AudioPlayer() {
   };
 
   const formatTime = (seconds: number): string => {
+    if (isNaN(seconds)) return '0:00';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
@@ -104,7 +110,11 @@ export function AudioPlayer() {
   if (!isVisible || !currentTrack) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-dark-bg border-t border-gray-700 z-40 px-4 py-3">
+    <div
+      className={`fixed bottom-6 right-6 z-40 bg-card/85 backdrop-blur-md border border-border rounded-2xl shadow-xl transition-all duration-300 ease-in-out select-none ${
+        isExpanded ? 'w-80 p-5' : 'w-64 px-4 py-3'
+      }`}
+    >
       <audio
         ref={audioRef}
         onTimeUpdate={handleTimeUpdate}
@@ -112,51 +122,141 @@ export function AudioPlayer() {
         onEnded={handleEnded}
       />
 
-      <div className="max-w-4xl mx-auto flex items-center gap-4">
-        <div className="flex-1 min-w-0">
-          <p className="font-medium truncate text-sm">{currentTrack.name}</p>
-        </div>
+      {isExpanded ? (
+        /* Expanded Mode Layout */
+        <div className="flex flex-col space-y-4">
+          {/* Header Controls */}
+          <div className="flex items-center justify-between">
+            <span className="text-xxs font-medium text-text-muted uppercase tracking-wider">Now Playing</span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setIsExpanded(false)}
+                aria-label="Collapse player"
+                className="p-1 hover:bg-card-hover rounded-lg text-text-muted hover:text-foreground cursor-pointer text-xs"
+              >
+                ▼
+              </button>
+              <button
+                onClick={close}
+                aria-label="Close player"
+                className="p-1 hover:bg-card-hover rounded-lg text-text-muted hover:text-foreground cursor-pointer text-xs"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <button onClick={previous} aria-label="Previous track" className="text-discord-muted hover:text-discord-text px-1 min-h-[44px] min-w-[44px]">⏮</button>
-          <button
-            onClick={() => isPlaying ? pause() : resume()}
-            aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="bg-blurple hover:bg-blurple/80 rounded-full w-8 h-8 flex items-center justify-center min-h-[44px] min-w-[44px]"
-          >
-            {isPlaying ? '⏸' : '▶'}
-          </button>
-          <button onClick={next} aria-label="Next track" className="text-discord-muted hover:text-discord-text px-1 min-h-[44px] min-w-[44px]">⏭</button>
-        </div>
+          {/* Album Art Icon Design */}
+          <div className="h-32 bg-gradient-to-tr from-primary/20 via-primary/5 to-transparent rounded-xl flex items-center justify-center relative overflow-hidden group border border-border/40">
+            <span className={`text-5xl transform transition-transform duration-1000 ${isPlaying ? 'rotate-180 animate-[spin_6s_linear_infinite]' : ''}`}>
+              🎵
+            </span>
+          </div>
 
-        <div className="flex items-center gap-2 flex-1">
-          <span className="text-xs text-discord-muted w-10 text-right">{formatTime(currentTime)}</span>
-          <input
-            type="range"
-            min={0}
-            max={duration || 0}
-            value={currentTime}
-            onChange={handleSeek}
-            className="flex-1 h-1 accent-blurple"
-          />
-          <span className="text-xs text-discord-muted w-10">{formatTime(duration)}</span>
-        </div>
+          {/* Track metadata details */}
+          <div className="text-center">
+            <h4 className="font-semibold text-foreground truncate text-sm px-2" title={currentTrack.name}>
+              {currentTrack.name}
+            </h4>
+            <p className="text-xxs text-text-muted mt-0.5">Secure Streaming</p>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-discord-muted">🔊</span>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={volume}
-            onChange={handleVolumeChange}
-            className="w-20 h-1 accent-blurple"
-          />
-        </div>
+          {/* Playback progress bar */}
+          <div className="space-y-1.5">
+            <input
+              type="range"
+              min={0}
+              max={duration || 0}
+              value={currentTime}
+              onChange={handleSeek}
+              className="w-full h-1 bg-border rounded-lg appearance-none cursor-pointer accent-primary"
+            />
+            <div className="flex justify-between text-[10px] text-text-muted font-medium">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
+          </div>
 
-        <button onClick={close} className="text-discord-muted hover:text-discord-text text-sm">✕</button>
-      </div>
+          {/* Audio Controls */}
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={previous}
+              aria-label="Previous track"
+              className="p-2 hover:bg-card-hover text-foreground hover:text-primary rounded-full transition-colors cursor-pointer text-sm"
+            >
+              ⏮
+            </button>
+            <button
+              onClick={() => isPlaying ? pause() : resume()}
+              aria-label={isPlaying ? 'Pause' : 'Play'}
+              className="bg-primary hover:bg-primary-hover text-white rounded-full w-10 h-10 flex items-center justify-center transition-all shadow-md cursor-pointer text-lg"
+            >
+              {isPlaying ? '⏸' : '▶'}
+            </button>
+            <button
+              onClick={next}
+              aria-label="Next track"
+              className="p-2 hover:bg-card-hover text-foreground hover:text-primary rounded-full transition-colors cursor-pointer text-sm"
+            >
+              ⏭
+            </button>
+          </div>
+
+          {/* Volume Control */}
+          <div className="flex items-center gap-2 border-t border-border/40 pt-3">
+            <span className="text-xs text-text-muted shrink-0">🔊</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={volume}
+              onChange={handleVolumeChange}
+              className="flex-1 h-1 bg-border rounded-lg appearance-none cursor-pointer accent-primary"
+            />
+          </div>
+        </div>
+      ) : (
+        /* Mini Mode Layout */
+        <div className="flex items-center justify-between gap-3 relative">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className={`w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-sm shrink-0 ${isPlaying ? 'animate-[spin_8s_linear_infinite]' : ''}`}>
+              🎵
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-foreground text-xs truncate" title={currentTrack.name}>
+                {currentTrack.name}
+              </p>
+              <p className="text-[10px] text-text-muted mt-0.5">{formatTime(currentTime)}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => isPlaying ? pause() : resume()}
+              aria-label={isPlaying ? 'Pause' : 'Play'}
+              className="w-7 h-7 bg-primary hover:bg-primary-hover text-white rounded-full flex items-center justify-center transition-all cursor-pointer text-xs"
+            >
+              {isPlaying ? '⏸' : '▶'}
+            </button>
+            <button
+              onClick={() => setIsExpanded(true)}
+              aria-label="Expand player"
+              className="p-1 hover:bg-card-hover rounded-lg text-text-muted hover:text-foreground cursor-pointer text-xs"
+            >
+              ▲
+            </button>
+          </div>
+
+          {/* Absolute progress track on bottom */}
+          <div className="absolute bottom-[-13px] left-[-16px] right-[-16px] h-0.5 bg-border">
+            <div
+              className="h-full bg-primary transition-all duration-100"
+              style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

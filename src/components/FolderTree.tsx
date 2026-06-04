@@ -27,23 +27,29 @@ export function FolderTree() {
     return (
       <div key={folder.id}>
         <div
-          className={`flex items-center gap-1 py-1 px-2 rounded cursor-pointer text-sm ${
-            isActive ? 'bg-blurple/20 text-blurple' : 'hover:bg-dark-bg'
+          className={`flex items-center gap-1.5 py-1 px-2 rounded-lg cursor-pointer text-xs transition-colors ${
+            isActive ? 'bg-primary/10 text-primary font-medium' : 'text-text-muted hover:text-foreground hover:bg-card-hover'
           }`}
-          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+          role="treeitem"
+          tabIndex={0}
+          aria-selected={isActive}
+          aria-expanded={children.length > 0 ? isExpanded : undefined}
+          aria-label={folder.name}
           onClick={() => setCurrentFolder(folder.id)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrentFolder(folder.id); } }}
         >
           {children.length > 0 ? (
             <button
               onClick={(e) => { e.stopPropagation(); toggleExpand(folder.id); }}
-              className="text-xs w-4"
+              className="text-[9px] w-3 flex items-center justify-center text-text-muted hover:text-foreground cursor-pointer"
             >
               {isExpanded ? '▼' : '▶'}
             </button>
           ) : (
-            <span className="w-4" />
+            <span className="w-3" />
           )}
-          <span>📁</span>
+          <span aria-hidden="true" className="text-sm shrink-0">📁</span>
           <span className="truncate">{folder.name}</span>
         </div>
         {isExpanded && children.map(child => renderFolder(child, depth + 1))}
@@ -52,15 +58,19 @@ export function FolderTree() {
   };
 
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-0.5" role="tree" aria-label="Folder navigation">
       <div
-        className={`flex items-center gap-1 py-1 px-2 rounded cursor-pointer text-sm ${
-          currentFolderId === null ? 'bg-blurple/20 text-blurple' : 'hover:bg-dark-bg'
+        className={`flex items-center gap-1.5 py-1 px-2 rounded-lg cursor-pointer text-xs transition-colors ${
+          currentFolderId === null ? 'bg-primary/10 text-primary font-medium' : 'text-text-muted hover:text-foreground hover:bg-card-hover'
         }`}
+        role="treeitem"
+        tabIndex={0}
+        aria-selected={currentFolderId === null}
         onClick={() => setCurrentFolder(null)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrentFolder(null); } }}
       >
-        <span className="w-4" />
-        <span>📁</span>
+        <span className="w-3" />
+        <span aria-hidden="true" className="text-sm shrink-0">📁</span>
         <span>Root</span>
       </div>
       {rootFolders.map(folder => renderFolder(folder))}

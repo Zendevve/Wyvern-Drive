@@ -43,7 +43,14 @@ export function UploadProgressList() {
               <span className="text-sm font-medium truncate">{upload.fileName}</span>
               <span className="text-xs text-discord-muted">{statusText}</span>
             </div>
-            <div className="h-1.5 bg-gray-700 rounded">
+            <div
+              className="h-1.5 bg-gray-700 rounded"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progress}
+              aria-label={`Upload progress for ${upload.fileName}`}
+            >
               <div
                 className={`h-full rounded transition-all ${
                   upload.status === 'failed' ? 'bg-red-500' : 'bg-blurple'

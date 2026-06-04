@@ -15,16 +15,22 @@ export function setWebhookUrl(url: string): void {
 interface FileState {
   files: FileRecord[];
   currentFolderId: string | null;
+  selectedFileId: string | null;
+  viewMode: 'list' | 'grid';
   isLoading: boolean;
   loadFiles: () => Promise<void>;
   addFile: (file: FileRecord) => Promise<void>;
   deleteFile: (id: string) => Promise<void>;
   setCurrentFolder: (folderId: string | null) => void;
+  setSelectedFileId: (id: string | null) => void;
+  setViewMode: (mode: 'list' | 'grid') => void;
 }
 
 export const useFileStore = create<FileState>((set) => ({
   files: [],
   currentFolderId: null,
+  selectedFileId: null,
+  viewMode: 'grid',
   isLoading: false,
 
   loadFiles: async () => {
@@ -40,10 +46,22 @@ export const useFileStore = create<FileState>((set) => ({
 
   deleteFile: async (id: string) => {
     await dbDeleteFile(id);
-    set(state => ({ files: state.files.filter(f => f.id !== id) }));
+    set(state => {
+      const nextFiles = state.files.filter(f => f.id !== id);
+      const nextSelected = state.selectedFileId === id ? null : state.selectedFileId;
+      return { files: nextFiles, selectedFileId: nextSelected };
+    });
   },
 
   setCurrentFolder: (folderId: string | null) => {
-    set({ currentFolderId: folderId });
+    set({ currentFolderId: folderId, selectedFileId: null });
+  },
+
+  setSelectedFileId: (id: string | null) => {
+    set({ selectedFileId: id });
+  },
+
+  setViewMode: (mode: 'list' | 'grid') => {
+    set({ viewMode: mode });
   },
 }));
