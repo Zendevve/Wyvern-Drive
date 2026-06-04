@@ -14,6 +14,9 @@
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
+  --color-surface-error: var(--surface-error);
+  --color-surface-success: var(--surface-success);
+  --color-surface-warning: var(--surface-warning);
   --font-display: 'Clash Display', sans-serif;
   --font-body: 'Satoshi', sans-serif;
 }
@@ -28,6 +31,9 @@
   --primary: #FF5A00;
   --primary-hover: #E04E00;
   --destructive: #FF3366;
+  --surface-error: rgba(239, 68, 68, 0.10);
+  --surface-success: rgba(16, 185, 129, 0.10);
+  --surface-warning: rgba(245, 158, 11, 0.10);
 }
 
 .dark {
@@ -40,6 +46,9 @@
   --primary: #FF5A00;
   --primary-hover: #FF7A33;
   --destructive: #FF3366;
+  --surface-error: rgba(239, 68, 68, 0.18);
+  --surface-success: rgba(16, 185, 129, 0.18);
+  --surface-warning: rgba(245, 158, 11, 0.18);
 }
 
 @layer base {
