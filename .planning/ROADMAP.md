@@ -15,7 +15,7 @@
 | 7 | Iconography | Replace every emoji-as-icon with @phosphor-icons/react; centralise file-type resolver | Complete | 1 plan |
 | 8 | Motion & Performance | 100dvh shell, prefers-reduced-motion gate, self-hosted fonts, image perf, transition-all hygiene | Complete | 1 plan |
 | 9 | Visual Discipline | Document shape scale, z-index scale, semantic colors; replace neon glows and hardcoded color literals | Complete | 1 plan |
-| 10 | AGENTS.md | Durable design discipline rule set for the repo | Planned | 1 plan |
+| 10 | AGENTS.md | Durable design discipline rule set for the repo | Complete | 2026-06-04 |
 
 ## Phase Details
 
@@ -285,7 +285,7 @@ Plans:
 
 Plans:
 
-- [ ] 10-01-PLAN.md — Write AGENTS.md
+- [x] 10-01-PLAN.md — Write AGENTS.md
 
 ---
 *Roadmap created: 2026-06-03*
