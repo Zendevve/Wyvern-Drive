@@ -9,3 +9,8 @@ data/
 *.db
 *.db-wal
 *.db-shm
+
+# Vite / TypeScript build artifacts
+web/dist/
+web/tsconfig.tsbuildinfo
+*.tsbuildinfo

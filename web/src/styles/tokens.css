@@ -1,0 +1,54 @@
+:root {
+  /* Surfaces */
+  --bg-base: #0B0D12;
+  --bg-surface-1: #14171F;
+  --bg-surface-2: #1C2030;
+  --bg-glass: rgba(28, 32, 48, 0.72);
+
+  /* Borders */
+  --border-subtle: #262A38;
+  --border-strong: #3A4055;
+
+  /* Text */
+  --text-primary: #E6E9F2;
+  --text-secondary: #9099B0;
+  --text-muted: #5A6178;
+
+  /* Accent */
+  --accent: #5865F2;
+  --accent-hover: #4752C4;
+  --accent-soft: rgba(88, 101, 242, 0.12);
+
+  /* Status */
+  --success: #3BA55D;
+  --danger: #ED4245;
+  --warning: #FAA61A;
+
+  /* Spacing scale */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 48px;
+
+  /* Radii */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --d-fast: 120ms;
+  --d-base: 200ms;
+
+  /* Z-index */
+  --z-rail: 10;
+  --z-topbar: 20;
+  --z-queue: 30;
+  --z-toast: 40;
+  --z-modal: 50;
+}
