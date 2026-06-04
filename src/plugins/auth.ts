@@ -1,14 +1,21 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 declare module 'fastify' {
   interface FastifyRequest {
     webhookUrl: string;
+    accountId: string;
   }
 }
 
 export async function authPlugin(app: FastifyInstance) {
   app.decorateRequest('webhookUrl', '');
+  app.decorateRequest('accountId', '');
+}
+
+export function deriveAccountId(webhookUrl: string): string {
+  return crypto.createHash('sha256').update(webhookUrl).digest('hex');
 }
 
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
@@ -27,6 +34,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     }
 
     request.webhookUrl = decoded.webhookUrl;
+    request.accountId = deriveAccountId(decoded.webhookUrl);
   } catch (error) {
     return reply.status(401).send({ error: 'Invalid or expired token' });
   }

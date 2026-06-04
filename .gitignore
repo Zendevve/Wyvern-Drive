@@ -3,3 +3,9 @@ node_modules/
 
 # Reference repositories cloned locally
 references/
+
+# Local SQLite database files
+data/
+*.db
+*.db-wal
+*.db-shm
