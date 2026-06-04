@@ -35,17 +35,23 @@ function parseCdnExpiry(url: string): Date | null {
 }
 
 export async function validateWebhook(url: string): Promise<boolean> {
+  const { id } = extractWebhookParts(url);
+  const routeKey = `webhook_${id}`;
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: 'Wyvern Drive connection test' }),
-    });
-    if (response.status === 429) {
-      const body = await response.json();
-      throw new DiscordRateLimitError(body.retry_after || 1);
-    }
-    return response.ok || response.status === 204;
+    return await limiter.enqueue(async () => {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'Wyvern Drive connection test' }),
+      });
+      if (response.status === 429) {
+        const body = await response.json();
+        limiter.updateLimits(routeKey, response.headers, body.retry_after);
+        throw new DiscordRateLimitError(body.retry_after || 1);
+      }
+      limiter.updateLimits(routeKey, response.headers);
+      return response.ok || response.status === 204;
+    }, routeKey);
   } catch {
     return false;
   }
@@ -56,6 +62,8 @@ export async function uploadChunk(
   file: Blob,
   metadata: Record<string, unknown>
 ): Promise<DiscordMessageResponse> {
+  const { id } = extractWebhookParts(webhookUrl);
+  const routeKey = `webhook_${id}`;
   return limiter.enqueue(async () => {
     const formData = new FormData();
     formData.append('payload_json', JSON.stringify({
@@ -70,14 +78,18 @@ export async function uploadChunk(
 
     if (response.status === 429) {
       const body = await response.json();
+      limiter.updateLimits(routeKey, response.headers, body.retry_after);
       throw new DiscordRateLimitError(body.retry_after || 1);
     }
+    
+    limiter.updateLimits(routeKey, response.headers);
+
     if (!response.ok) {
       throw new DiscordApiError(response.status, `Upload failed: ${response.statusText}`);
     }
 
     return response.json();
-  });
+  }, routeKey);
 }
 
 export async function fetchMessage(
@@ -85,18 +97,23 @@ export async function fetchMessage(
   messageId: string
 ): Promise<DiscordMessageResponse> {
   const { id, token } = extractWebhookParts(webhookUrl);
+  const routeKey = `webhook_${id}`;
   return limiter.enqueue(async () => {
     const url = `${BASE_URL}/webhooks/${id}/${token}/messages/${messageId}`;
     const response = await fetch(url);
     if (response.status === 429) {
       const body = await response.json();
+      limiter.updateLimits(routeKey, response.headers, body.retry_after);
       throw new DiscordRateLimitError(body.retry_after || 1);
     }
+    
+    limiter.updateLimits(routeKey, response.headers);
+
     if (!response.ok) {
       throw new DiscordApiError(response.status, `Fetch failed: ${response.statusText}`);
     }
     return response.json();
-  });
+  }, routeKey);
 }
 
 export async function refreshCdnUrl(

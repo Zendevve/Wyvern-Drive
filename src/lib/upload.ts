@@ -13,20 +13,39 @@ async function runWithConcurrency<T>(
 ): Promise<T[]> {
   const results: T[] = [];
   const executing = new Set<Promise<void>>();
+  let hasFailed = false;
+  let error: any = null;
 
   for (const task of tasks) {
+    if (hasFailed) {
+      throw error;
+    }
+
     const p = task().then(result => {
       results.push(result);
+    }).catch(err => {
+      hasFailed = true;
+      error = err;
+      throw err;
     });
-    const tracked = p.then(() => { executing.delete(tracked); });
+
+    const tracked = p.catch(() => {}).finally(() => {
+      executing.delete(tracked);
+    });
     executing.add(tracked);
 
     if (executing.size >= limit) {
       await Promise.race(executing);
+      if (hasFailed) {
+        throw error;
+      }
     }
   }
 
   await Promise.all(executing);
+  if (hasFailed) {
+    throw error;
+  }
   return results;
 }
 
@@ -75,55 +94,80 @@ export async function uploadFile(
   onProgress?.(progress);
 
   let completedChunks = 0;
+  let aborted = false;
 
   const uploadTasks = chunks.map((chunkBlob, index) => {
     return async () => {
-      const chunkBuffer = await chunkBlob.arrayBuffer();
-      const chunkNonce = generateNonce();
-      const encryptedData = await encryptFile(chunkBuffer, key, chunkNonce);
+      if (aborted) {
+        throw new Error('Upload aborted');
+      }
 
-      onProgress?.({ ...progress, status: 'uploading', completedChunks });
+      try {
+        const chunkBuffer = await chunkBlob.arrayBuffer();
+        const chunkNonce = generateNonce();
+        const encryptedData = await encryptFile(chunkBuffer, key, chunkNonce);
 
-      const response: DiscordMessageResponse = await uploadChunk(
-        webhookUrl,
-        new Blob([encryptedData], { type: 'application/octet-stream' }),
-        {
+        onProgress?.({ ...progress, status: 'uploading', completedChunks });
+
+        const response: DiscordMessageResponse = await uploadChunk(
+          webhookUrl,
+          new Blob([encryptedData], { type: 'application/octet-stream' }),
+          {
+            fileId,
+            chunkIndex: index,
+            chunkTotal: totalChunks,
+            filename: file.name,
+            uploadedAt: new Date().toISOString(),
+          }
+        );
+
+        const attachment = response.attachments[0];
+        const chunkRecord: ChunkRecord = {
+          id: uuidv4(),
           fileId,
           chunkIndex: index,
-          chunkTotal: totalChunks,
-          filename: file.name,
-          uploadedAt: new Date().toISOString(),
-        }
-      );
+          messageId: response.id,
+          attachmentId: attachment.id,
+          cdnUrl: attachment.url,
+          cdnExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          channelId: response.channel_id,
+          size: encryptedData.byteLength,
+          uploadedAt: new Date(),
+        };
 
-      const attachment = response.attachments[0];
-      const chunkRecord: ChunkRecord = {
-        id: uuidv4(),
-        fileId,
-        chunkIndex: index,
-        messageId: response.id,
-        attachmentId: attachment.id,
-        cdnUrl: attachment.url,
-        cdnExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        channelId: response.channel_id,
-        size: encryptedData.byteLength,
-        uploadedAt: new Date(),
-      };
+        await putChunk(chunkRecord);
 
-      await putChunk(chunkRecord);
-
-      completedChunks++;
-      onProgress?.({ ...progress, status: 'uploading', completedChunks });
+        completedChunks++;
+        onProgress?.({ ...progress, status: 'uploading', completedChunks });
+      } catch (err) {
+        aborted = true;
+        throw err;
+      }
     };
   });
 
-  await runWithConcurrency(uploadTasks, MAX_CONCURRENT);
+  try {
+    await runWithConcurrency(uploadTasks, MAX_CONCURRENT);
 
-  fileRecord.status = 'complete';
-  fileRecord.updatedAt = new Date();
-  await putFile(fileRecord);
+    fileRecord.status = 'complete';
+    fileRecord.updatedAt = new Date();
+    await putFile(fileRecord);
 
-  onProgress?.({ ...progress, status: 'complete', completedChunks: totalChunks });
+    onProgress?.({ ...progress, status: 'complete', completedChunks: totalChunks });
 
-  return fileRecord;
+    return fileRecord;
+  } catch (err: any) {
+    fileRecord.status = 'failed';
+    fileRecord.updatedAt = new Date();
+    await putFile(fileRecord);
+
+    onProgress?.({
+      ...progress,
+      status: 'failed',
+      completedChunks,
+      error: err instanceof Error ? err.message : String(err),
+    });
+
+    throw err;
+  }
 }
