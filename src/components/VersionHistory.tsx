@@ -27,28 +27,28 @@ export function VersionHistory({ fileId, onClose }: Props) {
     onClose();
   };
 
-  if (loading) return <div className="text-discord-muted text-sm p-4">Loading versions...</div>;
+  if (loading) return <div className="text-text-muted text-sm p-4">Loading versions...</div>;
 
   return (
-    <div className="bg-darker-bg p-4 rounded-lg">
+    <div className="bg-background p-4 rounded-xl border border-border">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="font-bold">Version History</h3>
-        <button onClick={onClose} aria-label="Close version history" className="text-discord-muted hover:text-discord-text p-1">
+        <h3 className="font-bold text-foreground">Version History</h3>
+        <button onClick={onClose} aria-label="Close version history" className="text-text-muted hover:text-foreground p-1">
           <X size={14} weight="regular" aria-hidden="true" />
         </button>
       </div>
       {versions.length === 0 && (
-        <p className="text-discord-muted text-sm">No version history</p>
+        <p className="text-text-muted text-sm">No version history</p>
       )}
-      <ul role="list" className="divide-y divide-gray-700">
+      <ul role="list" className="divide-y divide-border">
         {versions.map(v => (
           <li key={v.version} className="flex items-center justify-between py-1" aria-label={`Version ${v.version} — ${new Date(v.timestamp).toLocaleString()}`}>
-            <span className="text-sm">
+            <span className="text-sm text-foreground">
               v{v.version} — {new Date(v.timestamp).toLocaleString()}
             </span>
             <button
               onClick={() => handleRestore(v.version)}
-              className="text-xs text-blurple hover:underline"
+              className="text-xs text-primary hover:text-primary-hover hover:underline font-medium"
             >
               Restore
             </button>

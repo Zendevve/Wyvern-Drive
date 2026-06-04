@@ -47,7 +47,7 @@ export function FileActions({ fileId, fileName, status }: FileActionsProps) {
         onClick={handleDownload}
         disabled={isDownloading || status !== 'complete'}
         aria-label="Download"
-        className="px-3 py-1 bg-blurple hover:bg-blurple/80 disabled:opacity-50 rounded text-sm min-h-[44px]"
+        className="px-3 py-1 bg-primary hover:bg-primary-hover disabled:opacity-50 text-white rounded-lg text-sm min-h-[44px] transition-colors font-medium"
       >
         {isDownloading ? 'Downloading...' : 'Download'}
       </button>
@@ -55,7 +55,7 @@ export function FileActions({ fileId, fileName, status }: FileActionsProps) {
         onClick={() => setShowShare(true)}
         disabled={status !== 'complete'}
         aria-label="Share"
-        className="px-3 py-1 bg-dark-bg hover:bg-dark-bg/80 disabled:opacity-50 rounded text-sm border border-gray-700 min-h-[44px]"
+        className="px-3 py-1 bg-card hover:bg-card-hover disabled:opacity-50 text-foreground border border-border rounded-lg text-sm min-h-[44px] transition-colors"
       >
         Share
       </button>

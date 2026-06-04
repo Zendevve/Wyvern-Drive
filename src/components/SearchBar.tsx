@@ -24,7 +24,7 @@ export function SearchBar() {
         onChange={(e) => handleChange(e.target.value)}
         placeholder="Search files..."
         aria-label="Search files"
-        className="flex-1 bg-dark-bg border border-gray-600 rounded px-3 py-2 text-sm"
+        className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-text-muted focus:outline-none focus:border-primary transition-colors"
       />
     </div>
   );

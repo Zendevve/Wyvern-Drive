@@ -26,14 +26,14 @@ export function FolderActions() {
           }}
           onBlur={handleCreate}
           placeholder="Folder name"
-          className="bg-darker-bg border border-gray-600 rounded px-2 py-1 text-sm"
+          className="bg-background border border-border rounded-lg px-2 py-1 text-sm text-foreground placeholder:text-text-muted focus:outline-none focus:border-primary transition-colors"
           autoFocus
         />
       ) : (
         <button
           onClick={() => setIsCreating(true)}
           aria-label="New folder"
-          className="px-3 py-1 bg-dark-bg hover:bg-dark-bg/80 rounded text-sm"
+          className="px-3 py-1 bg-card hover:bg-card-hover text-foreground rounded-lg border border-border text-sm transition-colors"
         >
           + New Folder
         </button>
