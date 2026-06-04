@@ -169,6 +169,8 @@ None.
 ### Deliberate scope-tightening
 
 1. **`App.tsx:131 min-h-screen` (ShareAccess) NOT changed** — the plan explicitly scoped line ~229 (the app shell) only and said "Do not touch other App.tsx classes in this task." The `min-h-screen` on the standalone share-access page is not the main app shell; changing it would also be a behavior change (route layouts). Logged for transparency, not as a deviation.
+
+**UPDATED POST-EXECUTION:** The plan's own verification step (`rg -n "h-screen" src/ index.html` returns zero) would still match `min-h-screen`. The same mobile-viewport-jump threat (T-08-04) applies to the share-access full-page route. One-character change applied after the main commits, committed as `c027c44`. Final state: zero `h-screen` substring anywhere in `src/` or `index.html`.
 2. **`AudioPlayer.tsx:266` progress bar, `PasswordModal.tsx:56` strength bar, `UploadProgress.tsx:55` upload bar** — all kept as `transition-all` despite the 2-property change set, because the width change is via inline `style`, not a Tailwind utility. Narrowing to `transition-[width,colors]` would require generating a dynamic Tailwind class string and is fragile; the plan said "Do NOT collapse legitimate `transition-all` to a narrower form if doing so changes observable behavior" and this is a borderline case. Logged in the audit table above.
 3. **`SettingsPanel.tsx:52`, `:65`, `:80`** — kept as `transition-all` for the same reason (2 distinct property groups that would require a precise class string to narrow). The plan's threshold for keeping was 3+ distinct property groups; in practice, the cost of a brittle `transition-[background-color,box-shadow]` narrowing exceeds the perf benefit. Logged in the audit table above.
 
@@ -193,7 +195,9 @@ All 5 woff2 binaries were fetched once from the official Fontshare CDN, then com
 - `src/index.css` has 5 `@font-face` blocks AND a `@media (prefers-reduced-motion: reduce)` block
 - `index.html` has 5 `<link rel="preload" as="font" ...>` entries
 - `LightboxModal.tsx:72` and `PhotoThumbnail.tsx:47` both have `width`, `height`, `decoding="async"`, `loading="lazy"`
-- `App.tsx:230` uses `h-[100dvh]`
-- `git log --oneline` shows commits `c981369` (Task 1) and `84ef854` (Task 2)
+- `App.tsx:230` uses `h-[100dvh]`; `App.tsx:131` uses `min-h-[100dvh]`
+- Zero `h-screen` substring anywhere in `src/` or `index.html`
+- Zero `api.fontshare.com` references in `src/` or `index.html`
+- `git log --oneline` shows commits `c981369` (Task 1), `84ef854` (Task 2), `c027c44` (post-verification ShareAccess fix), `5bffabd` (docs)
 - `npm run test` → 28/28 pass
 - `npm run build` → exits 0, no warnings
