@@ -1,4 +1,6 @@
 import { REST } from '@discordjs/rest';
+import axios from 'axios';
+import { Readable } from 'stream';
 
 const rest = new REST({ version: '10' });
 
@@ -75,3 +77,28 @@ export async function deleteMessage(webhookUrl: string, messageId: string): Prom
     auth: false,
   });
 }
+
+export async function getMessage(webhookUrl: string, messageId: string): Promise<DiscordMessage> {
+  const path = getWebhookPath(webhookUrl);
+  return await rest.get(`${path}/messages/${messageId}` as `/${string}`, {
+    auth: false,
+  }) as DiscordMessage;
+}
+
+export async function refreshAttachmentUrl(webhookUrl: string, messageId: string): Promise<string> {
+  const msg = await getMessage(webhookUrl, messageId);
+  if (!msg.attachments || msg.attachments.length === 0) {
+    throw new Error(`No attachments found on message ${messageId}`);
+  }
+  return msg.attachments[0].url;
+}
+
+export async function downloadChunkStream(url: string, rangeHeader?: string): Promise<Readable> {
+  const headers = rangeHeader ? { Range: rangeHeader } : {};
+  const response = await axios.get(url, {
+    headers,
+    responseType: 'stream',
+  });
+  return response.data as Readable;
+}
+
