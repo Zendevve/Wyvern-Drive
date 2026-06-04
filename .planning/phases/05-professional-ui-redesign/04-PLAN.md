@@ -1,6 +1,7 @@
 ---
 wave: 2
 depends_on: [1]
+requirements: [UI-08]
 files_modified:
   - src/components/AudioPlayer.tsx
 autonomous: true

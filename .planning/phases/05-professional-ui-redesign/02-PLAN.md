@@ -1,6 +1,7 @@
 ---
 wave: 1
 depends_on: [1]
+requirements: [UI-09]
 files_modified:
   - src/components/DropZone.tsx
 autonomous: true

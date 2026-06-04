@@ -1,6 +1,7 @@
 ---
 wave: 2
 depends_on: [1]
+requirements: [UI-06]
 files_modified:
   - src/components/FileBrowser.tsx
   - src/components/FileList.tsx

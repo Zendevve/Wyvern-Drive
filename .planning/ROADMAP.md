@@ -1,6 +1,6 @@
 # Roadmap: Wyvern Drive
 
-**Phases:** 4 | **Requirements:** 22 | **Coverage:** 100% ✓
+**Phases:** 5 | **Requirements:** 28 | **Coverage:** 100% ✓
 
 ## Overview
 
@@ -8,8 +8,9 @@
 |---|-------|------|--------------|-------|
 | 1 | Core Storage Engine | File upload/download with encryption works end-to-end | Complete    | 2026-06-03 |
 | 2 | File Management | Folder system, versioning, search, virtual scrolling | Complete    | 2026-06-03 |
-| 3 | Media & Sharing | In-browser streaming, persistent player, secure sharing, photo timeline | MEDIA-01, MEDIA-02, SHAR-01, SHAR-02 | 1 |
-| 4 | Polish & Ship | Production UI, accessibility, PWA, test coverage | UI-01, UI-02, UI-03, TEST-01, TEST-02 | 1 |
+| 3 | Media & Sharing | In-browser streaming, persistent player, secure sharing, photo timeline | Complete | 2026-06-03 |
+| 4 | Polish & Ship | Production UI, accessibility, PWA, test coverage | Complete | 2026-06-03 |
+| 5 | Professional UI Redesign | Redesign UI to match professional cloud storage providers (Google Drive, MEGA, Dropbox) | UI-04 to UI-09 | 2026-06-04 |
 
 ## Phase Details
 
@@ -113,10 +114,32 @@ Phase 2: File Management
 Phase 3: Media & Sharing
     ↓
 Phase 4: Polish & Ship
+    ↓
+Phase 5: Professional UI Redesign
 ```
 
 All phases are sequential — each builds on the previous.
 
+### Phase 5: Professional UI Redesign
+
+**Goal:** Redesign the user interface to elevate it from a basic hobby project to a premium, professional product on par with Google Drive, MEGA, and Dropbox.
+**Requirements:**
+- UI-04: Collapsible left sidebar navigation dashboard layout
+- UI-05: Dual light and dark theme styling using modern slate/zinc CSS variable tokens and glassmorphism
+- UI-06: Toggleable Grid and List views in FileBrowser with inline folder pills
+- UI-07: Right-side collapsible details drawer panel for file metadata, inline versions list, and inline sharing config
+- UI-08: Persistent audio player floating dock with mini and expanded modes
+- UI-09: Window-level global drag-and-drop upload overlay
+**Depends on:** Phase 4
+**Plans:** 5 plans
+
+Plans:
+- [ ] Plan 01: Theme System & App Grid Shell
+- [ ] Plan 02: Fullscreen Upload DropZone Overlay
+- [ ] Plan 03: File Browser Grid/List Toggle & Folder Card View
+- [ ] Plan 04: Floating Glassmorphic Audio Player
+- [ ] Plan 05: Collapsible Right-Side Details Drawer
+
 ---
 *Roadmap created: 2026-06-03*
-*Last updated: 2026-06-03 after initialization*
+*Last updated: 2026-06-04*

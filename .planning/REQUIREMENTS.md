@@ -33,6 +33,12 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **UI-01**: Discord-inspired dark theme — fully responsive design down to mobile
 - [ ] **UI-02**: WCAG AA accessible — keyboard navigable throughout, screen reader support
 - [ ] **UI-03**: PWA ready — installable as native app on mobile and desktop via service worker
+- [ ] **UI-04**: Collapsible left sidebar navigation dashboard layout
+- [ ] **UI-05**: Dual light and dark theme styling using modern slate/zinc CSS variable tokens and glassmorphism
+- [ ] **UI-06**: Toggleable Grid and List views in FileBrowser with inline folder pills
+- [ ] **UI-07**: Right-side collapsible details drawer panel for file metadata, inline versions list, and inline sharing config
+- [ ] **UI-08**: Persistent audio player floating dock with mini and expanded modes
+- [ ] **UI-09**: Window-level global drag-and-drop upload overlay
 
 ### Infrastructure
 
@@ -92,14 +98,20 @@ Deferred to future release. Tracked but not in current roadmap.
 | UI-01 | Phase 4 | Pending |
 | UI-02 | Phase 4 | Pending |
 | UI-03 | Phase 4 | Pending |
+| UI-04 | Phase 5 | Pending |
+| UI-05 | Phase 5 | Pending |
+| UI-06 | Phase 5 | Pending |
+| UI-07 | Phase 5 | Pending |
+| UI-08 | Phase 5 | Pending |
+| UI-09 | Phase 5 | Pending |
 | TEST-01 | Phase 4 | Pending |
 | TEST-02 | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 22 total
-- Mapped to phases: 22
+- v1 requirements: 28 total
+- Mapped to phases: 28
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-03*
-*Last updated: 2026-06-03 after initial definition*
+*Last updated: 2026-06-04 after UI redesign definition*

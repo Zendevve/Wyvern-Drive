@@ -1,6 +1,7 @@
 ---
 wave: 2
 depends_on: [1, 3]
+requirements: [UI-07]
 files_modified:
   - src/App.tsx
   - src/components/FileDetailsDrawer.tsx

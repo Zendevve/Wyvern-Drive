@@ -1,6 +1,7 @@
 ---
 wave: 1
 depends_on: []
+requirements: [UI-04, UI-05]
 files_modified:
   - src/index.css
   - src/stores/theme-store.ts
