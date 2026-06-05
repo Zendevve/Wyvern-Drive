@@ -28,3 +28,14 @@ if (typeof globalThis.crypto === 'undefined' || typeof globalThis.crypto.subtle 
   const { webcrypto } = await import('node:crypto');
   Object.defineProperty(globalThis, 'crypto', { value: webcrypto });
 }
+
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverPolyfill {
+    constructor(_cb: ResizeObserverCallback) {}
+    observe(_target: Element, _options?: ResizeObserverOptions) {}
+    unobserve() {}
+    disconnect() {}
+  }
+  (globalThis as unknown as { ResizeObserver: typeof ResizeObserver }).ResizeObserver =
+    ResizeObserverPolyfill as unknown as typeof ResizeObserver;
+}

@@ -3,6 +3,7 @@ import multipart from '@fastify/multipart';
 import { authPlugin } from './plugins/auth';
 import { authRoutes } from './routes/auth';
 import { uploadRoutes } from './routes/upload';
+import { uploadResumableRoutes } from './routes/upload-resumable';
 import { downloadRoutes } from './routes/download';
 import { deleteRoutes } from './routes/delete';
 import { fsRoutes } from './routes/fs';
@@ -26,13 +27,14 @@ export function buildApp(opts: AppOptions = {}) {
 
   app.register(multipart, {
     limits: {
-      fileSize: 1024 * 1024 * 1024 * 10, // 10 GB limit for stream chunking
+      fileSize: 1024 * 1024 * 1024 * 10 // 10 GB limit for stream chunking
     }
   });
 
   app.register(authPlugin);
   app.register(authRoutes);
   app.register(uploadRoutes);
+  app.register(uploadResumableRoutes);
   app.register(downloadRoutes);
   app.register(deleteRoutes);
   app.register(fsRoutes);

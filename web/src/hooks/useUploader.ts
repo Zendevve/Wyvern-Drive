@@ -4,6 +4,9 @@ import { extractMessageIdFromUrl, uploadFile } from '../api/upload';
 import { runWithConcurrency } from '../lib/concurrency';
 import { useUploadsStore } from '../store/uploads';
 import { newCorrelationId, recordAuditEvent, withAudit } from '../lib/auditMiddleware';
+import { useResumableUploader } from './useResumableUploader';
+
+const RESUMABLE_THRESHOLD = 50 * 1024 * 1024;
 
 function newId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
@@ -26,6 +29,7 @@ export function useUploader(): UseUploader {
   const markError = useUploadsStore((s) => s.markError);
   const markCancelled = useUploadsStore((s) => s.markCancelled);
   const remove = useUploadsStore((s) => s.remove);
+  const resumable = useResumableUploader();
 
   async function enqueueFiles(files: FileList | File[], parentId: string | null): Promise<void> {
     const arr = Array.from(files);
@@ -42,50 +46,94 @@ export function useUploader(): UseUploader {
       controllers.set(id, controller);
       setStatus(id, 'uploading');
       try {
-        await withAudit(
-          { correlationId, targetType: 'file' },
-          {
-            action: 'upload',
-            metadata: () => ({ name: file.name, size_bytes: file.size, parent_id: parentId })
-          },
-          async () => {
-            const { promise } = uploadFile(
-              file,
-              (pct) => updateProgress(id, pct),
-              controller.signal
-            );
-            const result = await promise;
-            const chunks = result.chunks.map((c) => ({
-              discordMessageId: extractMessageIdFromUrl(c.url),
-              index: c.index,
-              sizeBytes: c.size,
-              cdnUrl: c.url
-            }));
-            const created = await apiFetch<{ node?: { id?: string }; node_id?: string }>(
-              '/fs/file/created',
-              {
-                method: 'POST',
-                body: JSON.stringify({
-                  name: file.name,
-                  parent_id: parentId,
-                  size_bytes: result.size,
-                  mime_type: result.mimeType,
-                  chunks
-                })
-              }
-            );
-            const nodeId = created?.node?.id ?? created?.node_id ?? null;
-            await recordAuditEvent({
+        if (file.size >= RESUMABLE_THRESHOLD) {
+          await withAudit(
+            { correlationId, targetType: 'file' },
+            {
               action: 'upload',
-              target_id: nodeId,
-              target_type: 'file',
-              outcome: 'success',
-              correlation_id: correlationId,
-              metadata: { phase: 'manifested', name: file.name, size_bytes: result.size }
-            });
-            return nodeId;
-          }
-        );
+              metadata: () => ({ name: file.name, size_bytes: file.size, parent_id: parentId, mode: 'resumable' })
+            },
+            async () => {
+              const result = await resumable.uploadResumable(file, {
+                onProgress: (bytes) => updateProgress(id, Math.round((bytes / file.size) * 100))
+              });
+              const chunks = result.chunks.map((c) => ({
+                discordMessageId: extractMessageIdFromUrl(c.url),
+                index: c.index,
+                sizeBytes: c.size,
+                cdnUrl: c.url
+              }));
+              const created = await apiFetch<{ node?: { id?: string }; node_id?: string }>(
+                '/fs/file/created',
+                {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    name: file.name,
+                    parent_id: parentId,
+                    size_bytes: result.size,
+                    mime_type: result.mimeType,
+                    chunks
+                  })
+                }
+              );
+              const nodeId = created?.node?.id ?? created?.node_id ?? null;
+              await recordAuditEvent({
+                action: 'upload',
+                target_id: nodeId,
+                target_type: 'file',
+                outcome: 'success',
+                correlation_id: correlationId,
+                metadata: { phase: 'manifested', name: file.name, size_bytes: result.size, mode: 'resumable' }
+              });
+              return nodeId;
+            }
+          );
+        } else {
+          await withAudit(
+            { correlationId, targetType: 'file' },
+            {
+              action: 'upload',
+              metadata: () => ({ name: file.name, size_bytes: file.size, parent_id: parentId, mode: 'single' })
+            },
+            async () => {
+              const { promise } = uploadFile(
+                file,
+                (pct) => updateProgress(id, pct),
+                controller.signal
+              );
+              const result = await promise;
+              const chunks = result.chunks.map((c) => ({
+                discordMessageId: extractMessageIdFromUrl(c.url),
+                index: c.index,
+                sizeBytes: c.size,
+                cdnUrl: c.url
+              }));
+              const created = await apiFetch<{ node?: { id?: string }; node_id?: string }>(
+                '/fs/file/created',
+                {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    name: file.name,
+                    parent_id: parentId,
+                    size_bytes: result.size,
+                    mime_type: result.mimeType,
+                    chunks
+                  })
+                }
+              );
+              const nodeId = created?.node?.id ?? created?.node_id ?? null;
+              await recordAuditEvent({
+                action: 'upload',
+                target_id: nodeId,
+                target_type: 'file',
+                outcome: 'success',
+                correlation_id: correlationId,
+                metadata: { phase: 'manifested', name: file.name, size_bytes: result.size, mode: 'single' }
+              });
+              return nodeId;
+            }
+          );
+        }
         markDone(id);
         queryClient.invalidateQueries({ queryKey: ['folder'] });
       } catch (err) {

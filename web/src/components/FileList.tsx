@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import type { Node } from '../api/fs';
 import { formatBytes, formatTimestamp, getFileIcon } from './icons';
+import { VirtualFileList } from './VirtualFileList';
+import { useFolderPrefetch } from '../hooks/useFolderPrefetch';
 
 interface FileListProps {
   nodes: Node[];
@@ -8,8 +10,11 @@ interface FileListProps {
   onSelect: (node: Node) => void;
 }
 
+const VIRTUAL_THRESHOLD = 100;
+
 export function FileList({ nodes, selectedId, onSelect }: FileListProps) {
   const navigate = useNavigate();
+  const { prefetch, cancel } = useFolderPrefetch();
 
   function handleRowClick(node: Node) {
     onSelect(node);
@@ -18,8 +23,28 @@ export function FileList({ nodes, selectedId, onSelect }: FileListProps) {
     }
   }
 
+  if (nodes.length > VIRTUAL_THRESHOLD) {
+    return (
+      <div onMouseLeave={cancel}>
+        <VirtualFileList
+          nodes={nodes}
+          selectedId={selectedId}
+          onSelect={onSelect}
+          onHover={(node) => {
+            if (node.kind === 'folder') prefetch(node.id);
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="drive-list" role="table" aria-label="Files and folders">
+    <div
+      className="drive-list"
+      role="table"
+      aria-label="Files and folders"
+      onMouseLeave={cancel}
+    >
       <div className="drive-list-head" role="row">
         <div role="columnheader">Name</div>
         <div role="columnheader">Size</div>
@@ -37,6 +62,9 @@ export function FileList({ nodes, selectedId, onSelect }: FileListProps) {
             onClick={() => handleRowClick(node)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') handleRowClick(node);
+            }}
+            onMouseEnter={() => {
+              if (node.kind === 'folder') prefetch(node.id);
             }}
             tabIndex={0}
           >
