@@ -1,7 +1,7 @@
 # Dependency directories
 node_modules/
 
-# Reference repositories cloned locally
+# Reference repositories cloned locally (see references/SOURCES.md if present)
 references/
 
 # Local SQLite database files
