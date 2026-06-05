@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useStorageStats } from '../../hooks/useStorageStats';
 import { StorageGauge } from './StorageGauge';
 import { CategoryBreakdown } from './CategoryBreakdown';
+import { ImportShareDropzone } from '../ImportShareDropzone';
 
 export function Sidebar() {
   const { data: stats } = useStorageStats();
+  const [importOpen, setImportOpen] = useState(false);
 
   const totalBytes = stats?.totalBytes ?? 0;
   const categories = stats?.categories ?? {
@@ -150,6 +153,32 @@ export function Sidebar() {
           </svg>
           <span className="sidebar-nav-label">Activity</span>
         </NavLink>
+
+        <button
+          type="button"
+          className="sidebar-nav-item"
+          onClick={() => setImportOpen(true)}
+          title="Import an encrypted share archive"
+        >
+          <div className="sidebar-nav-indicator" />
+          <svg
+            className="sidebar-nav-icon"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span className="sidebar-nav-label">Import Encrypted Share</span>
+        </button>
       </nav>
 
       {/* Storage Gauge & Widgets */}
@@ -157,6 +186,12 @@ export function Sidebar() {
         <StorageGauge totalBytes={totalBytes} />
         <CategoryBreakdown categories={categories} />
       </div>
+
+      <ImportShareDropzone
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => undefined}
+      />
     </aside>
   );
 }
