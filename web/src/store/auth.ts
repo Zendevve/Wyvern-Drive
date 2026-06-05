@@ -61,10 +61,6 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   async login(webhookUrl) {
     const trimmed = webhookUrl.trim();
-    const masterSet = await hasMasterPassword().catch(() => false);
-    if (masterSet && !useCryptoStore.getState().handle) {
-      throw new Error('Vault is locked. Unlock the vault before signing in.');
-    }
     await withAudit(
       { correlationId: newCorrelationId() },
       {
@@ -112,11 +108,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ status: 'unauthenticated' });
       return;
     }
-    const masterSet = await hasMasterPassword().catch(() => false);
-    if (masterSet && !useCryptoStore.getState().handle) {
-      set({ status: 'unauthenticated' });
-      return;
-    }
+    // If a master password is set, the MasterPasswordGate will prompt for unlock
+    // before exposing the app. We still mark the user as authenticated so the
+    // gate sits between the user and the app surface (not the login screen).
     const payload = decodeJwt(token);
     if (!payload?.webhookUrl) {
       clearJwt();

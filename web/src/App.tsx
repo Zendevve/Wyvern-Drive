@@ -7,6 +7,7 @@ import { ActivityPage } from './pages/ActivityPage';
 import { ToastHost } from './components/Toast';
 import { AppShell } from './components/AppShell';
 import { UploadQueuePanel } from './components/UploadQueuePanel';
+import { MasterPasswordGate } from './components/MasterPasswordGate';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const status = useAuthStore((s) => s.status);
@@ -43,12 +44,14 @@ export function App() {
 
   return (
     <PrivateRoute>
-      <AppShell>
-        <Routes>
-          <Route path="/activity" element={<ActivityPage />} />
-          <Route path="*" element={<DriveRoute />} />
-        </Routes>
-      </AppShell>
+      <MasterPasswordGate>
+        <AppShell>
+          <Routes>
+            <Route path="/activity" element={<ActivityPage />} />
+            <Route path="*" element={<DriveRoute />} />
+          </Routes>
+        </AppShell>
+      </MasterPasswordGate>
       <UploadQueuePanel />
       <ToastHost />
     </PrivateRoute>
