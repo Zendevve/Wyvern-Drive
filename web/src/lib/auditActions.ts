@@ -15,7 +15,8 @@ export const AUDIT_ACTIONS = [
   'file_encrypted',
   'file_decrypted',
   'share_archive_created',
-  'share_archive_imported'
+  'share_archive_imported',
+  'create_folder'
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -44,7 +45,8 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   file_encrypted: 'Encrypt file',
   file_decrypted: 'Decrypt file',
   share_archive_created: 'Create share archive',
-  share_archive_imported: 'Import share archive'
+  share_archive_imported: 'Import share archive',
+  create_folder: 'Create folder'
 };
 
 export interface MasterPasswordSetMeta {
