@@ -53,11 +53,29 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| THEME-01    | Phase 4 | Pending |
+| THEME-02    | Phase 4 | Pending |
+| THEME-03    | Phase 4 | Pending |
+| SIDEBAR-01  | Phase 4 | Pending |
+| SIDEBAR-02  | Phase 4 | Pending |
+| SIDEBAR-03  | Phase 4 | Pending |
+| BROWSE-01   | Phase 5 | Pending |
+| BROWSE-02   | Phase 5 | Pending |
+| BROWSE-03   | Phase 5 | Pending |
+| BROWSE-04   | Phase 5 | Pending |
+| DETAIL-01   | Phase 5 | Pending |
+| DETAIL-02   | Phase 5 | Pending |
+| DETAIL-03   | Phase 5 | Pending |
+| CONTEXT-01  | Phase 6 | Pending |
+| CONTEXT-02  | Phase 6 | Pending |
+| QUEUE-01    | Phase 6 | Pending |
+| QUEUE-02    | Phase 6 | Pending |
+| QUEUE-03    | Phase 6 | Pending |
 
 **Coverage:**
 - v2 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18
+- Mapped to phases: 18
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-05*
