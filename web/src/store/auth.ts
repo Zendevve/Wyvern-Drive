@@ -3,6 +3,8 @@ import { apiFetch, setUnauthorizedHandler } from '../lib/api';
 import { deriveAccountId } from '../lib/crypto';
 import { clearJwt, readJwt, writeJwt } from '../lib/storage';
 import { newCorrelationId, recordAuditEvent, withAudit } from '../lib/auditMiddleware';
+import { hasMasterPassword } from '../lib/secretStore';
+import { useCryptoStore } from './crypto';
 
 export type AuthStatus = 'unknown' | 'unauthenticated' | 'authenticated';
 
@@ -59,6 +61,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   async login(webhookUrl) {
     const trimmed = webhookUrl.trim();
+    const masterSet = await hasMasterPassword().catch(() => false);
+    if (masterSet && !useCryptoStore.getState().handle) {
+      throw new Error('Vault is locked. Unlock the vault before signing in.');
+    }
     await withAudit(
       { correlationId: newCorrelationId() },
       {
@@ -82,6 +88,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout() {
     const correlationId = newCorrelationId();
     const currentAccount = useAuthStore.getState().accountId;
+    try {
+      useCryptoStore.getState().wipe();
+    } catch {
+      // ignore
+    }
     clearJwt();
     set({ jwt: null, webhookUrl: null, accountId: null, status: 'unauthenticated' });
     void recordAuditEvent({
@@ -98,6 +109,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     const correlationId = newCorrelationId();
     const token = readJwt();
     if (!token) {
+      set({ status: 'unauthenticated' });
+      return;
+    }
+    const masterSet = await hasMasterPassword().catch(() => false);
+    if (masterSet && !useCryptoStore.getState().handle) {
       set({ status: 'unauthenticated' });
       return;
     }
