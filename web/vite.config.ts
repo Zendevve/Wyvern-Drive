@@ -7,6 +7,22 @@ const webRoot = fileURLToPath(new URL('.', import.meta.url));
 export default defineConfig({
   root: webRoot,
   plugins: [react()],
+  worker: {
+    format: 'es'
+  },
+  optimizeDeps: {
+    exclude: ['argon2-browser']
+  },
+  build: {
+    target: 'es2022',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          crypto: ['argon2-browser']
+        }
+      }
+    }
+  },
   server: {
     port: 5173,
     proxy: {
