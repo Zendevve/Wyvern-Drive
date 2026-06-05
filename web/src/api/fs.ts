@@ -38,3 +38,18 @@ export function listChildren(parentId: string | null): Promise<ListResponse> {
 export function getNode(id: string): Promise<NodeResponse> {
   return apiFetch<NodeResponse>(`/fs/node?id=${encodeURIComponent(id)}`);
 }
+
+export interface StorageStats {
+  totalBytes: number;
+  categories: {
+    documents: number;
+    images: number;
+    videos: number;
+    audio: number;
+    others: number;
+  };
+}
+
+export function getStorageStats(): Promise<StorageStats> {
+  return apiFetch<StorageStats>('/fs/stats');
+}

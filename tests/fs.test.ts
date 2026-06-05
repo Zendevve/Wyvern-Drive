@@ -214,4 +214,66 @@ describe('Fastify /fs routes', () => {
     expect(patch.statusCode).toBe(200);
     expect(JSON.parse(patch.body).name).toBe('new');
   });
+
+  it('returns correct storage stats categorized by mime types', async () => {
+    // 1. Create an image file
+    const file1 = await ctx.app.inject({
+      method: 'POST',
+      url: '/fs/file/created',
+      headers: { authorization: `Bearer ${ctx.tokenA}`, 'content-type': 'application/json' },
+      payload: {
+        name: 'test.png',
+        parent_id: null,
+        size_bytes: 12345,
+        mime_type: 'image/png',
+        chunks: [{ discordMessageId: 'msgI', index: 0, sizeBytes: 12345, cdnUrl: 'uI' }],
+      },
+    });
+    expect(file1.statusCode).toBe(201);
+
+    // 2. Create a document file
+    const file2 = await ctx.app.inject({
+      method: 'POST',
+      url: '/fs/file/created',
+      headers: { authorization: `Bearer ${ctx.tokenA}`, 'content-type': 'application/json' },
+      payload: {
+        name: 'test.pdf',
+        parent_id: null,
+        size_bytes: 54321,
+        mime_type: 'application/pdf',
+        chunks: [{ discordMessageId: 'msgP', index: 0, sizeBytes: 54321, cdnUrl: 'uP' }],
+      },
+    });
+    expect(file2.statusCode).toBe(201);
+
+    // 3. Create an audio file
+    const file3 = await ctx.app.inject({
+      method: 'POST',
+      url: '/fs/file/created',
+      headers: { authorization: `Bearer ${ctx.tokenA}`, 'content-type': 'application/json' },
+      payload: {
+        name: 'song.mp3',
+        parent_id: null,
+        size_bytes: 11111,
+        mime_type: 'audio/mpeg',
+        chunks: [{ discordMessageId: 'msgM', index: 0, sizeBytes: 11111, cdnUrl: 'uM' }],
+      },
+    });
+    expect(file3.statusCode).toBe(201);
+
+    // 4. Fetch stats
+    const statsRes = await ctx.app.inject({
+      method: 'GET',
+      url: '/fs/stats',
+      headers: { authorization: `Bearer ${ctx.tokenA}` },
+    });
+    expect(statsRes.statusCode).toBe(200);
+    const stats = JSON.parse(statsRes.body);
+    expect(stats.totalBytes).toBe(77777);
+    expect(stats.categories.images).toBe(12345);
+    expect(stats.categories.documents).toBe(54321);
+    expect(stats.categories.audio).toBe(11111);
+    expect(stats.categories.videos).toBe(0);
+    expect(stats.categories.others).toBe(0);
+  });
 });

@@ -28,12 +28,32 @@ export function AuthPage() {
     <div className="auth-shell">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="auth-mark" aria-hidden />
-          <h1 className="auth-title">Wyvern Drive</h1>
+          <div className="auth-logo-wrapper" aria-hidden="true">
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              {/* Left Claw Prong */}
+              <path d="M 6 4 C 8 8 7 14 3 20" />
+              <path d="M 3 20 C 5 18 8 16 10 15" />
+              {/* Middle Claw Prong */}
+              <path d="M 12 2 C 13 8 12 14 8 22" />
+              <path d="M 8 22 C 10 19 13 17 16 16" />
+              {/* Right Claw Prong */}
+              <path d="M 18 3 C 18 9 17 15 13 21" />
+              <path d="M 13 21 C 15 19 18 18 21 18" />
+            </svg>
+          </div>
+          <h1 className="auth-title">ARTANO</h1>
         </div>
         <p className="auth-subtitle">
-          Paste your Discord webhook URL to connect. Your credential stays in this browser; the server never
-          stores it.
+          Connect your secure storage using a Discord webhook URL. Credentials stay inside your browser storage.
         </p>
         <form onSubmit={onSubmit} className="auth-form">
           <label htmlFor="webhook" className="auth-label">

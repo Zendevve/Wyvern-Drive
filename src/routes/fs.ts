@@ -9,6 +9,7 @@ import {
   renameNode,
   recordChunks,
   UniqueViolationError,
+  getStorageStats,
 } from '../services/fs-repo';
 import { cascadeDelete } from '../services/cascade';
 import { exportBackup, restoreBackup } from '../services/backup';
@@ -203,4 +204,8 @@ export async function fsRoutes(app: FastifyInstance) {
       }
     }
   );
+
+  app.get('/fs/stats', auth, async (request) => {
+    return getStorageStats(app.db, request.accountId);
+  });
 }

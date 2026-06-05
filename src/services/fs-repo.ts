@@ -210,3 +210,61 @@ export function deleteNodes(db: DB, accountId: string, nodeIds: string[]): numbe
     .run(accountId, ...nodeIds);
   return res.changes;
 }
+
+export interface StorageStats {
+  totalBytes: number;
+  categories: {
+    documents: number;
+    images: number;
+    videos: number;
+    audio: number;
+    others: number;
+  };
+}
+
+export function getStorageStats(db: DB, accountId: string): StorageStats {
+  const rows = db.prepare(
+    `SELECT mime_type, SUM(size_bytes) as total_size
+     FROM nodes
+     WHERE account_id = ? AND kind = 'file' AND size_bytes IS NOT NULL
+     GROUP BY mime_type`
+  ).all(accountId) as Array<{ mime_type: string | null; total_size: number }>;
+
+  let totalBytes = 0;
+  let documents = 0;
+  let images = 0;
+  let videos = 0;
+  let audio = 0;
+  let others = 0;
+
+  for (const row of rows) {
+    const size = row.total_size;
+    totalBytes += size;
+    const mime = (row.mime_type || '').toLowerCase();
+    if (
+      mime.startsWith('text/') ||
+      mime.includes('pdf') ||
+      mime.includes('word') ||
+      mime.includes('excel') ||
+      mime.includes('powerpoint') ||
+      mime.includes('office') ||
+      mime.includes('zip') ||
+      mime.includes('rar')
+    ) {
+      documents += size;
+    } else if (mime.startsWith('image/')) {
+      images += size;
+    } else if (mime.startsWith('video/')) {
+      videos += size;
+    } else if (mime.startsWith('audio/')) {
+      audio += size;
+    } else {
+      others += size;
+    }
+  }
+
+  return {
+    totalBytes,
+    categories: { documents, images, videos, audio, others }
+  };
+}
