@@ -8,25 +8,42 @@ Wyvern Drive is a browser-based personal cloud storage application that utilizes
 
 Users get free, unlimited personal cloud storage with standard file manager features (folders, uploads, downloads) using their own Discord webhooks as the backend.
 
+## Current Milestone: v2.0 Professional Cloud Storage UX
+
+**Goal:** Deliver a premium, visually stunning, and highly interactive Google Drive/MEGA-grade cloud storage interface.
+
+**Target features:**
+- **Premium Design System & Theme:** Off-white warm canvas (`#F8F9FA`), white card modules with thin borders, and harmonious HSL accent gradients (sky-blue/golden-orange).
+- **Responsive Dashboard Sidebar & Widgets:** Left sidebar navigation with an arc-gauge storage indicator displaying used storage vs. limits, plus file category weights.
+- **Enhanced Directory Browser:** Grid & list toggle views, color-coded files/folders with nested avatar piles for collaborative elements, and visual type category filter chips.
+- **Detail & Preview Side-Pane:** Right-hand collapsible sidebar displaying detailed file metadata (size, upload timestamp, CDN URL status), quick sharing options, and file-type visual previews.
+- **Custom Context Menus:** Right-click context menus for files and folders (Rename, Delete, Share, Open/Download) matching native desktop behaviors.
+- **Active Upload/Download Queue Overlay:** Floating task queue in the bottom right corner showing real-time speed, progress bars, and queue status, styled after MEGA/pCloud.
+
 ## Requirements
 
 ### Validated
 
-(None yet — ship to validate)
+- **F-01**: Webhook-based account setup and stateless JWT authentication (Validated in v1.0)
+- **F-02**: File upload with automatic chunking (24MB limit per chunk) (Validated in v1.0)
+- **F-03**: File download with chunk reassembly and dynamic CDN URL refresh (Validated in v1.0)
+- **F-04**: Folder creation and directory hierarchy management (Validated in v1.0)
+- **F-05**: File/folder virtual filesystem listing scoped by hashed webhook (Validated in v1.0)
+- **F-06**: Delete file (cascade delete in metadata and associated Discord messages) (Validated in v1.0)
+- **F-07**: Upload progress indicator (per-chunk progress) (Validated in v1.0)
+- **F-08**: Drag-and-drop file upload (Validated in v1.0)
+- **F-09**: Breadcrumb navigation (Validated in v1.0)
+- **F-10**: File type icon mapping (Validated in v1.0)
+- **F-11**: Database backup & restore (export/import virtual drive metadata JSON) (Validated in v1.0)
 
 ### Active
 
-- [ ] **F-01**: Webhook-based account setup and stateless JWT authentication
-- [ ] **F-02**: File upload with automatic chunking (24MB limit per chunk)
-- [ ] **F-03**: File download with chunk reassembly and dynamic CDN URL refresh
-- [ ] **F-04**: Folder creation and directory hierarchy management
-- [ ] **F-05**: File/folder virtual filesystem listing scoped by hashed webhook
-- [ ] **F-06**: Delete file (cascade delete in metadata and associated Discord messages)
-- [ ] **F-07**: Upload progress indicator (per-chunk progress)
-- [ ] **F-08**: Drag-and-drop file upload
-- [ ] **F-09**: Breadcrumb navigation
-- [ ] **F-10**: File type icon mapping
-- [ ] **F-11**: Database backup & restore (export/import virtual drive metadata JSON)
+- [ ] **F-12**: Color-coded premium UI design system with off-white canvas, smooth gradients, and micro-animations
+- [ ] **F-13**: Sidebar storage gauge widget (semi-circular arc representation) displaying category size breakdown
+- [ ] **F-14**: Directory browser grid/list toggle, type category visual filter chips, and custom folder card style with collaborative avatar stack mockups
+- [ ] **F-15**: Right collapsible detail pane showing metadata details and file preview cards
+- [ ] **F-16**: Desktop-grade custom right-click context menu options for folders and files
+- [ ] **F-17**: Bottom-right floating tasks queue overlay showing active upload/download speeds and progress bars
 
 ### Out of Scope
 
@@ -78,4 +95,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-04 after initialization*
+*Last updated: 2026-06-05 for milestone v2.0*
