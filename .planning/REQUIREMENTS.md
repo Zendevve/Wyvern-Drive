@@ -1,61 +1,51 @@
 # Requirements: Wyvern Drive
 
-**Defined:** 2026-06-04
+**Defined:** 2026-06-05
 **Core Value:** Users get free, unlimited personal cloud storage with standard file manager features using their own Discord webhooks.
 
-## v1 Requirements
+## v2 Requirements (Professional Cloud Storage UX)
 
-Requirements for initial release.
+### Theme & Aesthetics (THEME)
 
-### Authentication & Setup
+- [ ] **THEME-01**: UI uses a curated color palette: warm off-white canvas (`#F8F9FA`), clean white card containers (`#FFFFFF`), thin border frames (`#E5E7EB`), and HSL gradients (sky-blue, golden-orange).
+- [ ] **THEME-02**: UI utilizes modern typography ("Inter" or "Outfit" font family via Google Fonts) for clean readability.
+- [ ] **THEME-03**: Add CSS-transition-based micro-animations (scale on hover, slide-in drawers, fading overlays) for premium user interactions.
 
-- [ ] **AUTH-01**: User can input their Discord webhook URL to initialize access.
-- [ ] **AUTH-02**: Backend validates webhook URL with Discord API and generates a stateless JWT containing the webhook URL.
-- [ ] **AUTH-03**: Backend isolates all virtual filesystem requests to an `accountId` derived from the hashed webhook.
-- [ ] **AUTH-04**: Client stores the JWT in local storage, maintaining the login session across refreshes.
+### Sidebar & Storage Widgets (SIDEBAR)
 
-### Filesystem Operations
+- [ ] **SIDEBAR-01**: Left-hand sidebar containing key drive navigation links with hover states and active-route colored highlights.
+- [ ] **SIDEBAR-02**: Semi-circular arc progress gauge widget in the sidebar showing total storage consumption (e.g. "75 GB used of 100 GB").
+- [ ] **SIDEBAR-03**: File category size breakdown list displaying storage weight per extension group (Documents, Images, Videos, Audio, Others).
 
-- [ ] **FS-01**: User can create virtual folders in a hierarchical path.
-- [ ] **FS-02**: User can list the files and folders inside any virtual folder parent directory.
-- [ ] **FS-03**: User can delete a virtual file, which removes metadata and deletes the message chunks from Discord.
-- [ ] **FS-04**: User can delete a folder (cascade deleting all children recursively).
-- [ ] **FS-05**: User can export and import the virtual drive database metadata as a JSON file for backup and restore.
+### Directory Browser (BROWSE)
 
-### Storage Engine
+- [ ] **BROWSE-01**: Grid / list toggle buttons that dynamically switch the file layout with smooth transition states.
+- [ ] **BROWSE-02**: Top row of rounded filter chips representing file categories with item counts acting as instant directory filters.
+- [ ] **BROWSE-03**: Premium folder card layout featuring file/folder name, a favorite star button toggle, and nested collaborative avatar pile mockups.
+- [ ] **BROWSE-04**: Interactive dotted-outline grid card for "+ Create Folder" that opens the folder creation dialog.
 
-- [ ] **STORE-01**: Files are split into chunks of up to 24MB before upload.
-- [ ] **STORE-02**: Chunks are uploaded to Discord using the webhook, saving attachment URLs and message IDs in the database.
-- [ ] **STORE-03**: Chunks are downloaded, reassembled, and streamed directly to the user's browser.
-- [ ] **STORE-04**: Expired Discord CDN URLs are dynamically refreshed by fetching the message from the webhook API when a download fails.
-- [ ] **STORE-05**: Webhook rate limits are handled using request queueing with exponential backoff and jitter.
+### Detail & Preview Pane (DETAIL)
 
-### User Interface
+- [ ] **DETAIL-01**: Collapsible right-sidebar info pane that shows details of the currently selected file or folder.
+- [ ] **DETAIL-02**: Detail panel displays complete file metadata: name, category, human-readable size, upload timestamp, and Discord CDN link refresh status.
+- [ ] **DETAIL-03**: Large visual preview element inside the detail pane showing image thumbnails, document icons, or inline media playback controls.
 
-- [ ] **UI-01**: Clean modern interface showing file list/grid, sidebar, and header.
-- [ ] **UI-02**: Breadcrumb navigation representing the virtual path.
-- [ ] **UI-03**: File upload progress overlay showing active and queued uploads.
-- [ ] **UI-04**: Drag-and-drop area for uploading files to the current folder.
-- [ ] **UI-05**: Modal confirmation dialogs for deletion.
-- [ ] **UI-06**: File type icons indicating folders, images, audio, video, documents, and archives.
+### Desktop-Grade Context Menus (CONTEXT)
 
-## v2 Requirements
+- [ ] **CONTEXT-01**: Custom right-click context menu that replaces browser defaults on files/folders with actions: Rename, Delete, Share, Open/Download.
+- [ ] **CONTEXT-02**: Small 3-dots icon button on file items that triggers the same custom context menu options for touch/mobile devices.
 
-### Sharing & Collaboration
+### Floating Task Queue Overlay (QUEUE)
 
-- **SHARE-01**: User can generate shareable public links for individual files.
-- **SHARE-02**: Shareable links can be configured with an optional expiry timestamp.
-
-### Encryption
-
-- **CRYPTO-01**: Client-side AES-256-GCM encryption of chunks before upload, using a user-specified passphrase.
-- **CRYPTO-02**: Client-side decryption during chunk reassembly (passphrase is never sent to the server).
+- [ ] **QUEUE-01**: Minimizable floating task queue drawer in the bottom right corner showing active and completed upload/download tasks.
+- [ ] **QUEUE-02**: Display per-file progress metrics, including upload speed (e.g. "4.2 MB/s") and estimated time remaining (ETA).
+- [ ] **QUEUE-03**: Render animated progress bars for active chunk uploads and a global queue progress indicator.
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Multi-user shared folders | Out of scope for v1 personal storage focus. |
+| Multi-user shared folders | Out of scope for personal cloud storage focus; visual avatar piles are mockups only. |
 | Native mobile/desktop app wrappers | Focus is on high-quality React web SPA first. |
 | Discord Bot token dependency | Webhook-only setup keeps configuration extremely simple. |
 
@@ -63,33 +53,12 @@ Requirements for initial release.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 1 | Pending |
-| AUTH-02 | Phase 1 | Pending |
-| AUTH-03 | Phase 1 | Pending |
-| AUTH-04 | Phase 1 | Pending |
-| FS-01 | Phase 2 | Pending |
-| FS-02 | Phase 2 | Pending |
-| FS-03 | Phase 2 | Pending |
-| FS-04 | Phase 2 | Pending |
-| FS-05 | Phase 2 | Pending |
-| STORE-01 | Phase 1 | Pending |
-| STORE-02 | Phase 1 | Pending |
-| STORE-03 | Phase 1 | Pending |
-| STORE-04 | Phase 1 | Pending |
-| STORE-05 | Phase 1 | Pending |
-| UI-01 | Phase 3 | Pending |
-| UI-02 | Phase 3 | Pending |
-| UI-03 | Phase 3 | Pending |
-| UI-04 | Phase 3 | Pending |
-| UI-05 | Phase 3 | Pending |
-| UI-06 | Phase 3 | Pending |
 
 **Coverage:**
-
-- v1 requirements: 20 total
-- Mapped to phases: 20
-- Unmapped: 0 ✓
+- v2 requirements: 18 total
+- Mapped to phases: 0
+- Unmapped: 18
 
 ---
-*Requirements defined: 2026-06-04*
-*Last updated: 2026-06-04 after initial definition*
+*Requirements defined: 2026-06-05*
+*Last updated: 2026-06-05 for milestone v2.0*
