@@ -3,6 +3,7 @@ import { apiFetch } from '../lib/api';
 import { extractMessageIdFromUrl, uploadFile } from '../api/upload';
 import { runWithConcurrency } from '../lib/concurrency';
 import { useUploadsStore } from '../store/uploads';
+import { newCorrelationId, recordAuditEvent, withAudit } from '../lib/auditMiddleware';
 
 function newId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
@@ -36,39 +37,71 @@ export function useUploader(): UseUploader {
     });
 
     await runWithConcurrency(tasks, 3, async ({ id, file, parentId }) => {
+      const correlationId = newCorrelationId();
       const controller = new AbortController();
       controllers.set(id, controller);
       setStatus(id, 'uploading');
       try {
-        const { promise } = uploadFile(
-          file,
-          (pct) => updateProgress(id, pct),
-          controller.signal
+        await withAudit(
+          { correlationId, targetType: 'file' },
+          {
+            action: 'upload',
+            metadata: () => ({ name: file.name, size_bytes: file.size, parent_id: parentId })
+          },
+          async () => {
+            const { promise } = uploadFile(
+              file,
+              (pct) => updateProgress(id, pct),
+              controller.signal
+            );
+            const result = await promise;
+            const chunks = result.chunks.map((c) => ({
+              discordMessageId: extractMessageIdFromUrl(c.url),
+              index: c.index,
+              sizeBytes: c.size,
+              cdnUrl: c.url
+            }));
+            const created = await apiFetch<{ node?: { id?: string }; node_id?: string }>(
+              '/fs/file/created',
+              {
+                method: 'POST',
+                body: JSON.stringify({
+                  name: file.name,
+                  parent_id: parentId,
+                  size_bytes: result.size,
+                  mime_type: result.mimeType,
+                  chunks
+                })
+              }
+            );
+            const nodeId = created?.node?.id ?? created?.node_id ?? null;
+            await recordAuditEvent({
+              action: 'upload',
+              target_id: nodeId,
+              target_type: 'file',
+              outcome: 'success',
+              correlation_id: correlationId,
+              metadata: { phase: 'manifested', name: file.name, size_bytes: result.size }
+            });
+            return nodeId;
+          }
         );
-        const result = await promise;
-        const chunks = result.chunks.map((c) => ({
-          discordMessageId: extractMessageIdFromUrl(c.url),
-          index: c.index,
-          sizeBytes: c.size,
-          cdnUrl: c.url
-        }));
-        await apiFetch('/fs/file/created', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: file.name,
-            parent_id: parentId,
-            size_bytes: result.size,
-            mime_type: result.mimeType,
-            chunks
-          })
-        });
         markDone(id);
         queryClient.invalidateQueries({ queryKey: ['folder'] });
       } catch (err) {
         if (controller.signal.aborted) {
           markCancelled(id);
+          await recordAuditEvent({
+            action: 'upload',
+            target_id: id,
+            target_type: 'file',
+            outcome: 'cancelled',
+            correlation_id: correlationId,
+            metadata: { name: file.name, size_bytes: file.size }
+          });
         } else {
-          markError(id, err instanceof Error ? err.message : 'Upload failed');
+          const message = err instanceof Error ? err.message : 'Upload failed';
+          markError(id, message);
         }
       } finally {
         controllers.delete(id);

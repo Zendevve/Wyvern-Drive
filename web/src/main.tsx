@@ -7,6 +7,7 @@ import { initAuthUnauthorizedHandler, useAuthStore } from './store/auth';
 import { useToastsStore } from './store/toasts';
 import './styles/global.css';
 import './styles/components.css';
+import './styles/activity.css';
 
 // Unregister any stale service workers that may intercept API requests
 if ('serviceWorker' in navigator) {

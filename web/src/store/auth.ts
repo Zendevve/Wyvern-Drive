@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { apiFetch, setUnauthorizedHandler } from '../lib/api';
 import { deriveAccountId } from '../lib/crypto';
 import { clearJwt, readJwt, writeJwt } from '../lib/storage';
+import { newCorrelationId, recordAuditEvent, withAudit } from '../lib/auditMiddleware';
 
 export type AuthStatus = 'unknown' | 'unauthenticated' | 'authenticated';
 
@@ -32,6 +33,24 @@ function decodeJwt(token: string): JwtPayload | null {
   }
 }
 
+function accountIdForLogging(trimmed: string): string {
+  try {
+    return deriveAccountIdSync(trimmed);
+  } catch {
+    return trimmed.slice(0, 16);
+  }
+}
+
+function deriveAccountIdSync(trimmed: string): string {
+  // Best-effort sync hash for audit log target_id; full derive is async.
+  // Falls back to a stable hash of the trimmed string.
+  let h = 5381;
+  for (let i = 0; i < trimmed.length; i++) {
+    h = ((h << 5) + h + trimmed.charCodeAt(i)) | 0;
+  }
+  return `acct-${(h >>> 0).toString(16)}`;
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   jwt: null,
   webhookUrl: null,
@@ -40,21 +59,43 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   async login(webhookUrl) {
     const trimmed = webhookUrl.trim();
-    const { token } = await apiFetch<{ token: string }>('/auth/webhook', {
-      method: 'POST',
-      body: JSON.stringify({ webhookUrl: trimmed })
-    });
-    writeJwt(token);
-    const accountId = await deriveAccountId(trimmed);
-    set({ jwt: token, webhookUrl: trimmed, accountId, status: 'authenticated' });
+    await withAudit(
+      { correlationId: newCorrelationId() },
+      {
+        action: 'login',
+        targetType: 'account',
+        metadata: () => ({ webhook_length: trimmed.length })
+      },
+      async () => {
+        const { token } = await apiFetch<{ token: string }>('/auth/webhook', {
+          method: 'POST',
+          body: JSON.stringify({ webhookUrl: trimmed })
+        });
+        writeJwt(token);
+        const accountId = await deriveAccountId(trimmed);
+        set({ jwt: token, webhookUrl: trimmed, accountId, status: 'authenticated' });
+        return accountId;
+      }
+    );
   },
 
   logout() {
+    const correlationId = newCorrelationId();
+    const currentAccount = useAuthStore.getState().accountId;
     clearJwt();
     set({ jwt: null, webhookUrl: null, accountId: null, status: 'unauthenticated' });
+    void recordAuditEvent({
+      action: 'logout',
+      target_id: currentAccount,
+      target_type: 'account',
+      outcome: 'success',
+      correlation_id: correlationId,
+      metadata: { phase: 'end' }
+    });
   },
 
   async restore() {
+    const correlationId = newCorrelationId();
     const token = readJwt();
     if (!token) {
       set({ status: 'unauthenticated' });
@@ -64,6 +105,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (!payload?.webhookUrl) {
       clearJwt();
       set({ status: 'unauthenticated' });
+      await recordAuditEvent({
+        action: 'session_restore',
+        target_id: null,
+        target_type: 'session',
+        outcome: 'error',
+        correlation_id: correlationId,
+        metadata: { reason: 'invalid_token_payload' }
+      });
       return;
     }
     const accountId = await deriveAccountId(payload.webhookUrl);
@@ -72,6 +121,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       webhookUrl: payload.webhookUrl,
       accountId,
       status: 'authenticated'
+    });
+    await recordAuditEvent({
+      action: 'session_restore',
+      target_id: accountIdForLogging(payload.webhookUrl),
+      target_type: 'session',
+      outcome: 'success',
+      correlation_id: correlationId,
+      metadata: {}
     });
   }
 }));

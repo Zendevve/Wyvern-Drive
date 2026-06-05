@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from './store/auth';
 import { AuthPage } from './pages/AuthPage';
 import { DrivePage } from './pages/DrivePage';
+import { ActivityPage } from './pages/ActivityPage';
 import { ToastHost } from './components/Toast';
 import { AppShell } from './components/AppShell';
 import { UploadQueuePanel } from './components/UploadQueuePanel';
@@ -43,7 +44,10 @@ export function App() {
   return (
     <PrivateRoute>
       <AppShell>
-        <DriveRoute />
+        <Routes>
+          <Route path="/activity" element={<ActivityPage />} />
+          <Route path="*" element={<DriveRoute />} />
+        </Routes>
       </AppShell>
       <UploadQueuePanel />
       <ToastHost />

@@ -123,6 +123,33 @@ export function Sidebar() {
           </svg>
           <span className="sidebar-nav-label">Trash</span>
         </button>
+
+        <NavLink
+          to="/activity"
+          className={({ isActive }) => `sidebar-nav-item${isActive ? ' is-active' : ''}`}
+        >
+          <div className="sidebar-nav-indicator" />
+          <svg
+            className="sidebar-nav-icon"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 8v4l3 2" />
+            <circle cx="12" cy="12" r="9" />
+            <path d="M4 12h2" />
+            <path d="M18 12h2" />
+            <path d="M12 4v2" />
+            <path d="M12 18v2" />
+          </svg>
+          <span className="sidebar-nav-label">Activity</span>
+        </NavLink>
       </nav>
 
       {/* Storage Gauge & Widgets */}

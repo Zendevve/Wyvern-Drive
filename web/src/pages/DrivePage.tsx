@@ -8,6 +8,7 @@ import { DetailPanel } from '../components/DetailPanel';
 import { Button } from '../components/Button';
 import { getNode, type Node } from '../api/fs';
 import { deleteNode } from '../api/delete';
+import { newCorrelationId, recordAuditEvent, withAudit } from '../lib/auditMiddleware';
 import { useFolder } from '../hooks/useFolder';
 import { useUploader } from '../hooks/useUploader';
 import { useSelectionStore } from '../store/selection';
@@ -131,9 +132,31 @@ export function DrivePage({ parentId }: DrivePageProps) {
     if (!pendingDelete) return;
     const id = pendingDelete.id;
     const name = pendingDelete.name;
+    const kind = pendingDelete.kind;
     setPendingDelete(null);
     try {
-      const result = await deleteNode(id);
+      const correlationId = newCorrelationId();
+      const result = await withAudit(
+        { correlationId, targetId: id, targetType: kind },
+        {
+          action: 'delete',
+          targetId: id,
+          targetType: kind,
+          metadata: () => ({ name })
+        },
+        async () => {
+          const r = await deleteNode(id);
+          await recordAuditEvent({
+            action: 'delete',
+            target_id: id,
+            target_type: kind,
+            outcome: 'success',
+            correlation_id: correlationId,
+            metadata: { phase: 'manifested', deleted_nodes: r.deleted_nodes, deleted_messages: r.deleted_messages.length }
+          });
+          return r;
+        }
+      );
       pushToast({
         kind: 'success',
         message: `Deleted ${name} (${result.deleted_nodes} item${result.deleted_nodes === 1 ? '' : 's'})`
