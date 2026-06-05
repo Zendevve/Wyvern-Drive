@@ -2,7 +2,7 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Ultimate Discord File Storage
-status: planning
+status: roadmap_approved
 last_updated: "2026-06-05T11:30:00.000Z"
 last_activity: 2026-06-05
 progress:
@@ -32,13 +32,13 @@ See: .planning/PROJECT.md (updated 2026-06-05)
   - [x] Phase 4: Design System & Sidebar Navigation (Complete)
   - [~] Phase 5: Directory Browser & Detail Side-Pane (Paused — spec captured, execution deferred)
   - [~] Phase 6: Desktop-Grade Context Menus & Task Queue Overlay (Paused — spec captured, execution deferred)
-- [>] Milestone v3.0: Ultimate Discord File Storage (Planning)
-  - [ ] Phase 7: TBD
-  - [ ] Phase 8: TBD
-  - [ ] Phase 9: TBD
-  - [ ] Phase 10: TBD
-  - [ ] Phase 11: TBD
-  - [ ] Phase 12: TBD
+- [>] Milestone v3.0: Ultimate Discord File Storage (Roadmap approved)
+  - [ ] Phase 7: Trust Foundation (audit log + activity feed)
+  - [ ] Phase 8: Performance Core (TUS + parallel chunks + virtual scroll + prefetch)
+  - [ ] Phase 9: Encryption at Rest (AES-256-GCM, Argon2id, secret store, key zeroization)
+  - [ ] Phase 10: Reliability & Recovery (local-first, persistent queue, idempotency)
+  - [ ] Phase 11: Disaster Recovery & Integrity (hash verify, receipts, backup export/import)
+  - [ ] Phase 12: Operations & Hardening (logger, OTLP, health, self-test, destructive consent)
 
 ## Current Work
 
@@ -65,7 +65,5 @@ Last activity: 2026-06-05 — Resetting STATE.md for v3.0
 
 ## Operator Next Steps
 
-- Write .planning/REQUIREMENTS.md with 22 v3 REQ-IDs (TRUST-01..05, PERF-01..04, CRYPTO-01..04, REL-01..05, OPS-01..04)
-- Commit PROJECT.md + STATE.md + REQUIREMENTS.md (atomic milestone-start commit)
-- Spawn gsd-roadmapper to produce ROADMAP.md (phases 7-12)
-- Display roadmap + checkpoint for approval
+- v3.0 roadmap committed (phases 7-12, 22 reqs).
+- Next: checkpoint for roadmap approval, then begin Phase 7 planning via `/gsd-discuss-phase 7` or `/gsd-plan-phase 7`.
