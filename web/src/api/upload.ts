@@ -1,3 +1,5 @@
+import { readJwt } from '../lib/storage';
+
 export interface UploadChunk {
   index: number;
   url: string;
@@ -24,6 +26,11 @@ export function uploadFile(
   const form = new FormData();
   form.append('file', file, file.name);
   xhr.open('POST', '/api/upload');
+
+  const jwt = readJwt();
+  if (jwt) {
+    xhr.setRequestHeader('Authorization', `Bearer ${jwt}`);
+  }
 
   xhr.upload.onprogress = (event) => {
     if (event.lengthComputable && onProgress) {

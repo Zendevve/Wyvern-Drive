@@ -8,6 +8,15 @@ import { useToastsStore } from './store/toasts';
 import './styles/global.css';
 import './styles/components.css';
 
+// Unregister any stale service workers that may intercept API requests
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const reg of registrations) {
+      reg.unregister();
+    }
+  });
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
