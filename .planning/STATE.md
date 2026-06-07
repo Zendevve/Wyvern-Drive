@@ -3,10 +3,10 @@ gsd_state_version: '1.0'
 status: executing
 progress:
   total_phases: 11
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 23
-  completed_plans: 1
-  percent: 4
+  completed_plans: 2
+  percent: 9
 ---
 
 # Project State
@@ -19,29 +19,30 @@ See: .planning/PROJECT.md (updated 2026-06-07)
 **Current focus:** Phase 0 — Monorepo & Tooling Foundation
 
 ## Current Position
-Phase: 1 of 11 (Shared Protocol SDK)
-Plan: 0 of 1 in current phase
+Phase: 2 of 11 (Server v2 Core)
+Plan: 0 of 3 in current phase
 Status: Ready to plan
-Last activity: 2026-06-07 — Phase 0 verified, scaffold committed (3560419)
+Last activity: 2026-06-07 — Phase 1 verified, SDK shipped (23/23 tests pass)
 
-Progress: [▓░░░░░░░░░] 4%
+Progress: [▓░░░░░░░░░] 9%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: ~10 min (00-01 scaffold)
-- Total execution time: ~0.2 hours
+- Total plans completed: 2
+- Average duration: ~20 min
+- Total execution time: ~0.7 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 0. Monorepo & Tooling | 1/1 | ~10 min | ~10 min |
+| 1. Shared Protocol SDK | 1/1 | ~30 min | ~30 min |
 
 **Recent Trend:**
-- Last 5 plans: 00-01 (scaffold, ~10 min)
-- Trend: —
+- Last 5 plans: 00-01 (scaffold), 01-01 (SDK)
+- Trend: stable
 
 _Updated after each plan completion_
 

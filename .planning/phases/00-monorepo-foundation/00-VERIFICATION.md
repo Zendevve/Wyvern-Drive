@@ -12,13 +12,13 @@ verifier: gsd-verifier (manual, no gsd-sdk binary on host)
 
 ## Goal-backward check
 
-| Success criterion (from ROADMAP) | Evidence | Pass |
-|----------------------------------|----------|------|
-| `pnpm install` completes without errors on a clean clone | 11.8s cold / 951ms warm with no errors | ✅ |
-| `pnpm -r build` builds all packages and apps | `turbo run build` — shared produced `dist/index.js`, `dist/index.cjs`, `index.d.ts`, source maps; all 4 apps exited 0 | ✅ |
-| `pnpm -r typecheck` passes across the monorepo | shared `tsc --noEmit` exit 0; app stubs exit 0 | ✅ |
-| `pnpm -r lint` passes with a shared eslint config | shared `eslint .` exit 0 (flat config, no warnings); app stubs exit 0 | ✅ |
-| `apps/web`, `apps/server`, `apps/ext`, `packages/shared` each have a `package.json` with correct workspace references | All 4 exist; `apps/{web,server}` declare `"@disbox/shared": "workspace:*"`; `ext` declares `@types/chrome` (Phase 4 dep) | ✅ |
+| Success criterion (from ROADMAP)                                                                                      | Evidence                                                                                                                 | Pass |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---- |
+| `pnpm install` completes without errors on a clean clone                                                              | 11.8s cold / 951ms warm with no errors                                                                                   | ✅   |
+| `pnpm -r build` builds all packages and apps                                                                          | `turbo run build` — shared produced `dist/index.js`, `dist/index.cjs`, `index.d.ts`, source maps; all 4 apps exited 0    | ✅   |
+| `pnpm -r typecheck` passes across the monorepo                                                                        | shared `tsc --noEmit` exit 0; app stubs exit 0                                                                           | ✅   |
+| `pnpm -r lint` passes with a shared eslint config                                                                     | shared `eslint .` exit 0 (flat config, no warnings); app stubs exit 0                                                    | ✅   |
+| `apps/web`, `apps/server`, `apps/ext`, `packages/shared` each have a `package.json` with correct workspace references | All 4 exist; `apps/{web,server}` declare `"@disbox/shared": "workspace:*"`; `ext` declares `@types/chrome` (Phase 4 dep) | ✅   |
 
 ## Code quality
 

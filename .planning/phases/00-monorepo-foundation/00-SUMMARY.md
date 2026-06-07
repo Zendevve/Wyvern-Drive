@@ -49,14 +49,14 @@ GitHub Actions CI workflow at `.github/workflows/ci.yml` — install → format-
 
 ## Acceptance verification
 
-| Criterion | Result |
-|-----------|--------|
-| `pnpm install` < 60s | ✅ 11.8s cold, 951ms warm |
-| `pnpm -r build` produces `dist/` in shared | ✅ `index.js`, `index.cjs`, `index.d.ts`, source maps |
-| `pnpm -r typecheck` passes | ✅ |
-| `pnpm -r lint` passes | ✅ (shared uses real flat config) |
-| 4 workspaces listed by `pnpm -r list` | ✅ `@disbox/web`, `@disbox/server`, `@disbox/ext`, `@disbox/shared` |
-| `pnpm format:check` passes | ✅ (bonus) |
+| Criterion                                  | Result                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------- |
+| `pnpm install` < 60s                       | ✅ 11.8s cold, 951ms warm                                           |
+| `pnpm -r build` produces `dist/` in shared | ✅ `index.js`, `index.cjs`, `index.d.ts`, source maps               |
+| `pnpm -r typecheck` passes                 | ✅                                                                  |
+| `pnpm -r lint` passes                      | ✅ (shared uses real flat config)                                   |
+| 4 workspaces listed by `pnpm -r list`      | ✅ `@disbox/web`, `@disbox/server`, `@disbox/ext`, `@disbox/shared` |
+| `pnpm format:check` passes                 | ✅ (bonus)                                                          |
 
 ## What this enables
 
