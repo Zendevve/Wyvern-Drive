@@ -2,10 +2,10 @@
   "name": "@disbox/ext",
   "version": "0.0.1",
   "private": true,
-  "description": "Disbox v2 Chrome extension — MV3 deep-link convenience. Filled in Phase 4.",
+  "description": "Disbox v2 Chrome extension - MV3 deep-link convenience. Filled in Phase 4.",
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "dev": "node scripts/watch.mjs",
+    "build": "echo 'ext: stub build (Phase 4)' && exit 0",
+    "dev": "echo 'ext: stub dev (Phase 4)' && exit 0",
     "lint": "echo 'no lint for ext' && exit 0",
     "typecheck": "echo 'ext is plain JS' && exit 0",
     "test": "echo 'no test for ext' && exit 0",
@@ -13,6 +13,6 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.0.268",
-    "esbuild": "^0.21.0"
+    "typescript": "^5.4.5"
   }
 }

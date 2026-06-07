@@ -19,9 +19,12 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\" --ignore-path .gitignore"
   },
   "devDependencies": {
+    "@eslint/js": "^9.0.0",
     "@types/node": "^20.11.0",
+    "eslint": "^9.0.0",
     "prettier": "^3.2.5",
     "turbo": "^1.13.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "typescript-eslint": "^8.0.0"
   }
 }

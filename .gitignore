@@ -40,19 +40,9 @@ data/
 *.sqlite-journal
 
 # Disbox v1 reference (removed once v2 ships; ignored so accidental commits are blocked)
-extension/manifest.json
-extension/background.js
-extension/discordappcom_rule.json
-extension/discordcom_rule.json
-extension/README.md
-server/disbox-file.js
-server/disbox-server.js
-server/package.json
-server/Dockerfile
-server/fly.toml
-web/src/
-web/public/
-web/package.json
-web/README.md
-web/.gitignore
-web/LICENSE
+/extension/
+/server/
+/web/
+/node_modules.old/
+*.old
+*.bak

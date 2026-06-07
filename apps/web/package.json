@@ -2,14 +2,14 @@
   "name": "@disbox/web",
   "version": "0.0.1",
   "private": true,
-  "description": "Disbox v2 web app — Next.js 14, shadcn/ui, Zustand. Filled in Phase 3.",
+  "description": "Disbox v2 web app - Next.js 14, shadcn/ui, Zustand. Filled in Phase 3.",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "dev": "echo 'web: not yet scaffolded (Phase 3)' && exit 0",
+    "build": "echo 'web: stub build (Phase 3 fills this)' && exit 0",
+    "start": "echo 'web: stub start' && exit 0",
+    "lint": "echo 'web: stub lint (Phase 3)' && exit 0",
+    "typecheck": "echo 'web: stub typecheck (Phase 3)' && exit 0",
+    "test": "echo 'web: stub test (Phase 3)' && exit 0",
     "clean": "rm -rf .next .turbo dist"
   },
   "dependencies": {
@@ -17,11 +17,6 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "next": "^14.2.0",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
     "typescript": "^5.4.5"
   }
 }

@@ -56,4 +56,5 @@ The previous v2 attempt used **Argon2id + AES-GCM** in a Web Worker. v2 keeps th
 - `PITFALLS.md` — captured in "Gotchas" above
 
 ---
-*Last updated: 2026-06-07*
+
+_Last updated: 2026-06-07_

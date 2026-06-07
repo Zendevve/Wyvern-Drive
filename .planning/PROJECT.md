@@ -16,22 +16,22 @@ The ONE thing that must work end-to-end: log in with a Discord user token → up
 
 ## Key Decisions
 
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Full rewrite (not modernization) | v1 webhook architecture is incompatible with v2 user-token model; data model, auth, and chunking all change | — Pending Phase 0 |
-| Self-bot / user-token mode | Webhook URL != identity; user tokens enable a single signed-in session that owns the storage server | ToS-grey, documented in README |
-| Next.js 14 + TS + Tailwind + shadcn/ui + Zustand (web) | Modern SSR-ready React stack; shadcn gives a coherent component vocabulary; Zustand is lighter than Redux for client state | — Pending Phase 4 |
-| Hono + discord.js-selfbot-v13 + Drizzle + better-sqlite3 (server) | Hono is the fastest edge-portable Node framework; Drizzle is typesafe SQL without ORM heaviness; better-sqlite3 is synchronous-fast for a single-process server | — Pending Phase 3 |
-| MV3 Chrome extension | v1 was load-bearing for CORS bypass; v2 is a convenience deep-linker, not a dependency | — Pending Phase 5 |
-| Monorepo: pnpm workspaces + turborepo, packages layout | Three apps + one shared SDK share types, chunker, and crypto code without publishing | — Pending Phase 1 |
-| 50 MB chunks (Nitro) / 25 MB (free) | v1 used 25 MB always; v2 opportunistically uses Nitro boost when token reports Nitro | Discord ToS still bans automated accounts; chunk size is the user's choice |
-| AES-GCM client-side encryption (Phase 6) | "Zero-knowledge server" is the differentiator vs Google Drive/Dropbox; Argon2 master-passport KDF; per-file keys wrapped by master key | — Pending Phase 6 |
-| 10 phases (your sketch) | Fine granularity matches the v2 pivot; lets us ship a working v0.5 at Phase 4 and harden from there | — Pending roadmap approval |
-| Branding: keep "Disbox" | v1 product name carries recognition; internal codename "Wyvern Drive" stays in repo path | Confirmed by assumption (flag if wrong) |
-| Deployment: self-hostable Docker, cloud-portable | Hono runs on Fly.io, Railway, Render, bare Node, Docker. Default to Docker image; document one cloud recipe | Confirmed by assumption (flag if wrong) |
-| UI direction: dark-first modern SaaS, shadcn defaults, Discord blurple accent (#5865F2) | Cohesive with shadcn/ui library; matches storage-medium aesthetic | Confirmed by assumption (flag if wrong) |
-| YOLO mode + Vertical MVP | Solo dev + GSD; each phase delivers a working vertical slice | — |
-| v1 data migration: out of scope | v1 keyed by sha256(webhookUrl); v2 keys by user_id. Schema and auth are incompatible | Documented in README |
+| Decision                                                                                | Rationale                                                                                                                                                       | Outcome                                                                    |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Full rewrite (not modernization)                                                        | v1 webhook architecture is incompatible with v2 user-token model; data model, auth, and chunking all change                                                     | — Pending Phase 0                                                          |
+| Self-bot / user-token mode                                                              | Webhook URL != identity; user tokens enable a single signed-in session that owns the storage server                                                             | ToS-grey, documented in README                                             |
+| Next.js 14 + TS + Tailwind + shadcn/ui + Zustand (web)                                  | Modern SSR-ready React stack; shadcn gives a coherent component vocabulary; Zustand is lighter than Redux for client state                                      | — Pending Phase 4                                                          |
+| Hono + discord.js-selfbot-v13 + Drizzle + better-sqlite3 (server)                       | Hono is the fastest edge-portable Node framework; Drizzle is typesafe SQL without ORM heaviness; better-sqlite3 is synchronous-fast for a single-process server | — Pending Phase 3                                                          |
+| MV3 Chrome extension                                                                    | v1 was load-bearing for CORS bypass; v2 is a convenience deep-linker, not a dependency                                                                          | — Pending Phase 5                                                          |
+| Monorepo: pnpm workspaces + turborepo, packages layout                                  | Three apps + one shared SDK share types, chunker, and crypto code without publishing                                                                            | — Pending Phase 1                                                          |
+| 50 MB chunks (Nitro) / 25 MB (free)                                                     | v1 used 25 MB always; v2 opportunistically uses Nitro boost when token reports Nitro                                                                            | Discord ToS still bans automated accounts; chunk size is the user's choice |
+| AES-GCM client-side encryption (Phase 6)                                                | "Zero-knowledge server" is the differentiator vs Google Drive/Dropbox; Argon2 master-passport KDF; per-file keys wrapped by master key                          | — Pending Phase 6                                                          |
+| 10 phases (your sketch)                                                                 | Fine granularity matches the v2 pivot; lets us ship a working v0.5 at Phase 4 and harden from there                                                             | — Pending roadmap approval                                                 |
+| Branding: keep "Disbox"                                                                 | v1 product name carries recognition; internal codename "Wyvern Drive" stays in repo path                                                                        | Confirmed by assumption (flag if wrong)                                    |
+| Deployment: self-hostable Docker, cloud-portable                                        | Hono runs on Fly.io, Railway, Render, bare Node, Docker. Default to Docker image; document one cloud recipe                                                     | Confirmed by assumption (flag if wrong)                                    |
+| UI direction: dark-first modern SaaS, shadcn defaults, Discord blurple accent (#5865F2) | Cohesive with shadcn/ui library; matches storage-medium aesthetic                                                                                               | Confirmed by assumption (flag if wrong)                                    |
+| YOLO mode + Vertical MVP                                                                | Solo dev + GSD; each phase delivers a working vertical slice                                                                                                    | —                                                                          |
+| v1 data migration: out of scope                                                         | v1 keyed by sha256(webhookUrl); v2 keys by user_id. Schema and auth are incompatible                                                                            | Documented in README                                                       |
 
 ## Requirements
 
@@ -43,21 +43,21 @@ The ONE thing that must work end-to-end: log in with a Discord user token → up
 
 See `.planning/REQUIREMENTS.md` for the full v1 requirement list grouped by category. Summary by count:
 
-| Category | Reqs | Owner Phase |
-|----------|------|-------------|
-| AUTH (authentication) | 4 | 3, 7 |
-| ACCT (account identity) | 3 | 3 |
-| FS (file system operations) | 9 | 4 |
-| DISC (Discord storage) | 5 | 3 |
-| PROTO (shared protocol SDK) | 4 | 2 |
-| E2EE (end-to-end encryption) | 4 | 6 |
-| WEB (web UI) | 8 | 4, 11 |
-| EXT (Chrome extension) | 3 | 5 |
-| SRCH (search) | 3 | 8 |
-| SHARE (sharing) | 4 | 9 |
-| MOB (mobile PWA) | 4 | 10 |
-| POL (polish) | 4 | 11 |
-| **Total** | **55** | |
+| Category                     | Reqs   | Owner Phase |
+| ---------------------------- | ------ | ----------- |
+| AUTH (authentication)        | 4      | 3, 7        |
+| ACCT (account identity)      | 3      | 3           |
+| FS (file system operations)  | 9      | 4           |
+| DISC (Discord storage)       | 5      | 3           |
+| PROTO (shared protocol SDK)  | 4      | 2           |
+| E2EE (end-to-end encryption) | 4      | 6           |
+| WEB (web UI)                 | 8      | 4, 11       |
+| EXT (Chrome extension)       | 3      | 5           |
+| SRCH (search)                | 3      | 8           |
+| SHARE (sharing)              | 4      | 9           |
+| MOB (mobile PWA)             | 4      | 10          |
+| POL (polish)                 | 4      | 11          |
+| **Total**                    | **55** |             |
 
 ### Out of Scope
 
@@ -90,6 +90,7 @@ See `.planning/REQUIREMENTS.md` for the full v1 requirement list grouped by cate
 This document evolves at phase transitions and milestone boundaries.
 
 **After each phase transition** (via `/gsd-transition`):
+
 1. Requirements invalidated? → Move to Out of Scope with reason
 2. Requirements validated? → Move to Validated with phase reference
 3. New requirements emerged? → Add to Active
@@ -97,10 +98,12 @@ This document evolves at phase transitions and milestone boundaries.
 5. "What This Is" still accurate? → Update if drifted
 
 **After each milestone** (via `/gsd-complete-milestone`):
+
 1. Full review of all sections
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-07 after initialization*
+
+_Last updated: 2026-06-07 after initialization_

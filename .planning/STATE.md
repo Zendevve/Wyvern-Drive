@@ -30,6 +30,7 @@ Progress: [░░░░░░░░░░] 0%
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: — min
 - Total execution time: 0 hours
@@ -37,14 +38,15 @@ Progress: [░░░░░░░░░░] 0%
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
+| ----- | ----- | ----- | -------- |
+| -     | -     | -     | -        |
 
 **Recent Trend:**
+
 - Last 5 plans: —
 - Trend: —
 
-*Updated after each plan completion*
+_Updated after each plan completion_
 
 ## Accumulated Context
 
@@ -73,8 +75,8 @@ None yet.
 Items acknowledged and carried forward:
 
 | Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| — | — | — | — |
+| -------- | ---- | ------ | ----------- |
+| —        | —    | —      | —           |
 
 ## Session Continuity
 
