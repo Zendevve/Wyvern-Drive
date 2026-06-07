@@ -1,119 +1,89 @@
-# Wyvern Drive
+# Project: Disbox v2
 
 ## What This Is
 
-Wyvern Drive is a browser-based personal cloud storage application that uses Discord as a free, unlimited blob storage backend. Files are split into chunks of up to 24MB, uploaded via Discord webhooks, and indexed in a metadata database — providing a Google Drive–like experience with zero server-side storage costs. The v3.0 milestone transforms the working v1.0/v2.0 product into a production-grade platform: trustworthy (OAuth, CSRF, audit), high-performance (parallel I/O, range passthrough, resumable uploads), encrypted at rest with signed share links, operationally reliable (health checks, structured logs, graceful shutdown), and productive (search, tags, bulk ops, previews).
+Disbox is **Discord-as-cloud-storage**: a self-hostable web app that turns a user's own Discord account into unlimited personal cloud storage. The user authenticates with a Discord user token, then uploads, organizes, previews, shares, and downloads files backed by Discord message attachments — wrapped in a virtual file system with a modern web UI, optional client-side E2E encryption, and a companion Chrome extension.
+
+v2 is a **full rewrite** of the original Disbox (React 17 + Express + webhook-based, archived at https://github.com/DisboxApp). v1 used Discord webhooks as the storage medium; v2 uses **self-bot / user-token mode** via `discord.js-selfbot-v13`, which means each user account's own private servers/channels hold their data. The server becomes a real proxy that chunks, encrypts (if enabled), uploads to Discord, and indexes metadata in SQLite. The web app is a real Next.js 14 SPA. The Chrome extension is no longer load-bearing (CORS is solved via the server proxy) but is retained to deep-link `discord.com` channel URLs into Disbox.
+
+This is **not** an official Discord integration. It uses a self-bot library, which is a ToS-grey area. The product positions itself for personal/experimental use by users who own the accounts.
 
 ## Core Value
 
-Users get free, unlimited personal cloud storage with the security, performance, and reliability expected of a commercial cloud drive — all backed by their own Discord webhooks.
+> **"I can store anything I want in Discord, see it like a normal cloud drive, and trust that nobody else can read it."**
 
-## Requirements
-
-### Validated
-
-- **F-01**: Webhook-based account setup and stateless JWT authentication (v1.0)
-- **F-02**: File upload with automatic chunking (24MB limit per chunk) (v1.0)
-- **F-03**: File download with chunk reassembly and dynamic CDN URL refresh (v1.0)
-- **F-04**: Folder creation and directory hierarchy management (v1.0)
-- **F-05**: File/folder virtual filesystem listing scoped by hashed webhook (v1.0)
-- **F-06**: Delete file (cascade delete in metadata and associated Discord messages) (v1.0)
-- **F-07**: Upload progress indicator (per-chunk progress) (v1.0)
-- **F-08**: Drag-and-drop file upload (v1.0)
-- **F-09**: Breadcrumb navigation (v1.0)
-- **F-10**: File type icon mapping (v1.0)
-- **F-11**: Database backup & restore (export/import virtual drive metadata JSON) (v1.0)
-
-### Active (v3.0 — Ultimate Discord File Storage)
-
-#### Trust & Security (TRUST)
-
-- [ ] **TRUST-01**: User can authenticate with Discord OAuth (identify + email scopes) with refresh-token rotation
-- [ ] **TRUST-02**: Per-account storage quota enforced server-side (configurable; arc-gauge widget already in v2.0 reads this)
-- [ ] **TRUST-03**: Per-account API rate limiting (token bucket; per-IP and per-account)
-- [ ] **TRUST-04**: State-changing requests require a CSRF token (double-submit or SameSite=Strict cookies)
-- [ ] **TRUST-05**: HTTP responses include security headers (CSP, X-Content-Type-Options, HSTS, Referrer-Policy)
-
-#### Performance (PERF)
-
-- [ ] **PERF-01**: Files upload with parallel chunk concurrency (configurable, default 4)
-- [ ] **PERF-02**: Files download with parallel chunk concurrency (configurable, default 4)
-- [ ] **PERF-03**: HTTP Range requests are forwarded per-chunk to Discord CDN (no server buffering)
-- [ ] **PERF-04**: Failed uploads can resume from last successful byte via TUS.io protocol
-
-#### Encryption & Sharing (CRYPTO)
-
-- [ ] **CRYPTO-01**: Files can be encrypted at rest with AES-256-GCM (per-chunk random 12-byte nonce + 16-byte auth tag)
-- [ ] **CRYPTO-02**: User can create a signed share link with HMAC-SHA256 token, optional TTL (1h / 24h / 7d / 30d / never)
-- [ ] **CRYPTO-03**: Share links support optional password protection (Argon2id verified on recipient side)
-- [ ] **CRYPTO-04**: Share links can be revoked without rotating the underlying chunks (server-side deny list)
-
-#### Reliability (REL)
-
-- [ ] **REL-01**: Database schema is versioned with forward+backward migrations (better-sqlite3 + hand-rolled `migrations/` table)
-- [ ] **REL-02**: Server exposes `/healthz` (liveness, no external deps) and `/readyz` (DB + Discord connectivity) endpoints
-- [ ] **REL-03**: Structured logging via pino with request IDs and configurable log levels
-- [ ] **REL-04**: Server handles SIGTERM/SIGINT gracefully — drain in-flight uploads, close DB cleanly
-- [ ] **REL-05**: File deletion is atomic: DB row + all associated Discord messages deleted in a single transaction (no orphaned chunks on partial failure)
-
-#### Productivity (OPS)
-
-- [ ] **OPS-01**: User can search files by filename (case-insensitive substring, server-side via SQLite FTS5 or indexed LIKE)
-- [ ] **OPS-02**: User can tag files with free-form labels and filter the file list by tag
-- [ ] **OPS-03**: User can perform bulk operations (delete, move, tag, share) on multi-selected files
-- [ ] **OPS-04**: User sees image and video previews (server-side thumbnail generation with `sharp` and `ffmpeg`)
-
-### Out of Scope (deferred to future milestones)
-
-- **F-12 through F-17** (v2.0 UI polish: premium design system, sidebar gauge, detail pane, context menus, task queue) — Paused in v2.0; resume in v3.1 quick wins or v4. The competitive analysis work takes priority. *Reason: v3 addresses the more critical backend gaps first; the UI polish is a fast follower once the foundation is hardened.*
-- **Browser extension (MV3)** — *Reason: leverage feature that depends on a hardened core; defer to v4.*
-- **CLI client (`npm i -g wyvern-drive`)** — *Reason: same as above.*
-- **WebDAV server (rclone mount compatibility)** — *Reason: same as above.*
-- **MCP server (AI agent integration)** — *Reason: niche; defer until user demand.*
-- **Public versioned REST API with OpenAPI 3.1 spec** — *Reason: leverage feature; defer to v4.*
-- **Content-addressed dedup (SHA-256 chunk hashing)** — *Reason: high complexity, low immediate value; defer to v4 or v5.*
-- **End-to-end encryption (server never sees plaintext key)** — *Reason: needs careful UX work; defer to v4 after CRYPTO is validated.*
-- **Multi-tenant / team shared folders** — *Reason: high complexity, conflicts with personal-storage positioning (see PROJECT.md history).*
-- **Native mobile/desktop app wrappers** — *Reason: web-first; mobile later.*
-
-## Context
-
-### Technical Environment
-- **Frontend**: React 18, Vite, TypeScript, Zustand, Vanilla CSS (premium custom aesthetics)
-- **Backend**: Node.js 20+, Fastify 5, better-sqlite3, @discordjs/rest 2.x, jsonwebtoken
-- **Blob Engine**: Discord Webhook API (per-user webhook, dynamic CDN URL refresh)
-- **Tests**: vitest (already in package.json; not yet exercised)
-- **CI/CD**: GitHub Actions (planned in REL phase)
-
-### Ecosystem Limitations
-- **Discord CDN Expiration**: Late 2023 forced CDN attachment URLs to expire after 24 hours. Wyvern dynamically refreshes URLs via `GET /webhooks/{id}/{token}/messages/{msgId}`.
-- **Discord Rate Limits**: 30 requests/minute per webhook. Handled via `X-RateLimit-*` headers and backoff (will be hardened in PERF-04).
-- **Discord ToS**: Storing arbitrary user data in Discord channels is a ToS grey area. Wyvern's per-user-webhook model mitigates this — the user owns and can rotate their webhook.
-
-### Competitive Context
-See `.planning/research/competitive-analysis.md` for the full 8-project analysis. Key takeaway: every reference project fails on at least one of (a) parallel downloads, (b) resumable uploads, (c) real auth, (d) signed share links, (e) multi-user. v3.0 closes all five.
-
-## Constraints
-
-- **Storage Limit**: Chunks must be under 25MB (set to 24MB to allow margin)
-- **Zero Cost**: Architecture must run locally or on free VPS tiers with no database hosting fees
-- **Stateless Backend**: Server must not store webhook URLs persistently as credentials; auth is via JWT or OAuth
-- **No Selfbot**: Use only official bot/webhook OAuth flows (Discord ToS compliance)
-- **No Bot Token Required**: v3 keeps the per-user-webhook model (no operator bot token), so a single user's data loss doesn't cascade to all users
+The ONE thing that must work end-to-end: log in with a Discord user token → upload a file → see it in the UI → download it back bit-perfect. Everything else (encryption, sharing, mobile, search) is layered on top of that.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Webhook URL Message Fetching | Dynamic CDN URL refresh via `GET /webhooks/{id}/{token}/messages/{msgId}` for fresh attachment links | ✓ Validated v1.0 |
-| Stateless JWT Auth (webhook in token) | Hashing webhook provides `accountId` to isolate file nodes in SQLite | ✓ Validated v1.0 |
-| JSON Metadata Import/Export | Backup/recovery of virtual drive metadata without secondary DB servers | ✓ Validated v1.0 |
-| Swappable Storage Interface | `StorageBackend` allows future swap from Discord to other engines | ✓ Validated v1.0 |
-| AES-256-GCM (not CTR) at rest | CTR is unauthenticated (silent tampering); GCM is HW-accelerated and AEAD | — Pending (v3 CRYPTO-01) |
-| Argon2id for share-link passwords | Rainbow-table feasible for short secrets under SHA-256 | — Pending (v3 CRYPTO-03) |
-| TUS.io for resumable uploads | Battle-tested protocol; avoids custom chunked-upload bugs | — Pending (v3 PERF-04) |
-| Skip Ecosystem (ext/CLI/MCP/API) in v3 | These are leverage that depend on a hardened core; defer to v4 | — Pending |
-| Pause v2.0 Phases 5-6 UI polish | v3's backend work is higher priority for "be the best" than UI polish | — Pending |
+| Full rewrite (not modernization) | v1 webhook architecture is incompatible with v2 user-token model; data model, auth, and chunking all change | — Pending Phase 0 |
+| Self-bot / user-token mode | Webhook URL != identity; user tokens enable a single signed-in session that owns the storage server | ToS-grey, documented in README |
+| Next.js 14 + TS + Tailwind + shadcn/ui + Zustand (web) | Modern SSR-ready React stack; shadcn gives a coherent component vocabulary; Zustand is lighter than Redux for client state | — Pending Phase 4 |
+| Hono + discord.js-selfbot-v13 + Drizzle + better-sqlite3 (server) | Hono is the fastest edge-portable Node framework; Drizzle is typesafe SQL without ORM heaviness; better-sqlite3 is synchronous-fast for a single-process server | — Pending Phase 3 |
+| MV3 Chrome extension | v1 was load-bearing for CORS bypass; v2 is a convenience deep-linker, not a dependency | — Pending Phase 5 |
+| Monorepo: pnpm workspaces + turborepo, packages layout | Three apps + one shared SDK share types, chunker, and crypto code without publishing | — Pending Phase 1 |
+| 50 MB chunks (Nitro) / 25 MB (free) | v1 used 25 MB always; v2 opportunistically uses Nitro boost when token reports Nitro | Discord ToS still bans automated accounts; chunk size is the user's choice |
+| AES-GCM client-side encryption (Phase 6) | "Zero-knowledge server" is the differentiator vs Google Drive/Dropbox; Argon2 master-passport KDF; per-file keys wrapped by master key | — Pending Phase 6 |
+| 10 phases (your sketch) | Fine granularity matches the v2 pivot; lets us ship a working v0.5 at Phase 4 and harden from there | — Pending roadmap approval |
+| Branding: keep "Disbox" | v1 product name carries recognition; internal codename "Wyvern Drive" stays in repo path | Confirmed by assumption (flag if wrong) |
+| Deployment: self-hostable Docker, cloud-portable | Hono runs on Fly.io, Railway, Render, bare Node, Docker. Default to Docker image; document one cloud recipe | Confirmed by assumption (flag if wrong) |
+| UI direction: dark-first modern SaaS, shadcn defaults, Discord blurple accent (#5865F2) | Cohesive with shadcn/ui library; matches storage-medium aesthetic | Confirmed by assumption (flag if wrong) |
+| YOLO mode + Vertical MVP | Solo dev + GSD; each phase delivers a working vertical slice | — |
+| v1 data migration: out of scope | v1 keyed by sha256(webhookUrl); v2 keys by user_id. Schema and auth are incompatible | Documented in README |
+
+## Requirements
+
+### Validated
+
+(None yet — greenfield rewrite; ship to validate.)
+
+### Active
+
+See `.planning/REQUIREMENTS.md` for the full v1 requirement list grouped by category. Summary by count:
+
+| Category | Reqs | Owner Phase |
+|----------|------|-------------|
+| AUTH (authentication) | 4 | 3, 7 |
+| ACCT (account identity) | 3 | 3 |
+| FS (file system operations) | 9 | 4 |
+| DISC (Discord storage) | 5 | 3 |
+| PROTO (shared protocol SDK) | 4 | 2 |
+| E2EE (end-to-end encryption) | 4 | 6 |
+| WEB (web UI) | 8 | 4, 11 |
+| EXT (Chrome extension) | 3 | 5 |
+| SRCH (search) | 3 | 8 |
+| SHARE (sharing) | 4 | 9 |
+| MOB (mobile PWA) | 4 | 10 |
+| POL (polish) | 4 | 11 |
+| **Total** | **55** | |
+
+### Out of Scope
+
+- **v1 data migration** — webhook-keyed sqlite is incompatible with v2 user-token-keyed sqlite. Clean break.
+- **Official Discord bot integration** — explicitly self-bot only; official bot path requires a different architecture and a different product.
+- **Real-time collaboration / multi-user shared drives** — single-user model for v1. Multi-account is per-user (one user, many Discord accounts) not multi-user (many users, one drive).
+- **Mobile native apps (iOS/Android)** — PWA only for v1. Native shells deferred to v3.
+- **Server-side rendering of file previews** — previews are client-side (browser plays video/audio, renders image, syntax-highlights text). Server never reads plaintext.
+- **End-to-end tests for all flows** — E2E for critical user flows only (login, upload, download, encrypt/decrypt). Unit + integration tests for the rest.
+- **Self-service hosted server multi-tenancy** — single-user self-hosted server. Adding auth and multi-tenant billing is a v3 problem.
+
+## Constraints
+
+- **Platform**: Windows dev (current), Linux deploy target
+- **Node**: ≥ 20.x LTS (Hono, Next.js 14, better-sqlite3 prebuilds)
+- **Package manager**: pnpm ≥ 9 (workspaces)
+- **Discord client lib**: `discord.js-selfbot-v13` (ToS-grey; documented in README)
+- **Single-process server**: better-sqlite3 is sync; one Node process; cluster mode is out of scope for v1
+- **No external cloud dependencies** (no S3, no Redis, no managed Postgres) — server is fully self-contained
+- **Browser support**: evergreen Chrome/Edge/Firefox/Safari (MV3 extension is Chrome-only for v1)
+
+## Context
+
+- v1 reference repos (untracked) live in `extension/`, `server/`, `web/` for protocol & UX inspiration. Will be removed once v2 ships.
+- Prior v2 attempt (Vite + Hono + Argon2) is staged for deletion in the index; do not restore.
+- A `competitive-analysis.md` research file was deleted from the prior v2; not restored. Current research notes in `.planning/research/SUMMARY.md` are lean by design — the user pre-decided the stack.
 
 ## Evolution
 
@@ -133,4 +103,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-05 for milestone v3.0 (Ultimate Discord File Storage)*
+*Last updated: 2026-06-07 after initialization*

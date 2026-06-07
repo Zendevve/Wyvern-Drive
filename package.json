@@ -1,35 +1,27 @@
 {
-  "name": "wyvern-drive",
-  "version": "1.0.0",
-  "description": "Stateless backend cloud storage engine using Discord webhooks as a chunked blob backend.",
-  "main": "dist/index.js",
-  "scripts": {
-    "dev": "ts-node src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "test": "vitest run"
+  "name": "disbox",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Disbox v2 — Discord-as-cloud-storage. Monorepo root.",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
   },
-  "dependencies": {
-    "@discordjs/rest": "^2.2.0",
-    "@fastify/multipart": "^9.0.1",
-    "axios": "^1.17.0",
-    "better-sqlite3": "^11.0.0",
-    "discord-api-types": "^0.37.103",
-    "dotenv": "^16.4.5",
-    "fastify": "^5.0.0",
-    "jsonwebtoken": "^9.0.2"
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\" --ignore-path .gitignore"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.10",
-    "@types/jsonwebtoken": "^9.0.6",
-    "@types/node": "^20.14.9",
-    "fake-indexeddb": "^6.2.5",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.5.2",
-    "vitest": "^1.6.0"
-  },
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "private": true
+    "@types/node": "^20.11.0",
+    "prettier": "^3.2.5",
+    "turbo": "^1.13.0",
+    "typescript": "^5.4.5"
+  }
 }

@@ -1,0 +1,33 @@
+{
+  "name": "@disbox/server",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Disbox v2 server — Hono + discord.js-selfbot-v13 + Drizzle + better-sqlite3. Filled in Phase 2.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "eslint src --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist .turbo data/*.db"
+  },
+  "dependencies": {
+    "@disbox/shared": "workspace:*",
+    "better-sqlite3": "^11.0.0",
+    "discord.js-selfbot-v13": "^3.0.0",
+    "drizzle-orm": "^0.30.0",
+    "hono": "^4.4.0",
+    "jose": "^5.6.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^20.11.0",
+    "drizzle-kit": "^0.21.0",
+    "tsx": "^4.10.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}

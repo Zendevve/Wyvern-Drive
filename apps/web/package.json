@@ -1,0 +1,27 @@
+{
+  "name": "@disbox/web",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Disbox v2 web app — Next.js 14, shadcn/ui, Zustand. Filled in Phase 3.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf .next .turbo dist"
+  },
+  "dependencies": {
+    "@disbox/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "typescript": "^5.4.5"
+  }
+}
