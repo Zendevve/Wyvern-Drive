@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ddrive-postgres
+    environment:
+      POSTGRES_USER: ddrive
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ddrive
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - ddrive-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ddrive"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ddrive-backend
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://ddrive:${POSTGRES_PASSWORD:-changeme}@postgres:5432/ddrive
+      JWT_SECRET: ${JWT_SECRET}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
+      DISCORD_CHANNEL_ID: ${DISCORD_CHANNEL_ID}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      # Limit Node.js heap to 1GB to prevent memory spikes from crashing the Pi.
+      # Large file tasks (TinySMP ~14GB) were causing node to balloon to 2GB+,
+      # making SSH unresponsive and forcing manual reboots.
+      NODE_OPTIONS: --max-old-space-size=1024
+    ports:
+      - "5001:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ddrive-network
+    volumes:
+      - ./backend/logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_DISCORD_CLIENT_ID: ${VITE_DISCORD_CLIENT_ID:-}
+    container_name: ddrive-frontend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - ddrive-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  ddrive-network:
+    driver: bridge

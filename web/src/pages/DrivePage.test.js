@@ -1,0 +1,368 @@
+import React from 'react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
+import DrivePage from './DrivePage';
+import { AuthProvider } from '../auth/AuthProvider';
+import * as client from '../api/client';
+
+jest.mock('../api/client', () => ({
+  ApiError: class ApiError extends Error {
+    constructor(status, code, message) {
+      super(message);
+      this.status = status;
+      this.code = code;
+    }
+  },
+  api: {
+    me: jest.fn(),
+    drive: jest.fn(),
+    entries: jest.fn(),
+    createFolder: jest.fn(),
+    updateEntry: jest.fn(),
+    deleteEntry: jest.fn(),
+    createShare: jest.fn(),
+    listShares: jest.fn(),
+    revokeShare: jest.fn(),
+    publicShare: jest.fn(),
+    logout: jest.fn(),
+  },
+  uploadFile: jest.fn(),
+  downloadUrl: jest.fn(),
+}));
+
+const user = { id: 1, discordId: '123456', username: 'alice', avatarUrl: null };
+const drive = { id: 1, quotaBytes: 10737418240, usedBytes: 1073741824 };
+
+const fileEntry = (overrides = {}) => ({
+  id: 1,
+  parentId: null,
+  kind: 'file',
+  name: 'notes.txt',
+  sizeBytes: 2048,
+  mimeType: 'text/plain',
+  status: 'ready',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-02T00:00:00.000Z',
+  ...overrides,
+});
+
+const folderEntry = (overrides = {}) => ({
+  id: 2,
+  parentId: null,
+  kind: 'folder',
+  name: 'Documents',
+  sizeBytes: 0,
+  mimeType: null,
+  status: 'ready',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  ...overrides,
+});
+
+const createMatchMedia = (width) => (query) => ({
+  matches: query.includes('min-width') ? width >= 768 : width < 768,
+  media: query,
+  onchange: null,
+  addListener: jest.fn(),
+  removeListener: jest.fn(),
+  addEventListener: jest.fn(),
+  removeEventListener: jest.fn(),
+  dispatchEvent: jest.fn(),
+});
+
+const renderDrive = () =>
+  render(
+    <MemoryRouter initialEntries={['/drive']}>
+      <AuthProvider>
+        <DrivePage />
+      </AuthProvider>
+    </MemoryRouter>
+  );
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  // NOTE: implementations are set here, not in the jest.mock factory — the
+  // CRA 5 babel-jest hoist transform drops factory-set implementations.
+  client.downloadUrl.mockImplementation((id) => `/api/files/${id}/download`);
+  window.matchMedia = createMatchMedia(1024);
+  client.api.me.mockResolvedValue({ user, drive });
+  client.api.entries.mockResolvedValue({ entries: [] });
+});
+
+describe('loading and empty states', () => {
+  it('shows a loading skeleton while entries are fetched', async () => {
+    client.api.entries.mockReturnValue(new Promise(() => {}));
+    renderDrive();
+    expect(await screen.findByTestId('entries-loading')).toBeInTheDocument();
+  });
+
+  it('shows an empty state when the folder has no entries', async () => {
+    renderDrive();
+    expect(await screen.findByTestId('empty-state')).toBeInTheDocument();
+    expect(screen.getByText('This folder is empty')).toBeInTheDocument();
+  });
+
+  it('shows an error notice with retry when listing fails', async () => {
+    client.api.entries.mockRejectedValueOnce(
+      new client.ApiError(502, 'STORAGE_UNAVAILABLE', 'Discord storage is unavailable')
+    );
+    renderDrive();
+    expect(
+      await screen.findByText('Discord storage is unavailable')
+    ).toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: /retry/i }));
+    await waitFor(() => expect(client.api.entries).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe('navigation and breadcrumbs', () => {
+  it('navigates into folders and back via breadcrumbs', async () => {
+    const docs = folderEntry({ id: 2, name: 'Documents' });
+    const report = fileEntry({ id: 3, parentId: 2, name: 'report.pdf', sizeBytes: 4096 });
+    client.api.entries.mockImplementation((params) => {
+      if (params.parentId === 2) {
+        return Promise.resolve({ entries: [report] });
+      }
+      return Promise.resolve({ entries: [docs] });
+    });
+    renderDrive();
+
+    const folderButton = await screen.findByRole('button', { name: 'Documents' });
+    userEvent.click(folderButton);
+    await waitFor(() =>
+      expect(client.api.entries).toHaveBeenCalledWith(
+        expect.objectContaining({ parentId: 2 })
+      )
+    );
+    expect(await screen.findByText('report.pdf')).toBeInTheDocument();
+
+    userEvent.click(screen.getByRole('button', { name: 'My drive' }));
+    await waitFor(() =>
+      expect(client.api.entries).toHaveBeenCalledWith(
+        expect.objectContaining({ parentId: null })
+      )
+    );
+    expect(await screen.findByRole('button', { name: 'Documents' })).toBeInTheDocument();
+  });
+
+  it('sorts by clicking column headers, toggling direction', async () => {
+    client.api.entries.mockResolvedValue({ entries: [fileEntry()] });
+    renderDrive();
+    await screen.findByText('notes.txt');
+
+    userEvent.click(screen.getByRole('button', { name: /size/i }));
+    await waitFor(() =>
+      expect(client.api.entries).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sort: 'size', direction: 'asc' })
+      )
+    );
+    userEvent.click(screen.getByRole('button', { name: /size/i }));
+    await waitFor(() =>
+      expect(client.api.entries).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sort: 'size', direction: 'desc' })
+      )
+    );
+  });
+
+  it('searches with a debounced query', async () => {
+    renderDrive();
+    await screen.findByTestId('empty-state');
+    userEvent.type(screen.getByRole('textbox', { name: /search/i }), 'hello');
+    await waitFor(
+      () =>
+        expect(client.api.entries).toHaveBeenLastCalledWith(
+          expect.objectContaining({ query: 'hello' })
+        ),
+      { timeout: 1500 }
+    );
+  });
+});
+
+describe('uploads', () => {
+  it('shows progress and completes with the server-returned name', async () => {
+    let resolveUpload;
+    client.uploadFile.mockImplementation(
+      ({ onProgress }) =>
+        new Promise((resolve) => {
+          resolveUpload = resolve;
+          onProgress(50, 100);
+        })
+    );
+    renderDrive();
+    await screen.findByTestId('empty-state');
+
+    const file = new File(['hello world'], 'hello.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByTestId('file-input'), { target: { files: [file] } });
+
+    expect(await screen.findByText('Uploading 50%')).toBeInTheDocument();
+    resolveUpload(fileEntry({ id: 9, name: 'hello.txt', sizeBytes: 11 }));
+    expect(await screen.findByText('Uploaded')).toBeInTheDocument();
+    expect(screen.getByText('hello.txt')).toBeInTheDocument();
+  });
+
+  it('shows a failed upload job and retries it', async () => {
+    client.uploadFile
+      .mockRejectedValueOnce(
+        new client.ApiError(502, 'UPLOAD_FAILED', 'Discord rejected the chunk')
+      )
+      .mockResolvedValueOnce(fileEntry({ id: 9, name: 'hello.txt', sizeBytes: 11 }));
+    renderDrive();
+    await screen.findByTestId('empty-state');
+
+    const file = new File(['hello world'], 'hello.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByTestId('file-input'), { target: { files: [file] } });
+
+    expect(await screen.findByText('Discord rejected the chunk')).toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: /retry/i }));
+    expect(await screen.findByText('Uploaded')).toBeInTheDocument();
+    expect(client.uploadFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('links downloads to the authenticated download route', async () => {
+    client.api.entries.mockResolvedValue({ entries: [fileEntry()] });
+    renderDrive();
+    // MUI renders component="a" controls as links once href is present.
+    const link = await screen.findByRole('link', { name: /download notes\.txt/i });
+    expect(link.href).toBe('http://localhost/api/files/1/download');
+  });
+});
+
+describe('entry mutations', () => {
+  it('renames an entry through the rename dialog', async () => {
+    client.api.entries.mockResolvedValue({ entries: [fileEntry()] });
+    client.api.updateEntry.mockResolvedValue(fileEntry({ name: 'renamed.txt' }));
+    renderDrive();
+    await screen.findByText('notes.txt');
+
+    userEvent.click(screen.getByRole('button', { name: /rename notes\.txt/i }));
+    const dialog = screen.getByRole('dialog');
+    const input = within(dialog).getByRole('textbox', { name: /name/i });
+    userEvent.clear(input);
+    userEvent.type(input, 'renamed.txt');
+    userEvent.click(within(dialog).getByRole('button', { name: /rename/i }));
+
+    await waitFor(() =>
+      expect(client.api.updateEntry).toHaveBeenCalledWith(1, { name: 'renamed.txt' })
+    );
+  });
+
+  it('moves an entry to a chosen folder', async () => {
+    const notes = fileEntry();
+    client.api.entries.mockImplementation((params) => {
+      if (params.kind === 'folder') {
+        return Promise.resolve({ entries: [folderEntry({ id: 5, name: 'Projects' })] });
+      }
+      return Promise.resolve({ entries: [notes] });
+    });
+    client.api.updateEntry.mockResolvedValue(notes);
+    renderDrive();
+    await screen.findByText('notes.txt');
+
+    userEvent.click(screen.getByRole('button', { name: /move notes\.txt/i }));
+    const target = await screen.findByRole('button', { name: 'Projects' });
+    userEvent.click(target);
+    userEvent.click(screen.getByTestId('move-here'));
+
+    await waitFor(() =>
+      expect(client.api.updateEntry).toHaveBeenCalledWith(1, { parentId: 5 })
+    );
+  });
+
+  it('deletes an entry after confirmation', async () => {
+    client.api.entries.mockResolvedValue({ entries: [fileEntry()] });
+    client.api.deleteEntry.mockResolvedValue(null);
+    renderDrive();
+    await screen.findByText('notes.txt');
+
+    userEvent.click(screen.getByRole('button', { name: /delete notes\.txt/i }));
+    userEvent.click(screen.getByTestId('confirm-delete'));
+
+    await waitFor(() => expect(client.api.deleteEntry).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(client.api.entries).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows an actionable error when creating a conflicting folder', async () => {
+    client.api.createFolder.mockRejectedValue(
+      new client.ApiError(409, 'NAME_CONFLICT', 'A folder named "docs" already exists.')
+    );
+    renderDrive();
+    await screen.findByTestId('empty-state');
+
+    userEvent.click(screen.getByRole('button', { name: /new folder/i }));
+    userEvent.type(screen.getByRole('textbox', { name: /folder name/i }), 'docs');
+    userEvent.click(screen.getByRole('button', { name: /create folder/i }));
+
+    const messages = await screen.findAllByText(
+      'A folder named "docs" already exists.'
+    );
+    expect(messages.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('sharing', () => {
+  it('creates and revokes share links', async () => {
+    client.api.entries.mockResolvedValue({ entries: [fileEntry()] });
+    const activeShare = {
+      id: 11,
+      token: 'tok123',
+      url: 'http://localhost/share/tok123',
+      expiresAt: null,
+      revokedAt: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    const revokedShare = { ...activeShare, revokedAt: '2026-02-01T00:00:00.000Z' };
+    client.api.listShares
+      .mockResolvedValueOnce({ shares: [activeShare] })
+      .mockResolvedValueOnce({ shares: [activeShare] })
+      .mockResolvedValueOnce({ shares: [revokedShare] });
+    client.api.createShare.mockResolvedValue({
+      ...activeShare,
+      id: 12,
+      token: 'tok456',
+      url: 'http://localhost/share/tok456',
+    });
+    client.api.revokeShare.mockResolvedValue(null);
+    renderDrive();
+    await screen.findByText('notes.txt');
+
+    userEvent.click(screen.getByRole('button', { name: /share notes\.txt/i }));
+
+    expect(await screen.findByText('http://localhost/share/tok123')).toBeInTheDocument();
+    userEvent.click(screen.getByTestId('create-share'));
+    expect(await screen.findByText('http://localhost/share/tok456')).toBeInTheDocument();
+
+    userEvent.click(screen.getAllByRole('button', { name: /revoke/i })[0]);
+    expect(await screen.findByText('Revoked')).toBeInTheDocument();
+    expect(client.api.revokeShare).toHaveBeenCalledWith(11);
+  });
+});
+
+describe('quota and responsiveness', () => {
+  it('shows quota usage in the sidebar', async () => {
+    renderDrive();
+    expect(
+      await screen.findByText('1.0 GiB of 10.0 GiB used')
+    ).toBeInTheDocument();
+  });
+
+  it('renders stacked cards below 768px and a table on desktop', async () => {
+    window.matchMedia = createMatchMedia(500);
+    client.api.entries.mockResolvedValue({
+      entries: [fileEntry(), folderEntry()],
+    });
+    renderDrive();
+    expect(await screen.findByTestId('entry-cards')).toBeInTheDocument();
+    expect(screen.queryByTestId('entry-table')).not.toBeInTheDocument();
+    expect(screen.getByText('notes.txt')).toBeInTheDocument();
+  });
+
+  it('renders the table on desktop and keeps the same actions', async () => {
+    client.api.entries.mockResolvedValue({ entries: [fileEntry()] });
+    renderDrive();
+    expect(await screen.findByTestId('entry-table')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /delete notes\.txt/i })
+    ).toBeInTheDocument();
+  });
+});

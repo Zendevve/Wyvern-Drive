@@ -1,0 +1,309 @@
+#!/bin/bash
+set -e
+
+# D-Drive Installation Script
+# This script installs D-Drive with a single command
+
+REPO_URL="https://github.com/jasonzli-DEV/D-Drive.git"
+INSTALL_DIR="${DDRIVE_INSTALL_DIR:-$HOME/d-drive}"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+print_banner() {
+    echo -e "${BLUE}"
+    echo "╔═══════════════════════════════════════════════════════════════╗"
+    echo "║                                                               ║"
+    echo "║     ██████╗       ██████╗ ██████╗ ██╗██╗   ██╗███████╗        ║"
+    echo "║     ██╔══██╗      ██╔══██╗██╔══██╗██║██║   ██║██╔════╝        ║"
+    echo "║     ██║  ██║█████╗██║  ██║██████╔╝██║██║   ██║█████╗          ║"
+    echo "║     ██║  ██║╚════╝██║  ██║██╔══██╗██║╚██╗ ██╔╝██╔══╝          ║"
+    echo "║     ██████╔╝      ██████╔╝██║  ██║██║ ╚████╔╝ ███████╗        ║"
+    echo "║     ╚═════╝       ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝  ╚══════╝        ║"
+    echo "║                                                               ║"
+    echo "║           Discord-Based Cloud Storage System                  ║"
+    echo "║                                                               ║"
+    echo "╚═══════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+check_docker() {
+    log_info "Checking for Docker..."
+    
+    if ! command -v docker &> /dev/null; then
+        log_error "Docker is not installed."
+        echo ""
+        echo "Please install Docker first:"
+        echo "  - macOS: https://docs.docker.com/desktop/install/mac-install/"
+        echo "  - Windows: https://docs.docker.com/desktop/install/windows-install/"
+        echo "  - Linux: https://docs.docker.com/engine/install/"
+        echo ""
+        echo "Or run: curl -fsSL https://get.docker.com | sh"
+        exit 1
+    fi
+    
+    log_info "Docker found: $(docker --version)"
+}
+
+check_docker_compose() {
+    log_info "Checking for Docker Compose..."
+    
+    # Check for docker compose (v2) or docker-compose (v1)
+    if docker compose version &> /dev/null; then
+        COMPOSE_CMD="docker compose"
+        log_info "Docker Compose found: $(docker compose version)"
+    elif command -v docker-compose &> /dev/null; then
+        COMPOSE_CMD="docker-compose"
+        log_info "Docker Compose found: $(docker-compose --version)"
+    else
+        log_error "Docker Compose is not installed."
+        echo ""
+        echo "Docker Compose is usually included with Docker Desktop."
+        echo "If using Linux, install with: sudo apt install docker-compose-plugin"
+        exit 1
+    fi
+}
+
+check_docker_running() {
+    log_info "Checking if Docker daemon is running..."
+    # Ensure OSTYPE is set (for non-interactive shells)
+    if [ -z "$OSTYPE" ]; then
+        case "$(uname -s)" in
+            Darwin*) OSTYPE="darwin" ;;
+            Linux*) OSTYPE="linux" ;;
+            *) OSTYPE="unknown" ;;
+        esac
+    fi
+    if ! docker info &> /dev/null; then
+        log_warn "Docker daemon is not running. Attempting to start Docker..."
+        # Try to start Docker Desktop (macOS)
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            if command -v open &>/dev/null && [ -d "/Applications/Docker.app" ]; then
+                log_info "Trying to launch Docker Desktop (macOS)..."
+                open -a Docker || open /Applications/Docker.app
+                # Wait for Docker to start (max 90s)
+                for i in {1..90}; do
+                    if docker info &>/dev/null; then
+                        log_info "Docker daemon started successfully."
+                        break
+                    fi
+                    # Print a dot every 5 seconds
+                    if (( i % 5 == 0 )); then echo -n "."; fi
+                    sleep 1
+                done
+                echo ""
+            fi
+        elif [[ "$OSTYPE" == "linux"* ]]; then
+            if command -v systemctl &>/dev/null; then
+                log_info "Trying to start Docker service (Linux)..."
+                sudo systemctl start docker
+                # Wait for Docker to start (max 30s)
+                for i in {1..30}; do
+                    if docker info &>/dev/null; then
+                        log_info "Docker daemon started successfully."
+                        break
+                    fi
+                    sleep 1
+                done
+            fi
+        fi
+        # Final check
+        if ! docker info &> /dev/null; then
+            log_error "Docker daemon is still not running."
+            echo ""
+            echo "Please start Docker Desktop or the Docker service manually."
+            exit 1
+        fi
+    fi
+    log_info "Docker daemon is running"
+}
+
+clone_or_update_repo() {
+    if [ -d "$INSTALL_DIR" ]; then
+        log_info "D-Drive directory exists, updating..."
+        cd "$INSTALL_DIR"
+        # Ensure local main is tracking remote main
+        git fetch origin main
+        git branch main --set-upstream-to=origin/main 2>/dev/null || true
+        if ! git reset --hard origin/main; then
+            log_error "git reset --hard origin/main failed. Printing git status and log for debugging:"
+            git status
+            git log --oneline -n 10
+            log_error "Please resolve git issues manually in $INSTALL_DIR."
+            exit 1
+        fi
+    else
+        log_info "Cloning D-Drive to $INSTALL_DIR..."
+        git clone "$REPO_URL" "$INSTALL_DIR"
+        cd "$INSTALL_DIR"
+    fi
+}
+
+generate_secrets() {
+    log_info "Generating secure secrets..."
+    
+    # Generate random strings for secrets (alphanumeric only to avoid URL encoding issues)
+    JWT_SECRET=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | xxd -p | head -c 64)
+    POSTGRES_PASSWORD=$(openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | xxd -p | head -c 32)
+    
+    # Create .env file with generated secrets (Discord config will be set via UI)
+    if [ ! -f .env ]; then
+        cat > .env << EOF
+# Auto-generated by D-Drive installer
+# Discord configuration will be set via the web setup wizard
+
+# Database
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+
+# JWT Secret
+JWT_SECRET=${JWT_SECRET}
+
+# URLs (adjust if running on different host/port)
+FRONTEND_URL=http://localhost
+# Use /api for Docker deployment (nginx proxies to backend)
+VITE_API_URL=/api
+
+# Discord Configuration (set via web setup wizard)
+# DISCORD_CLIENT_ID=
+# DISCORD_CLIENT_SECRET=
+# DISCORD_BOT_TOKEN=
+# DISCORD_GUILD_ID=
+# DISCORD_CHANNEL_ID=
+
+# CORS (will be set during setup)
+# ALLOWED_ORIGINS=
+EOF
+        log_info "Created .env file with generated secrets"
+        log_info "Discord configuration will be set via the web setup wizard"
+    else
+        log_warn ".env file already exists, skipping generation"
+    fi
+}
+
+start_services() {
+    log_info "Building and starting D-Drive services..."
+    
+    $COMPOSE_CMD build 2>/dev/null
+    
+    # Start only postgres first
+    log_info "Starting database..."
+    $COMPOSE_CMD up -d postgres
+    
+    # Wait for postgres to be healthy
+    log_info "Waiting for database to be ready..."
+    for i in {1..30}; do
+        if $COMPOSE_CMD exec -T postgres pg_isready -U ddrive &>/dev/null; then
+            log_info "Database is ready!"
+            break
+        fi
+        if [ $i -eq 30 ]; then
+            log_error "Database failed to start within 30 seconds"
+            $COMPOSE_CMD logs postgres
+            exit 1
+        fi
+        sleep 1
+    done
+    
+    # Start backend (which runs migrations)
+    log_info "Starting backend (running database migrations)..."
+    $COMPOSE_CMD up -d backend
+    
+    # Wait for backend to be healthy (longer timeout for migrations)
+    log_info "Waiting for backend to be ready (this may take a minute on first run)..."
+    for i in {1..120}; do
+        if $COMPOSE_CMD ps backend 2>/dev/null | grep -q "healthy"; then
+            log_info "Backend is ready!"
+            break
+        fi
+        if $COMPOSE_CMD ps backend 2>/dev/null | grep -q "unhealthy"; then
+            log_error "Backend failed to start"
+            echo ""
+            log_warn "Backend logs:"
+            $COMPOSE_CMD logs --tail=50 backend
+            echo ""
+            log_info "This usually means Discord configuration is incomplete."
+            log_info "The backend will run in 'setup mode' - continue to configure via web UI."
+            break
+        fi
+        if [ $i -eq 120 ]; then
+            log_warn "Backend still starting after 2 minutes..."
+            $COMPOSE_CMD logs --tail=20 backend
+        fi
+        sleep 1
+    done
+    
+    # Start frontend regardless of backend health (it will redirect to setup)
+    log_info "Starting frontend..."
+    $COMPOSE_CMD up -d frontend
+    
+    sleep 3
+    
+    # Show final status
+    log_info "Service status:"
+    $COMPOSE_CMD ps
+}
+
+print_success() {
+    echo ""
+    echo -e "${GREEN}╔═══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                                                               ║${NC}"
+    echo -e "${GREEN}║              D-Drive Installation Complete!                   ║${NC}"
+    echo -e "${GREEN}║                                                               ║${NC}"
+    echo -e "${GREEN}╚═══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${BLUE}Open your browser and go to:${NC}"
+    echo ""
+    echo -e "    ${GREEN}http://localhost${NC}"
+    echo ""
+    echo -e "${BLUE}Complete the setup wizard to configure Discord integration.${NC}"
+    echo ""
+    echo -e "${YELLOW}Useful commands:${NC}"
+    echo "  cd $INSTALL_DIR"
+    echo "  $COMPOSE_CMD logs -f        # View logs"
+    echo "  $COMPOSE_CMD down           # Stop services"
+    echo "  $COMPOSE_CMD up -d          # Start services"
+    echo "  $COMPOSE_CMD pull && $COMPOSE_CMD up -d --build  # Update"
+    echo ""
+}
+
+# Main installation flow
+main() {
+    print_banner
+    
+    log_info "Starting D-Drive installation..."
+    echo ""
+    
+    check_docker
+    check_docker_compose
+    check_docker_running
+    
+    echo ""
+    clone_or_update_repo
+    
+    echo ""
+    generate_secrets
+    
+    echo ""
+    start_services
+    
+    print_success
+}
+
+# Run main function
+main "$@"

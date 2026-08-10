@@ -1,48 +1,8 @@
-# Dependencies
 node_modules/
-.pnpm-store/
-
-# Build outputs
-dist/
 build/
-.next/
-out/
-*.tsbuildinfo
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
-
-# IDE
-.vscode/
-.idea/
-*.swp
-.DS_Store
-
-# Test
-coverage/
-.nyc_output/
-
-# Turbo
-.turbo/
-
-# Server data (Drizzle/SQLite)
-data/
 *.db
 *.db-journal
-*.sqlite
-*.sqlite-journal
-
-# Disbox v1 reference (removed once v2 ships; ignored so accidental commits are blocked)
-/extension/
-/server/
-/web/
-/node_modules.old/
-*.old
-*.bak
+*.log
+.env
+.env.*
+!.env.example
