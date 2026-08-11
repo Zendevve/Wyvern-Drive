@@ -49,8 +49,9 @@ test('24-byte upload splits into exactly 3 x 8-byte encrypted chunks', async () 
     assert.strictEqual(chunk.deleted_at, null);
   });
 
-  // Discord storage holds ciphertext, never plaintext.
-  const stored = ctx.discordStorage.getMessages('channel-1001');
+  // Discord storage holds ciphertext, never plaintext. Drive id 1 is the
+  // first (and only) user's configured drive.
+  const stored = ctx.discordStorage.getMessages(1);
   assert.strictEqual(stored.size, 3);
   for (let i = 0; i < 3; i += 1) {
     const storedBuf = [...stored.values()][i];

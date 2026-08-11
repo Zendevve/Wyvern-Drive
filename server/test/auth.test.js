@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { startTestServer, makeClient, performOAuth, login, ORIGIN, dbAll } = require('./helpers');
+const { startTestServer, makeClient, performOAuth, login, configureWebhook, ORIGIN, dbAll } = require('./helpers');
 
 async function setup(t, overrides = {}) {
   const ctx = await startTestServer(overrides);
@@ -27,25 +27,42 @@ test('GET /api/auth/discord redirects to Discord with state and a state cookie',
   assert.ok(res.cookies.wyvern_oauth_state);
 });
 
-test('callback happy path creates user, drive, session and CSRF cookies', async (t) => {
+test('callback happy path creates user and session, redirects to /connect, and webhook setup creates the drive', async (t) => {
   const { ctx, client } = await setup(t);
   const res = await performOAuth(client);
   assert.strictEqual(res.status, 302);
-  assert.strictEqual(res.headers.get('location'), `${ORIGIN}/drive`);
+  assert.strictEqual(res.headers.get('location'), `${ORIGIN}/connect`);
 
   const sessionCookie = res.cookies.wyvern_session;
   const csrfCookie = res.cookies.wyvern_csrf;
   assert.ok(sessionCookie);
   assert.ok(csrfCookie);
 
-  const drive = await ctx.repositories.getDriveByOwner(1);
-  assert.ok(drive, 'drive should be provisioned');
-  assert.strictEqual(drive.discord_channel_id, 'channel-1001');
-  assert.strictEqual(drive.quota_bytes, ctx.config.defaultQuotaBytes);
+  // No storage is provisioned by the callback itself.
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 0);
 
   const user = await ctx.repositories.getUserById(1);
   assert.strictEqual(user.discord_id, '1001');
   assert.strictEqual(user.username, 'alice');
+
+  // The authenticated webhook setup creates the drive with a sealed credential.
+  const cfg = await client.request('/api/storage/webhook', {
+    method: 'POST',
+    body: JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/123/test-token' }),
+    headers: { 'content-type': 'application/json' },
+    csrf: true,
+    expect: 201,
+  });
+  assert.strictEqual(cfg.json.id, 1);
+  assert.strictEqual(cfg.json.quotaBytes, ctx.config.defaultQuotaBytes);
+  assert.strictEqual(cfg.json.usedBytes, 0);
+
+  const drive = await ctx.repositories.getDriveByOwner(1);
+  assert.ok(drive, 'drive should be provisioned by webhook setup');
+  assert.strictEqual(drive.legacy_discord_channel_id, null);
+  assert.ok(Buffer.isBuffer(drive.webhook_ciphertext) && drive.webhook_ciphertext.length > 0);
+  assert.strictEqual(drive.webhook_nonce.length, 'nonce:https://discord.com/api/webhooks/123/test-token'.length);
+  assert.strictEqual(drive.quota_bytes, ctx.config.defaultQuotaBytes);
 
   // session row stores only the hash, never the token
   const sessions = await dbAll(ctx.db, 'SELECT token_hash FROM sessions');
@@ -95,48 +112,142 @@ test('callback without a code redirects to an error', async (t) => {
   assert.strictEqual(res.headers.get('location'), `${ORIGIN}/login?error=invalid_state`);
 });
 
-test('provisioning failure redirects to storage_unavailable with no session', async (t) => {
-  const { ctx, client } = await setup(t);
-  ctx.discordStorage.ensureDriveChannelFailures = 2;
-
-  const res = await performOAuth(client);
-  assert.strictEqual(res.status, 302);
-  assert.strictEqual(res.headers.get('location'), `${ORIGIN}/login?error=storage_unavailable`);
-  assert.ok(!res.cookies.wyvern_session, 'no session cookie on provisioning failure');
-  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM sessions'))[0].c, 0);
-  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 0, 'no partial drive');
-
-  // user row remains so retry can re-provision
-  const user = await ctx.repositories.getUserById(1);
-  assert.ok(user);
-  assert.strictEqual(user.discord_id, '1001');
-});
-
-test('provisioning retry: fails once, then a later sign-in succeeds', async (t) => {
-  const { ctx, client } = await setup(t);
-  ctx.discordStorage.ensureDriveChannelFailures = 1;
-
-  let res = await performOAuth(client);
-  assert.strictEqual(res.headers.get('location'), `${ORIGIN}/login?error=storage_unavailable`);
-  assert.ok(!res.cookies.wyvern_session);
-
-  // Retry succeeds and provisions the drive.
-  res = await performOAuth(client);
-  assert.strictEqual(res.status, 302);
-  assert.strictEqual(res.headers.get('location'), `${ORIGIN}/drive`);
-  assert.ok(res.cookies.wyvern_session);
-  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 1);
-  assert.strictEqual(ctx.discordStorage.ensureDriveChannelCalls, 2);
-});
-
-test('existing drive is reused on repeat logins', async (t) => {
+test('webhook validation failure leaves no drive and surfaces INVALID_WEBHOOK', async (t) => {
   const { ctx, client } = await setup(t);
   await performOAuth(client);
-  const callsBefore = ctx.discordStorage.ensureDriveChannelCalls;
+
+  const res = await client.request('/api/storage/webhook', {
+    method: 'POST',
+    body: JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/123/bad-token' }),
+    headers: { 'content-type': 'application/json' },
+    csrf: true,
+  });
+  assert.strictEqual(res.status, 400);
+  assert.strictEqual(res.json.error.code, 'INVALID_WEBHOOK');
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 0, 'no partial drive');
+  assert.strictEqual(ctx.discordStorage.webhookValidationCalls, 1);
+});
+
+test('Discord unavailability during webhook validation returns STORAGE_UNAVAILABLE and no drive', async (t) => {
+  const { ctx, client } = await setup(t);
+  await performOAuth(client);
+  ctx.discordStorage.failNextWebhookValidations = 1;
+
+  const res = await client.request('/api/storage/webhook', {
+    method: 'POST',
+    body: JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/123/test-token' }),
+    headers: { 'content-type': 'application/json' },
+    csrf: true,
+  });
+  assert.strictEqual(res.status, 502);
+  assert.strictEqual(res.json.error.code, 'STORAGE_UNAVAILABLE');
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 0);
+
+  // A later, successful validation provisions the drive.
+  const ok = await client.request('/api/storage/webhook', {
+    method: 'POST',
+    body: JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/123/test-token' }),
+    headers: { 'content-type': 'application/json' },
+    csrf: true,
+    expect: 201,
+  });
+  assert.strictEqual(ok.json.id, 1);
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 1);
+});
+
+test('configured drive redirects to /drive on repeat logins', async (t) => {
+  const { ctx, client } = await setup(t);
+  await login(client, ctx); // callback -> /connect, then webhook configured
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 1);
+
   const res = await performOAuth(client); // second login
   assert.strictEqual(res.headers.get('location'), `${ORIGIN}/drive`);
-  assert.strictEqual(ctx.discordStorage.ensureDriveChannelCalls, callsBefore, 'no re-provisioning');
   assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 1);
+  assert.strictEqual(ctx.discordStorage.webhookValidationCalls, 1, 'no re-validation');
+});
+
+test('POST /api/storage/webhook: first-time 201, same-user unconfigured drive 200, configured drive 409', async (t) => {
+  const { ctx, client } = await setup(t);
+  await performOAuth(client);
+
+  // First-time creation.
+  const created = await client.request('/api/storage/webhook', {
+    method: 'POST',
+    body: JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/123/test-token' }),
+    headers: { 'content-type': 'application/json' },
+    csrf: true,
+    expect: 201,
+  });
+  assert.deepStrictEqual(created.json, { id: 1, quotaBytes: ctx.config.defaultQuotaBytes, usedBytes: 0 });
+
+  // A configured drive rejects rotation.
+  const again = await client.request('/api/storage/webhook', {
+    method: 'POST',
+    body: JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/123/test-token' }),
+    headers: { 'content-type': 'application/json' },
+    csrf: true,
+  });
+  assert.strictEqual(again.status, 409);
+  assert.strictEqual(again.json.error.code, 'STORAGE_ALREADY_CONFIGURED');
+
+  // A legacy bot-era drive returns STORAGE_MIGRATION_REQUIRED and keeps its value.
+  await login(client, ctx, { as: { id: '2002', username: 'bob', avatar: null }, noWebhook: true });
+  const legacyDrive = await ctx.repositories.insertDrive({
+    ownerId: 2,
+    webhookCiphertext: null,
+    webhookNonce: null,
+    webhookAuthTag: null,
+    quotaBytes: ctx.config.defaultQuotaBytes,
+  });
+  await ctx.db.exec(`UPDATE drives SET legacy_discord_channel_id = 'ch-legacy' WHERE id = ${legacyDrive.id}`);
+  const legacy = await client.request('/api/storage/webhook', {
+    method: 'POST',
+    body: JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/123/test-token' }),
+    headers: { 'content-type': 'application/json' },
+    csrf: true,
+  });
+  assert.strictEqual(legacy.status, 409);
+  assert.strictEqual(legacy.json.error.code, 'STORAGE_MIGRATION_REQUIRED');
+  const kept = await ctx.repositories.getDriveById(legacyDrive.id);
+  assert.strictEqual(kept.legacy_discord_channel_id, 'ch-legacy', 'legacy value preserved');
+  assert.strictEqual(kept.webhook_ciphertext, null);
+});
+
+test('POST /api/storage/webhook: missing/invalid input returns 400 INVALID_WEBHOOK', async (t) => {
+  const { client } = await setup(t);
+  await login(client, undefined, { noWebhook: true });
+  for (const body of [{}, { webhookUrl: '' }, { webhookUrl: '   ' }, { webhookUrl: 42 }]) {
+    const res = await client.request('/api/storage/webhook', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+      csrf: true,
+    });
+    assert.strictEqual(res.status, 400, `body ${JSON.stringify(body)}`);
+    assert.strictEqual(res.json.error.code, 'INVALID_WEBHOOK');
+  }
+});
+
+test('POST /api/storage/webhook: malformed URLs are rejected before any Discord call', async (t) => {
+  const { ctx, client } = await setup(t);
+  await login(client, undefined, { noWebhook: true });
+  for (const url of [
+    'http://discord.com/api/webhooks/123/token',
+    'https://evil.example/api/webhooks/123/token',
+    'https://discord.com/api/webhooks/abc/token',
+    'https://discord.com/not-a-webhook',
+    'https://discord.com/api/webhooks/123/',
+  ]) {
+    const res = await client.request('/api/storage/webhook', {
+      method: 'POST',
+      body: JSON.stringify({ webhookUrl: url }),
+      headers: { 'content-type': 'application/json' },
+      csrf: true,
+    });
+    assert.strictEqual(res.status, 400, url);
+    assert.strictEqual(res.json.error.code, 'INVALID_WEBHOOK');
+  }
+  assert.strictEqual(ctx.discordStorage.webhookValidationCalls, 0, 'no Discord call for malformed URLs');
 });
 
 test('GET /api/auth/me returns null user anonymously and full identity when signed in', async (t) => {
@@ -145,7 +256,15 @@ test('GET /api/auth/me returns null user anonymously and full identity when sign
   let res = await client.request('/api/auth/me');
   assert.deepStrictEqual(res.json, { user: null });
 
-  await login(client, ctx);
+  // Signed in but storage not yet connected: drive is null.
+  await login(client, ctx, { noWebhook: true });
+  res = await client.request('/api/auth/me');
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.json.user.id, 1);
+  assert.strictEqual(res.json.drive, null);
+
+  // Once a webhook is configured, the drive summary appears.
+  await configureWebhook(client);
   res = await client.request('/api/auth/me');
   assert.strictEqual(res.status, 200);
   assert.strictEqual(res.json.user.id, 1);
@@ -156,11 +275,12 @@ test('GET /api/auth/me returns null user anonymously and full identity when sign
   assert.strictEqual(res.json.drive.quotaBytes, ctx.config.defaultQuotaBytes);
   assert.strictEqual(res.json.drive.usedBytes, 0);
 
-  // no tokens, channel ids, or hashes leak
+  // no tokens, channel ids, webhook URLs, or hashes leak
   const serialized = JSON.stringify(res.json);
   assert.ok(!serialized.includes('token'));
   assert.ok(!serialized.includes('channel'));
   assert.ok(!serialized.includes('access'));
+  assert.ok(!serialized.includes('webhook'));
 });
 
 test('POST /api/auth/logout revokes the session and clears cookies', async (t) => {

@@ -1,4 +1,4 @@
-import { ApiError, apiFetch, uploadFile } from './client';
+import { ApiError, apiFetch, api, uploadFile } from './client';
 
 describe('api client', () => {
   afterEach(() => {
@@ -35,6 +35,26 @@ describe('api client', () => {
 
     const [, init] = fetch.mock.calls[0];
     expect(init.headers['X-CSRF-Token']).toBeUndefined();
+  });
+
+  it('configureWebhook posts the URL as JSON to /api/storage/webhook with CSRF', async () => {
+    document.cookie = 'wyvern_csrf=csrf-token-456';
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue({ status: 201, ok: true, text: async () => '{"id":1,"quotaBytes":10,"usedBytes":0}' });
+
+    const result = await api.configureWebhook('https://discord.com/api/webhooks/123/test-token');
+
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe('/api/storage/webhook');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-CSRF-Token']).toBe('csrf-token-456');
+    expect(init.headers['Content-Type']).toBe('application/json');
+    expect(JSON.parse(init.body)).toEqual({
+      webhookUrl: 'https://discord.com/api/webhooks/123/test-token',
+    });
+    expect(result.id).toBe(1);
   });
 
   it('parses server error bodies into ApiError', async () => {

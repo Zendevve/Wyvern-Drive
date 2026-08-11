@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { loadConfig, DEFAULT_PORT, DEFAULT_QUOTA_BYTES, PRODUCTION_CHUNK_SIZE_BYTES } = require('../src/config');
+const { loadConfig, diagnoseConfig, REQUIRED_VARS, DEFAULT_PORT, DEFAULT_QUOTA_BYTES, PRODUCTION_CHUNK_SIZE_BYTES } = require('../src/config');
 
 const VALID_ENV = {
   APP_ORIGIN: 'http://localhost:3000',
@@ -10,9 +10,6 @@ const VALID_ENV = {
   DISCORD_CLIENT_ID: 'cid',
   DISCORD_CLIENT_SECRET: 'csecret',
   DISCORD_REDIRECT_URI: 'http://localhost:3000/api/auth/discord/callback',
-  DISCORD_BOT_TOKEN: 'bot-token',
-  DISCORD_STORAGE_GUILD_ID: '111',
-  DISCORD_STORAGE_CATEGORY_ID: '222',
   WYVERN_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString('base64'),
   WYVERN_CHUNK_SIZE_BYTES: '8',
   NODE_ENV: 'test',
@@ -41,9 +38,6 @@ test('loadConfig throws when each required variable is missing', () => {
     'DISCORD_CLIENT_ID',
     'DISCORD_CLIENT_SECRET',
     'DISCORD_REDIRECT_URI',
-    'DISCORD_BOT_TOKEN',
-    'DISCORD_STORAGE_GUILD_ID',
-    'DISCORD_STORAGE_CATEGORY_ID',
     'WYVERN_ENCRYPTION_KEY',
   ];
   for (const key of required) {
@@ -116,10 +110,73 @@ test('loadConfig validates APP_ORIGIN and DEFAULT_QUOTA_BYTES', () => {
   assert.strictEqual(loadConfig({ ...VALID_ENV, DEFAULT_QUOTA_BYTES: '4096' }).defaultQuotaBytes, 4096);
 });
 
+test('loadConfig rejects a malformed DISCORD_REDIRECT_URI', () => {
+  assert.throws(() => loadConfig({ ...VALID_ENV, DISCORD_REDIRECT_URI: 'not-a-url' }), /DISCORD_REDIRECT_URI/);
+  assert.throws(() => loadConfig({ ...VALID_ENV, DISCORD_REDIRECT_URI: 'ftp://x/api/auth/discord/callback' }), /DISCORD_REDIRECT_URI/);
+  const cfg = loadConfig({ ...VALID_ENV, DISCORD_REDIRECT_URI: 'https://drive.example.com/api/auth/discord/callback' });
+  assert.strictEqual(cfg.discordRedirectUri, 'https://drive.example.com/api/auth/discord/callback');
+});
+
 test('loadConfig exposes environment flags', () => {
   const prod = loadConfig({ ...VALID_ENV, NODE_ENV: 'production' });
   assert.strictEqual(prod.isProduction, true);
   assert.strictEqual(prod.isTest, false);
   const test = loadConfig({ ...VALID_ENV, NODE_ENV: 'test' });
   assert.strictEqual(test.isTest, true);
+});
+
+test('diagnoseConfig reports a complete environment as fully configured', () => {
+  const result = diagnoseConfig(VALID_ENV);
+  assert.deepStrictEqual(result.missing, []);
+  assert.deepStrictEqual(result.invalid, []);
+  assert.strictEqual(result.config.port, DEFAULT_PORT);
+  assert.strictEqual(result.config.appOrigin, 'http://localhost:3000');
+});
+
+test('diagnoseConfig lists missing variables without throwing', () => {
+  const env = { NODE_ENV: 'test', PORT: '0' };
+  const result = diagnoseConfig(env);
+  assert.deepStrictEqual(result.missing, REQUIRED_VARS);
+  assert.deepStrictEqual(result.invalid, []);
+});
+
+test('diagnoseConfig reports a malformed redirect URI as an invalid variable', () => {
+  const result = diagnoseConfig({ ...VALID_ENV, DISCORD_REDIRECT_URI: 'not-a-url' });
+  assert.deepStrictEqual(result.missing, []);
+  assert.strictEqual(result.invalid.length, 1);
+  assert.strictEqual(result.invalid[0].key, 'DISCORD_REDIRECT_URI');
+  assert.match(result.invalid[0].message, /absolute http\(s\) URL/);
+});
+
+test('diagnoseConfig reports invalid credentials and keys as diagnostics', () => {
+  const result = diagnoseConfig({
+    ...VALID_ENV,
+    DISCORD_CLIENT_ID: '',
+    WYVERN_ENCRYPTION_KEY: Buffer.alloc(16, 2).toString('base64'),
+    APP_ORIGIN: 'ftp://x',
+  });
+  assert.deepStrictEqual(result.missing, ['DISCORD_CLIENT_ID']);
+  const keys = result.invalid.map((item) => item.key).sort();
+  assert.deepStrictEqual(keys, ['APP_ORIGIN', 'WYVERN_ENCRYPTION_KEY']);
+});
+
+test('diagnoseConfig never exposes secret values', () => {
+  const secretEnv = {
+    ...VALID_ENV,
+    DISCORD_CLIENT_SECRET: 's3cr3t-cl13nt',
+    DISCORD_BOT_TOKEN: 's3cr3t-bot-token',
+    WYVERN_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString('base64'),
+  };
+  const result = diagnoseConfig(secretEnv);
+  const serialized = JSON.stringify(result);
+  assert.ok(!serialized.includes('s3cr3t-cl13nt'), 'client secret must not leak');
+  assert.ok(!serialized.includes('s3cr3t-bot-token'), 'bot token must not leak');
+  assert.strictEqual(result.config.encryptionKey, undefined, 'key material must not be in diagnostics config');
+  assert.strictEqual(result.config.discordClientSecret, undefined);
+  assert.strictEqual(result.config.discordBotToken, undefined);
+});
+
+test('diagnoseConfig throws on an invalid PORT', () => {
+  assert.throws(() => diagnoseConfig({ ...VALID_ENV, PORT: 'abc' }), /PORT/);
+  assert.throws(() => diagnoseConfig({ ...VALID_ENV, PORT: '70000' }), /PORT/);
 });

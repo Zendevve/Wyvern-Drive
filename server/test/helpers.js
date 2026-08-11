@@ -15,6 +15,8 @@ const { createApp } = require('../src/http/app');
 
 const ORIGIN = 'http://localhost:3000';
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'src', 'db', 'migrations');
+const DEFAULT_WEBHOOK_URL = 'https://discord.com/api/webhooks/123/test-token';
+const WEBHOOK_URL_RE = /^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+$/;
 
 // Deterministic test environment. Tests set every required variable explicitly;
 // there is no blanket "skip validation" path.
@@ -24,9 +26,6 @@ process.env.DB_URL = ':memory:';
 process.env.DISCORD_CLIENT_ID = 'test-client-id';
 process.env.DISCORD_CLIENT_SECRET = 'test-client-secret';
 process.env.DISCORD_REDIRECT_URI = `${ORIGIN}/api/auth/discord/callback`;
-process.env.DISCORD_BOT_TOKEN = 'test-bot-token';
-process.env.DISCORD_STORAGE_GUILD_ID = '111';
-process.env.DISCORD_STORAGE_CATEGORY_ID = '222';
 process.env.WYVERN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
 process.env.WYVERN_CHUNK_SIZE_BYTES = '8';
 process.env.DEFAULT_QUOTA_BYTES = '1048576';
@@ -69,16 +68,18 @@ function createFakeOAuthFetch() {
 }
 
 /**
- * In-memory fake DiscordStorage. Tracks messages per channel and supports
- * failure injection: ensureDriveChannelFailures, failNextPutChunks,
- * failNextGetChunks, failNextDeleteChunks.
+ * In-memory fake DiscordStorage. Models webhook credential configuration
+ * (validateAndSealWebhook over a set of accepted URLs) and per-drive message
+ * storage, with failure injection: failNextWebhookValidations,
+ * failNextPutChunks, failPutChunkOnCall, failNextGetChunks,
+ * failNextDeleteChunks, failDeleteChunkOnCall.
  */
 function createFakeDiscordStorage() {
-  const channels = new Map(); // channelId -> Map(messageId -> Buffer)
+  const drives = new Map(); // driveId -> Map(messageId -> Buffer)
   const deletedMessages = [];
   const storage = {
-    ensureDriveChannelCalls: 0,
-    ensureDriveChannelFailures: 0,
+    failNextWebhookValidations: 0,
+    webhookValidationCalls: 0,
     failNextPutChunks: 0,
     failPutChunkOnCall: 0,
     putCalls: 0,
@@ -88,17 +89,31 @@ function createFakeDiscordStorage() {
     deleteCalls: 0,
     msgSeq: 0,
     deletedMessages,
+    validWebhooks: new Set([DEFAULT_WEBHOOK_URL]),
 
-    async ensureDriveChannel(driveOwner) {
-      storage.ensureDriveChannelCalls += 1;
-      if (storage.ensureDriveChannelFailures > 0) {
-        storage.ensureDriveChannelFailures -= 1;
-        throw new Error('fake: channel creation failed');
+    async validateAndSealWebhook(webhookUrl) {
+      const trimmed = String(webhookUrl).trim();
+      // Mirror the real adapter: malformed URLs are rejected before any
+      // Discord call, so they never touch the validation counter.
+      if (!WEBHOOK_URL_RE.test(trimmed)) {
+        throw new WyvernError('INVALID_WEBHOOK', 'Webhook URL must be an HTTPS Discord webhook URL', 400);
       }
-      return `channel-${driveOwner.id}`;
+      storage.webhookValidationCalls += 1;
+      if (storage.failNextWebhookValidations > 0) {
+        storage.failNextWebhookValidations -= 1;
+        throw storageError('fake: discord unavailable');
+      }
+      if (!storage.validWebhooks.has(trimmed)) {
+        throw new WyvernError('INVALID_WEBHOOK', 'Webhook URL is not a valid Discord webhook', 400);
+      }
+      return {
+        webhook_ciphertext: Buffer.from(`cipher:${trimmed}`),
+        webhook_nonce: Buffer.from(`nonce:${trimmed}`),
+        webhook_auth_tag: Buffer.from(`tag:${trimmed}`),
+      };
     },
 
-    async putChunk(channelId, filename, encryptedBuffer) {
+    async putChunk(drive, filename, encryptedBuffer) {
       storage.putCalls += 1;
       if (storage.failPutChunkOnCall > 0 && storage.putCalls === storage.failPutChunkOnCall) {
         throw storageError('fake: putChunk failed');
@@ -107,10 +122,10 @@ function createFakeDiscordStorage() {
         storage.failNextPutChunks -= 1;
         throw storageError('fake: putChunk failed');
       }
-      let msgs = channels.get(channelId);
+      let msgs = drives.get(drive.id);
       if (!msgs) {
         msgs = new Map();
-        channels.set(channelId, msgs);
+        drives.set(drive.id, msgs);
       }
       storage.msgSeq += 1;
       const messageId = `msg-${storage.msgSeq}`;
@@ -118,18 +133,18 @@ function createFakeDiscordStorage() {
       return messageId;
     },
 
-    async getChunk(channelId, messageId) {
+    async getChunk(drive, messageId) {
       if (storage.failNextGetChunks > 0) {
         storage.failNextGetChunks -= 1;
         throw storageError('fake: getChunk failed');
       }
-      const msgs = channels.get(channelId);
+      const msgs = drives.get(drive.id);
       const buf = msgs && msgs.get(messageId);
       if (!buf) throw storageError('fake: chunk not found');
       return Buffer.from(buf);
     },
 
-    async deleteChunk(channelId, messageId) {
+    async deleteChunk(drive, messageId) {
       storage.deleteCalls += 1;
       if (storage.failDeleteChunkOnCall > 0 && storage.deleteCalls === storage.failDeleteChunkOnCall) {
         throw storageError('fake: deleteChunk failed');
@@ -138,21 +153,21 @@ function createFakeDiscordStorage() {
         storage.failNextDeleteChunks -= 1;
         throw storageError('fake: deleteChunk failed');
       }
-      const msgs = channels.get(channelId);
+      const msgs = drives.get(drive.id);
       if (msgs && msgs.has(messageId)) {
         msgs.delete(messageId);
-        deletedMessages.push({ channelId, messageId });
+        deletedMessages.push({ driveId: drive.id, messageId });
       }
     },
 
     countMessages() {
       let n = 0;
-      for (const msgs of channels.values()) n += msgs.size;
+      for (const msgs of drives.values()) n += msgs.size;
       return n;
     },
 
-    getMessages(channelId) {
-      return channels.get(channelId);
+    getMessages(driveId) {
+      return drives.get(driveId);
     },
   };
   return storage;
@@ -176,7 +191,7 @@ async function startTestServer(overrides = {}) {
   const oauthFetch = createFakeOAuthFetch();
   if (overrides.oauthUser) oauthFetch.currentUser = overrides.oauthUser;
   const oauth = createDiscordOAuth(config, oauthFetch);
-  const discordStorage = createFakeDiscordStorage();
+  const discordStorage = overrides.storage || createFakeDiscordStorage();
   const fileService = createFileService({ db, repositories, discordStorage, config });
 
   const app = createApp({ config, db, repositories, sessionStore, oauth, discordStorage, fileService });
@@ -268,15 +283,34 @@ async function performOAuth(client) {
   return res;
 }
 
-/** Login as the oauth fetch's current user and assert a successful session. */
+/** Configure the fake-accepted webhook for the signed-in user (201 expected). */
+async function configureWebhook(client, webhookUrl = DEFAULT_WEBHOOK_URL) {
+  return client.request('/api/storage/webhook', {
+    method: 'POST',
+    body: JSON.stringify({ webhookUrl }),
+    headers: { 'content-type': 'application/json' },
+    csrf: true,
+    expect: 201,
+  });
+}
+
+/**
+ * Login as the oauth fetch's current user and assert a successful session.
+ * A fresh user redirects to /connect; the default flow then configures a
+ * webhook so drive/file operations work. Pass opts.noWebhook to stop after
+ * the callback, or opts.webhookUrl to use a specific URL.
+ */
 async function login(client, ctx, opts = {}) {
   if (opts.as) ctx.oauthFetch.currentUser = opts.as;
   const res = await performOAuth(client);
   assert.strictEqual(res.status, 302);
   const location = res.headers.get('location');
-  assert.ok(location.endsWith('/drive'), `expected redirect to /drive, got ${location}`);
+  assert.ok(location.endsWith('/connect'), `expected redirect to /connect, got ${location}`);
   assert.ok(res.cookies.wyvern_session, 'session cookie should be set');
   assert.ok(res.cookies.wyvern_csrf, 'csrf cookie should be set');
+  if (!opts.noWebhook) {
+    await configureWebhook(client, opts.webhookUrl);
+  }
   return res;
 }
 
@@ -298,6 +332,7 @@ async function uploadFile(client, opts = {}) {
 module.exports = {
   ORIGIN,
   MIGRATIONS_DIR,
+  DEFAULT_WEBHOOK_URL,
   sha256hex,
   makeFixture,
   createFakeOAuthFetch,
@@ -306,6 +341,7 @@ module.exports = {
   makeClient,
   performOAuth,
   login,
+  configureWebhook,
   uploadFile,
   dbAll: all,
   dbGet: get,

@@ -9,6 +9,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import DialogTransition from '../motion/DialogTransition';
 
 /**
  * Single name-input dialog shared by "New folder" and "Rename".
@@ -55,7 +56,13 @@ export default function FolderDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="xs"
+      fullWidth
+      TransitionComponent={DialogTransition}
+    >
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="inkMuted" sx={{ mb: 2 }}>

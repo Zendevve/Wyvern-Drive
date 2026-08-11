@@ -5,6 +5,8 @@ const cookieParser = require('cookie-parser');
 const { toErrorBody } = require('../errors');
 const { createRateLimiter } = require('./middleware');
 const { createAuthRoutes } = require('./auth-routes');
+const { createSetupStatusRoutes } = require('./setup-status');
+const { createStorageRoutes } = require('./storage-routes');
 const { createDriveRoutes } = require('./drive-routes');
 const { createEntryRoutes, createFolderRoutes } = require('./entry-routes');
 const { createFileRoutes } = require('./file-routes');
@@ -56,13 +58,19 @@ function createApp(deps) {
   });
 
   const authRoutes = createAuthRoutes(deps);
+  const storageRoutes = createStorageRoutes(deps);
   const driveRoutes = createDriveRoutes(deps);
   const entryRoutes = createEntryRoutes(deps);
   const folderRoutes = createFolderRoutes(deps);
   const fileRoutes = createFileRoutes(deps);
   const { apiRouter: shareApiRouter, sRouter } = createShareRoutes(deps);
 
+  // First-run status: read-only, mounted before auth/protected routes. In a
+  // complete configuration it reports setupRequired: false with empty
+  // diagnostics; the limited setup app mounts the same route with real data.
+  app.use('/api/setup', createSetupStatusRoutes({ missing: [], invalid: [] }));
   app.use('/api/auth', authRoutes);
+  app.use('/api/storage', storageRoutes);
   app.use('/api/drive', driveRoutes);
   app.use('/api/entries', entryRoutes);
   app.use('/api/folders', folderRoutes);

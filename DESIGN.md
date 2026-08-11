@@ -124,7 +124,7 @@ components:
 
 **Creative North Star: "The Dark Canvas"**
 
-Wyvern Drive is a personal cloud drive backed by Discord — files split into chunks, AES-256-GCM encrypted at rest, served from a bot-managed private channel — and it wears the Framer dark-canvas marketing world the way Framer wears it: a near-black canvas with a faint warmth, oversized white display type with hard negative tracking, and one chromatic accent (blue) that is a signal, never a fill. The app is a poster at the edges (login, share links) and a quiet instrument in the middle (the drive itself): scanability, density, and the familiar cloud-drive idioms outrank expression once the user is inside.
+- Wyvern Drive is a personal cloud drive backed by Discord — files split into chunks, AES-256-GCM encrypted at rest, served from one per-user Discord webhook — and it wears the Framer dark-canvas marketing world the way Framer wears it: a near-black canvas with a faint warmth, oversized white display type with hard negative tracking, and one chromatic accent (blue) that is a signal, never a fill. The app is a poster at the edges (login, share links) and a quiet instrument in the middle (the drive itself): scanability, density, and the familiar cloud-drive idioms outrank expression once the user is inside.
 
 Hierarchy is carried by **surface lift** — canvas → surface-1 → surface-2 — never by color ramps or opacity tricks on white type. The text scale is binary: `ink` or `ink-muted`. The only chromatic depth in the whole system is the scarce gradient spotlight card (the drive's empty state), which sits in an otherwise monochrome grid like a Framer showcase tile.
 

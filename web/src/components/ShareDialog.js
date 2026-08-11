@@ -18,6 +18,7 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCopy } from '@fortawesome/free-solid-svg-icons';
 import { api } from '../api/client';
+import DialogTransition from '../motion/DialogTransition';
 
 function formatDate(value) {
   return new Date(value).toLocaleString();
@@ -100,7 +101,13 @@ export default function ShareDialog({ open, entry, onClose }) {
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      TransitionComponent={DialogTransition}
+    >
       <DialogTitle>Share {entry ? entry.name : ''}</DialogTitle>
       <DialogContent dividers>
         {error && (

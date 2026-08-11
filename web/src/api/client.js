@@ -129,8 +129,14 @@ export function shareDownloadUrl(token) {
 }
 
 export const api = {
+  setupStatus: () => apiFetch('/api/setup/status'),
   me: () => apiFetch('/api/auth/me'),
   drive: () => apiFetch('/api/drive'),
+  configureWebhook: (webhookUrl) =>
+    apiFetch('/api/storage/webhook', {
+      method: 'POST',
+      body: JSON.stringify({ webhookUrl }),
+    }),
   entries: (params = {}) => {
     const q = new URLSearchParams();
     if (params.parentId != null) {

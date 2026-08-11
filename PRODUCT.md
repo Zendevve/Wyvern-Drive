@@ -18,10 +18,13 @@ interviewed.]
 
 A self-hostable personal cloud drive backed by Discord: files are split into
 chunks, encrypted at rest with AES-256-GCM, and stored as Discord attachments
-in bot-managed private channels. The server owns all Discord credentials and
-metadata (SQLite); the browser never sees bot tokens, webhook URLs, or raw
-attachment URLs. Success = the user trusts it with real files and finds the
-cloud-drive flows (upload, browse, search, share) comfortable.
+posted through one per-user Discord webhook (Disbox-style). Each user connects
+their own webhook once on the authenticated `/connect` page; the server holds
+the OAuth2 client secret, validates and encrypts the webhook URL at rest, and
+performs all webhook and Discord-CDN I/O server-side. The browser never sees
+webhook URLs, raw attachment URLs, message IDs, or any secret value. Success
+= the user trusts it with real files and finds the cloud-drive flows (upload,
+browse, search, share) comfortable.
 
 ## Positioning
 
@@ -36,6 +39,10 @@ Web app (React 17 + MUI 5, CRA) talking to same-origin `/api`; Node 20 +
 Express + discord.js 14 + SQLite server; Discord OAuth2 sign-in; desktop
 list/grid views, mobile cards; drag-and-drop upload; anonymous read-only share
 links; quota (default 10 GiB). Server serves the built SPA in production.
+First-run onboarding is operator-managed: with incomplete configuration the
+server boots a read-only setup mode serving `GET /api/setup/status` and a
+guided `/setup` page (missing-variable names only, never values); the operator
+fills `server/.env` and restarts. No browser form writes secrets.
 
 ## Capabilities and Constraints
 
@@ -50,8 +57,10 @@ floating upload progress manager).
 Constraints: encryption is server-side, not end-to-end (Discord and the browser
 never receive plaintext chunks, storage internals, or keys); Discord rate
 limits bound storage throughput; runtime must stay self-hostable — no external
-font/CDN dependencies; `refs/` is read-only vendored prior art; a
-`legacy-webhook-version` branch preserves the previous v1.
+font/CDN dependencies; `refs/` is read-only vendored prior art; the current
+storage adapter is bot-based (`discord-storage.js`), and a
+`legacy-webhook-version` branch preserves the previous webhook-based v1 as
+prior art — webhooks are not current runtime behavior.
 
 ## Brand Commitments
 
@@ -72,9 +81,10 @@ font/CDN dependencies; `refs/` is read-only vendored prior art; a
 ## Evidence on Hand
 
 - `README.md` — features, architecture, security model, config, testing.
-- `server/README.md` — manual smoke path (85 server tests; encrypted
-  round-trip fixture verified against SHA-256).
-- `web/` — 32 tests pinning accessible names, testids, and quota/share text.
+- `server/README.md` — manual smoke path (96 server tests; encrypted
+  round-trip fixture verified against SHA-256; setup-mode coverage).
+- `web/` — 44 tests pinning accessible names, testids, quota/share text, and
+  the setup gate/page.
 - `refs/` — vendored prior art (Disbox et al.), read-only.
 
 ## Product Principles
@@ -87,8 +97,10 @@ font/CDN dependencies; `refs/` is read-only vendored prior art; a
    world); expression is saved for moments, never at the cost of the task.
 4. Self-hostable: runtime depends on nothing external (fonts, assets self-
    hosted).
-5. Security-sensitive: never leak tokens, webhook URLs, or raw attachment URLs
-   to the browser.
+5. Security-sensitive: never leak server-held Discord credentials (OAuth2
+   client secret, sealed webhook credentials), raw attachment URLs, message
+   IDs, or encryption keys to the browser. Setup surfaces render variable
+   names only, never values.
 
 ## Accessibility & Inclusion
 

@@ -62,11 +62,17 @@ export default function LoginPage() {
         <Typography variant="h4" sx={{ color: 'inkMuted', mb: 4 }}>
           Stored on Discord, under your control.
         </Typography>
-        {error === 'storage_unavailable' && (
-          <Alert severity="warning" sx={{ mb: 2 }} data-testid="storage-unavailable">
-            Your private storage channel could not be created. This usually means the
-            bot cannot manage channels in the storage server. Please try signing in
+        {error === 'invalid_state' && (
+          <Alert severity="warning" sx={{ mb: 2 }} data-testid="oauth-invalid-state">
+            Your sign-in session expired or was already used. Please try signing in
             again.
+          </Alert>
+        )}
+        {error === 'oauth_failed' && (
+          <Alert severity="warning" sx={{ mb: 2 }} data-testid="oauth-failed">
+            Discord rejected the sign-in. Check that the redirect URI registered on
+            your Discord application exactly matches the server&apos;s{' '}
+            <code>DISCORD_REDIRECT_URI</code>, then try again.
           </Alert>
         )}
         <Button

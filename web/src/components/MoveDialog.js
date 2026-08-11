@@ -17,6 +17,7 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown, faChevronRight, faFolder } from '@fortawesome/free-solid-svg-icons';
 import { api } from '../api/client';
+import DialogTransition from '../motion/DialogTransition';
 
 const ROOT_KEY = 'root';
 
@@ -202,7 +203,13 @@ export default function MoveDialog({ open, entry, currentParentId, onClose, onMo
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      TransitionComponent={DialogTransition}
+    >
       <DialogTitle>Move {entry ? entry.name : ''}</DialogTitle>
       <DialogContent dividers>
         {error && (

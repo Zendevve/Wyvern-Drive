@@ -1,24 +1,74 @@
 'use strict';
 
 const path = require('node:path');
-const { loadConfig } = require('./config');
+const fs = require('node:fs');
+
+// Load server/.env before any config validation so the documented
+// `Copy-Item .env.example .env; npm start` flow reads the file. Skipped in
+// test mode: the test suite sets every variable explicitly and must stay
+// hermetic against a developer's local .env.
+if (process.env.NODE_ENV !== 'test') {
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+}
+
+const { loadConfig, diagnoseConfig } = require('./config');
 const { openDatabase, closeDatabase } = require('./db/connection');
 const { migrate } = require('./db/migrate');
 const { createRepositories } = require('./db/repositories');
 const { createSessionStore } = require('./auth/session-store');
 const { createDiscordOAuth } = require('./auth/discord-oauth');
-const { createDiscordStorage } = require('./storage/discord-storage');
+const { createDiscordWebhookStorage } = require('./storage/discord-webhook-storage');
 const { createFileService } = require('./services/file-service');
 const { createApp } = require('./http/app');
+const { createSetupApp } = require('./http/setup-app');
+
+/**
+ * Create the parent directory of a file-backed SQLite path before opening it.
+ * `:memory:` databases have no directory. sqlite3 will not create missing
+ * parent directories on its own, so a fresh `DB_URL=./data/wyvern.db` would
+ * otherwise fail on first run.
+ */
+function ensureDatabaseParent(dbUrl) {
+  if (dbUrl === ':memory:') return;
+  const dir = path.dirname(dbUrl);
+  if (dir && dir !== '.') {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
 
 async function main() {
-  let config;
+  let diagnostics;
   try {
-    config = loadConfig();
+    diagnostics = diagnoseConfig(process.env);
   } catch (err) {
     console.error(`Wyvern server ${err.message}`);
     process.exit(1);
   }
+
+  const setupRequired =
+    diagnostics.missing.length > 0 || diagnostics.invalid.length > 0;
+
+  if (setupRequired) {
+    // Limited setup mode: status endpoint + production SPA only. No SQLite,
+    // migrations, OAuth, storage adapter, or protected file routes.
+    const app = createSetupApp({
+      missing: diagnostics.missing,
+      invalid: diagnostics.invalid,
+    });
+    const server = app.listen(diagnostics.config.port, () => {
+      const addr = server.address();
+      const boundPort = addr && typeof addr === 'object' ? addr.port : diagnostics.config.port;
+      console.log(`Wyvern server listening on http://localhost:${boundPort} (setup mode)`);
+    });
+    server.on('error', (err) => {
+      console.error(`Wyvern server failed to start: ${err.message}`);
+      process.exit(1);
+    });
+    return;
+  }
+
+  const config = loadConfig(process.env);
+  ensureDatabaseParent(config.dbUrl);
 
   const db = await openDatabase(config.dbUrl);
   await migrate(db, path.join(__dirname, 'db', 'migrations'));
@@ -26,7 +76,7 @@ async function main() {
   const repositories = createRepositories(db);
   const sessionStore = createSessionStore(repositories);
   const oauth = createDiscordOAuth(config);
-  const discordStorage = createDiscordStorage(config, { chunkSizeBytes: config.chunkSizeBytes });
+  const discordStorage = createDiscordWebhookStorage(config, { chunkSizeBytes: config.chunkSizeBytes });
   const fileService = createFileService({ db, repositories, discordStorage, config });
 
   const app = createApp({ config, db, repositories, sessionStore, oauth, discordStorage, fileService });

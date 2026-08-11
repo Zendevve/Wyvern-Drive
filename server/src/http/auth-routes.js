@@ -6,7 +6,7 @@ const { avatarUrl } = require('../auth/discord-oauth');
 const { SESSION_TTL_MS } = require('../config');
 const { asyncHandler, csrfProtect, createRateLimiter, safeEqual } = require('./middleware');
 
-function createAuthRoutes({ config, repositories, sessionStore, oauth, discordStorage }) {
+function createAuthRoutes({ config, repositories, sessionStore, oauth }) {
   const router = express.Router();
   const callbackLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 10 });
 
@@ -55,21 +55,7 @@ function createAuthRoutes({ config, repositories, sessionStore, oauth, discordSt
         avatarUrl: avatarUrl(discordUser),
       });
 
-      let drive = await repositories.getDriveByOwner(user.id);
-      if (!drive) {
-        try {
-          const channelId = await discordStorage.ensureDriveChannel(discordUser);
-          drive = await repositories.insertDrive({
-            ownerId: user.id,
-            channelId,
-            quotaBytes: config.defaultQuotaBytes,
-          });
-        } catch (err) {
-          // User row remains; provisioning is retried on the next sign-in.
-          res.redirect(`${config.appOrigin}/login?error=storage_unavailable`);
-          return;
-        }
-      }
+      const drive = await repositories.getDriveByOwner(user.id);
 
       const token = crypto.randomBytes(32).toString('base64url');
       await sessionStore.create(token, user.id, SESSION_TTL_MS);
@@ -89,7 +75,10 @@ function createAuthRoutes({ config, repositories, sessionStore, oauth, discordSt
         maxAge: SESSION_TTL_MS,
         secure: config.isProduction,
       });
-      res.redirect(`${config.appOrigin}/drive`);
+      // Storage is per-user: a drive with a sealed webhook goes straight to
+      // the drive; a fresh (or bot-era) user lands on /connect first.
+      const destination = drive && drive.webhook_ciphertext ? '/drive' : '/connect';
+      res.redirect(`${config.appOrigin}${destination}`);
     })
   );
 
@@ -121,7 +110,7 @@ function createAuthRoutes({ config, repositories, sessionStore, oauth, discordSt
       }
       const drive = await repositories.getDriveByUser(user.id);
       let driveJson = null;
-      if (drive) {
+      if (drive && drive.webhook_ciphertext) {
         const usedBytes = await repositories.sumReadyBytes(drive.id);
         driveJson = { id: drive.id, quotaBytes: drive.quota_bytes, usedBytes };
       }

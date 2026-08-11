@@ -21,7 +21,6 @@ import {
   Typography,
   useMediaQuery,
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowRightArrowLeft,
@@ -39,6 +38,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import AppShell from '../components/AppShell';
 import Breadcrumbs from '../components/Breadcrumbs';
+import DropOverlay from '../components/DropOverlay';
 import EntryCards from '../components/EntryCards';
 import EntryGrid from '../components/EntryGrid';
 import EntryTable from '../components/EntryTable';
@@ -50,6 +50,7 @@ import QuotaMeter from '../components/QuotaMeter';
 import UploadQueue from '../components/UploadQueue';
 import { api, downloadUrl, uploadFile } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
+import DialogTransition from '../motion/DialogTransition';
 import { gradients } from '../theme';
 
 let nextJobId = 1;
@@ -87,6 +88,7 @@ export default function DrivePage() {
   });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [dragging, setDragging] = useState(false);
+  const [dropCount, setDropCount] = useState(0);
 
   useEffect(() => {
     try {
@@ -414,6 +416,7 @@ export default function DrivePage() {
       setDragging(false);
       if (event.dataTransfer && event.dataTransfer.files) {
         enqueueFiles(Array.from(event.dataTransfer.files));
+        setDropCount((c) => c + 1);
       }
     },
     [enqueueFiles]
@@ -698,26 +701,7 @@ export default function DrivePage() {
           <EntryCards entries={entries} actions={actions} />
         )}
 
-        {dragging && (
-          <Box
-            sx={(theme) => ({
-              position: 'absolute',
-              inset: 0,
-              border: `2px dashed ${theme.palette.accentBlue}`,
-              borderRadius: '15px',
-              bgcolor: alpha(theme.palette.accentBlue, 0.06),
-              zIndex: 1100,
-              pointerEvents: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            })}
-          >
-            <Typography fontWeight={600} sx={{ color: 'accentBlue' }}>
-              Drop files to upload to this folder
-            </Typography>
-          </Box>
-        )}
+        <DropOverlay active={dragging} dropCount={dropCount} />
       </Box>
 
       <UploadQueue jobs={uploads} onRetry={retryUpload} onRemove={removeUpload} />
@@ -753,7 +737,11 @@ export default function DrivePage() {
         entry={shareEntry}
         onClose={() => setShareEntry(null)}
       />
-      <Dialog open={deleteEntry !== null} onClose={() => setDeleteEntry(null)}>
+      <Dialog
+        open={deleteEntry !== null}
+        onClose={() => setDeleteEntry(null)}
+        TransitionComponent={DialogTransition}
+      >
         <DialogTitle>Delete {deleteEntry ? deleteEntry.name : ''}?</DialogTitle>
         <DialogContent>
           <DialogContentText>

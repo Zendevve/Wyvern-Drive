@@ -11,31 +11,34 @@ const REQUIRED_VARS = [
   'DISCORD_CLIENT_ID',
   'DISCORD_CLIENT_SECRET',
   'DISCORD_REDIRECT_URI',
-  'DISCORD_BOT_TOKEN',
-  'DISCORD_STORAGE_GUILD_ID',
-  'DISCORD_STORAGE_CATEGORY_ID',
   'WYVERN_ENCRYPTION_KEY',
 ];
 
 /**
- * Validate and load server configuration from an environment object.
- * Throws a descriptive Error listing every missing/invalid value.
- * Tests set every required variable explicitly; there is no blanket
- * "skip validation in test" path.
+ * Shared environment validation used by both loadConfig (strict) and
+ * diagnoseConfig (startup diagnostics).
+ *
+ * Returns parsed values plus:
+ *  - missing: required variable names with no value
+ *  - invalid: [{ key, message }] for non-secret validation problems
+ *  - fatalPortError: set when PORT is unusable; the process cannot choose a
+ *    listening port, so this is always fatal (never a setup diagnostic)
+ *
+ * The returned parsed values are deliberately minimal in diagnoseConfig so
+ * secret values (client secret, bot token, encryption key material) are never
+ * part of the diagnostics surface.
  */
-function loadConfig(env = process.env) {
-  const errors = [];
+function validateEnv(env = process.env) {
+  const invalid = [];
+  let fatalPortError = null;
 
   const missing = REQUIRED_VARS.filter((key) => !env[key]);
-  if (missing.length > 0) {
-    errors.push(`missing required environment variables: ${missing.join(', ')}`);
-  }
 
   let port = DEFAULT_PORT;
   if (env.PORT !== undefined && env.PORT !== '') {
     port = Number(env.PORT);
     if (!Number.isInteger(port) || port < 0 || port > 65535) {
-      errors.push('PORT must be an integer between 0 and 65535');
+      fatalPortError = 'PORT must be an integer between 0 and 65535';
     }
   }
 
@@ -48,7 +51,18 @@ function loadConfig(env = process.env) {
       }
       appOrigin = env.APP_ORIGIN.replace(/\/+$/, '');
     } catch {
-      errors.push('APP_ORIGIN must be a valid http(s) URL');
+      invalid.push({ key: 'APP_ORIGIN', message: 'must be a valid http(s) URL' });
+    }
+  }
+
+  if (env.DISCORD_REDIRECT_URI) {
+    try {
+      const parsed = new URL(env.DISCORD_REDIRECT_URI);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('not http(s)');
+      }
+    } catch {
+      invalid.push({ key: 'DISCORD_REDIRECT_URI', message: 'must be an absolute http(s) URL' });
     }
   }
 
@@ -61,7 +75,7 @@ function loadConfig(env = process.env) {
       buf = null;
     }
     if (!buf || buf.length !== 32) {
-      errors.push('WYVERN_ENCRYPTION_KEY must be a base64-encoded 32-byte key');
+      invalid.push({ key: 'WYVERN_ENCRYPTION_KEY', message: 'must be a base64-encoded 32-byte key' });
     } else {
       encryptionKey = buf;
     }
@@ -71,7 +85,7 @@ function loadConfig(env = process.env) {
   if (env.DEFAULT_QUOTA_BYTES !== undefined && env.DEFAULT_QUOTA_BYTES !== '') {
     const n = Number(env.DEFAULT_QUOTA_BYTES);
     if (!Number.isInteger(n) || n <= 0) {
-      errors.push('DEFAULT_QUOTA_BYTES must be a positive integer');
+      invalid.push({ key: 'DEFAULT_QUOTA_BYTES', message: 'must be a positive integer' });
     } else {
       defaultQuotaBytes = n;
     }
@@ -87,26 +101,19 @@ function loadConfig(env = process.env) {
   ) {
     const n = Number(env.WYVERN_CHUNK_SIZE_BYTES);
     if (!Number.isInteger(n) || n <= 0) {
-      errors.push('WYVERN_CHUNK_SIZE_BYTES must be a positive integer');
+      invalid.push({ key: 'WYVERN_CHUNK_SIZE_BYTES', message: 'must be a positive integer' });
     } else {
       chunkSizeBytes = n;
     }
   }
 
-  if (errors.length > 0) {
-    throw new Error(`configuration error: ${errors.join('; ')}`);
-  }
-
   return {
+    missing,
+    invalid,
+    fatalPortError,
     port,
     appOrigin,
-    dbUrl: env.DB_URL,
-    discordClientId: env.DISCORD_CLIENT_ID,
-    discordClientSecret: env.DISCORD_CLIENT_SECRET,
-    discordRedirectUri: env.DISCORD_REDIRECT_URI,
-    discordBotToken: env.DISCORD_BOT_TOKEN,
-    discordStorageGuildId: env.DISCORD_STORAGE_GUILD_ID,
-    discordStorageCategoryId: env.DISCORD_STORAGE_CATEGORY_ID,
+    dbUrl: env.DB_URL || null,
     encryptionKey,
     defaultQuotaBytes,
     chunkSizeBytes,
@@ -116,8 +123,75 @@ function loadConfig(env = process.env) {
   };
 }
 
+/**
+ * Validate and load server configuration from an environment object.
+ * Throws a descriptive Error listing every missing/invalid value.
+ * Tests set every required variable explicitly; there is no blanket
+ * "skip validation in test" path.
+ */
+function loadConfig(env = process.env) {
+  const v = validateEnv(env);
+  const errors = [];
+  if (v.missing.length > 0) {
+    errors.push(`missing required environment variables: ${v.missing.join(', ')}`);
+  }
+  for (const item of v.invalid) {
+    errors.push(`${item.key} ${item.message}`);
+  }
+  if (v.fatalPortError) {
+    errors.push(v.fatalPortError);
+  }
+  if (errors.length > 0) {
+    throw new Error(`configuration error: ${errors.join('; ')}`);
+  }
+
+  return {
+    port: v.port,
+    appOrigin: v.appOrigin,
+    dbUrl: env.DB_URL,
+    discordClientId: env.DISCORD_CLIENT_ID,
+    discordClientSecret: env.DISCORD_CLIENT_SECRET,
+    discordRedirectUri: env.DISCORD_REDIRECT_URI,
+    encryptionKey: v.encryptionKey,
+    defaultQuotaBytes: v.defaultQuotaBytes,
+    chunkSizeBytes: v.chunkSizeBytes,
+    nodeEnv: v.nodeEnv,
+    isProduction: v.isProduction,
+    isTest: v.isTest,
+  };
+}
+
+/**
+ * Startup diagnostics: non-fatal validation for the setup-mode path.
+ * Returns only missing variable names and non-secret invalid-variable
+ * messages — never secret values. An invalid PORT throws because the process
+ * cannot pick a listening port at all.
+ *
+ * The returned `config` is intentionally minimal (no credentials, no key
+ * material) so it can be handed to the read-only setup app safely.
+ */
+function diagnoseConfig(env = process.env) {
+  const v = validateEnv(env);
+  if (v.fatalPortError) {
+    throw new Error(`configuration error: ${v.fatalPortError}`);
+  }
+  return {
+    missing: v.missing,
+    invalid: v.invalid,
+    config: {
+      port: v.port,
+      appOrigin: v.appOrigin,
+      nodeEnv: v.nodeEnv,
+      isProduction: v.isProduction,
+      isTest: v.isTest,
+    },
+  };
+}
+
 module.exports = {
   loadConfig,
+  diagnoseConfig,
+  REQUIRED_VARS,
   DEFAULT_PORT,
   DEFAULT_QUOTA_BYTES,
   PRODUCTION_CHUNK_SIZE_BYTES,

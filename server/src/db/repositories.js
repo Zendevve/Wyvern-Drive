@@ -50,6 +50,8 @@ function createRepositories(db) {
     },
 
     // ---- drives ----
+    // Drive rows carry webhook credential columns (ciphertext/nonce/auth tag)
+    // for server-side services only; no route serializes them.
     getDriveByOwner(ownerId) {
       return get(db, 'SELECT * FROM drives WHERE owner_id = ?', [ownerId]);
     },
@@ -62,20 +64,30 @@ function createRepositories(db) {
       return get(db, 'SELECT * FROM drives WHERE id = ?', [driveId]);
     },
 
-    async insertDrive({ ownerId, channelId, quotaBytes }) {
+    async insertDrive({ ownerId, webhookCiphertext, webhookNonce, webhookAuthTag, quotaBytes }) {
       const now = nowIso();
       const res = await run(
         db,
-        'INSERT INTO drives (owner_id, discord_channel_id, quota_bytes, created_at) VALUES (?, ?, ?, ?)',
-        [ownerId, channelId, quotaBytes, now]
+        'INSERT INTO drives (owner_id, webhook_ciphertext, webhook_nonce, webhook_auth_tag, quota_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [ownerId, webhookCiphertext, webhookNonce, webhookAuthTag, quotaBytes, now]
       );
       return {
         id: res.lastID,
         owner_id: ownerId,
-        discord_channel_id: channelId,
+        webhook_ciphertext: webhookCiphertext,
+        webhook_nonce: webhookNonce,
+        webhook_auth_tag: webhookAuthTag,
         quota_bytes: quotaBytes,
         created_at: now,
       };
+    },
+
+    updateDriveWebhook(driveId, { webhookCiphertext, webhookNonce, webhookAuthTag }) {
+      return run(
+        db,
+        'UPDATE drives SET webhook_ciphertext = ?, webhook_nonce = ?, webhook_auth_tag = ? WHERE id = ?',
+        [webhookCiphertext, webhookNonce, webhookAuthTag, driveId]
+      );
     },
 
     // ---- entries ----

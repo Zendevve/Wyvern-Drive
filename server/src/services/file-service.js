@@ -102,7 +102,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
       for (const chunk of chunks) {
         let encrypted;
         try {
-          encrypted = await discordStorage.getChunk(drive.discord_channel_id, chunk.discord_message_id);
+          encrypted = await discordStorage.getChunk(drive, chunk.discord_message_id);
         } catch (err) {
           if (err && err.code === 'STORAGE_UNAVAILABLE') throw err;
           throw new WyvernError('STORAGE_UNAVAILABLE', 'Chunk fetch failed');
@@ -178,7 +178,6 @@ function createFileService({ db, repositories, discordStorage, config }) {
         throw new WyvernError('UPLOAD_FAILED', 'Failed to create upload record');
       }
 
-      const channelId = drive.discord_channel_id;
       let bytesRead = 0;
       let ordinal = 0;
       const sentMessageIds = [];
@@ -192,7 +191,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
             pending = pending.subarray(chunkSizeBytes);
             bytesRead += chunk.length;
             this.assertQuota(usedBytes, bytesRead, drive.quota_bytes);
-            const messageId = await this.putEncryptedChunk(entry.id, channelId, chunk, ordinal);
+            const messageId = await this.putEncryptedChunk(entry.id, drive, chunk, ordinal);
             sentMessageIds.push(messageId);
             ordinal += 1;
           }
@@ -200,7 +199,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
         if (pending.length > 0) {
           bytesRead += pending.length;
           this.assertQuota(usedBytes, bytesRead, drive.quotaBytes);
-          const messageId = await this.putEncryptedChunk(entry.id, channelId, pending, ordinal);
+          const messageId = await this.putEncryptedChunk(entry.id, drive, pending, ordinal);
           sentMessageIds.push(messageId);
           ordinal += 1;
         }
@@ -210,7 +209,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
       } catch (err) {
         try {
           for (const messageId of sentMessageIds) {
-            await discordStorage.deleteChunk(channelId, messageId);
+            await discordStorage.deleteChunk(drive, messageId);
           }
           await repositories.deleteEntryById(entry.id);
         } catch (cleanupErr) {
@@ -238,10 +237,10 @@ function createFileService({ db, repositories, discordStorage, config }) {
       return conflictSuffixName(name, n);
     },
 
-    async putEncryptedChunk(entryId, channelId, plain, ordinal) {
+    async putEncryptedChunk(entryId, drive, plain, ordinal) {
       const { cipher, nonce, authTag } = encryptChunk(plain, encryptionKey);
       const checksum = sha256hex(plain);
-      const messageId = await discordStorage.putChunk(channelId, `chunk-${ordinal}.bin`, cipher);
+      const messageId = await discordStorage.putChunk(drive, `chunk-${ordinal}.bin`, cipher);
       await repositories.insertChunk({
         entryId,
         ordinal,
@@ -314,7 +313,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
         for (const fileRow of fileRows) {
           const chunks = await repositories.getPendingChunks(fileRow.id);
           for (const chunk of chunks) {
-            await discordStorage.deleteChunk(drive.discord_channel_id, chunk.discord_message_id);
+            await discordStorage.deleteChunk(drive, chunk.discord_message_id);
             await repositories.markChunkDeleted(chunk.id);
           }
         }

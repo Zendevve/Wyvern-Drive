@@ -10,7 +10,16 @@ let client;
 before(async () => {
   ctx = await startTestServer();
   client = makeClient(ctx.baseUrl);
-  await login(client, ctx);
+  // Login without the webhook POST (which counts as a mutation): the drive is
+  // seeded directly so the limiter test has the full 60-mutation budget.
+  await login(client, ctx, { noWebhook: true });
+  await ctx.repositories.insertDrive({
+    ownerId: 1,
+    webhookCiphertext: Buffer.from('cipher'),
+    webhookNonce: Buffer.from('nonce'),
+    webhookAuthTag: Buffer.from('tag'),
+    quotaBytes: ctx.config.defaultQuotaBytes,
+  });
 });
 
 after(() => ctx.close());

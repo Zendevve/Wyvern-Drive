@@ -51,22 +51,40 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // Route guard: protected pages require a session; /login is for anonymous.
+  // Route guard:
+  //  - protected pages (/drive, /settings, /connect) require a session
+  //  - a signed-in user with no connected storage is sent to /connect
+  //  - a signed-in user with connected storage is sent to /drive
+  // The OAuth callback redirects fresh users to /connect, so this guard also
+  // runs on a fresh login and keeps them there until storage is configured.
   useEffect(() => {
     if (state.loading) {
       return;
     }
+    const path = location.pathname;
     const isProtected =
-      location.pathname === '/drive' ||
-      location.pathname === '/settings' ||
-      location.pathname.startsWith('/drive/') ||
-      location.pathname.startsWith('/settings/');
-    if (!state.user && isProtected) {
-      navigate('/login', { replace: true });
-    } else if (state.user && location.pathname === '/login') {
-      navigate('/drive', { replace: true });
+      path === '/drive' ||
+      path === '/settings' ||
+      path === '/connect' ||
+      path.startsWith('/drive/') ||
+      path.startsWith('/settings/');
+    if (!state.user) {
+      if (isProtected) {
+        navigate('/login', { replace: true });
+      }
+      return;
     }
-  }, [state.loading, state.user, location.pathname, navigate]);
+    const needsConnect = !state.drive;
+    if (path === '/login') {
+      navigate(needsConnect ? '/connect' : '/drive', { replace: true });
+    } else if (path === '/connect') {
+      if (!needsConnect) {
+        navigate('/drive', { replace: true });
+      }
+    } else if (needsConnect) {
+      navigate('/connect', { replace: true });
+    }
+  }, [state.loading, state.user, state.drive, location.pathname, navigate]);
 
   const value = {
     user: state.user,
