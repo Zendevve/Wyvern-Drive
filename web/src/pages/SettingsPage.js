@@ -52,8 +52,11 @@ export default function SettingsPage() {
 
   return (
     <AppShell title="Settings">
-      <Card variant="outlined" sx={{ maxWidth: 560 }}>
-        <CardContent>
+      <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
+        Settings
+      </Typography>
+      <Card variant="outlined" elevation={0} sx={{ maxWidth: 560, borderRadius: '20px' }}>
+        <CardContent sx={{ p: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
             <Avatar
               src={user.avatarUrl || undefined}
@@ -63,16 +66,15 @@ export default function SettingsPage() {
               {user.username ? user.username.charAt(0).toUpperCase() : '?'}
             </Avatar>
             <Box>
-              <Typography variant="h6">{user.username}</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                {user.username}
+              </Typography>
               <Typography variant="body2" color="textSecondary">
                 Discord ID: {user.discordId}
               </Typography>
             </Box>
           </Box>
-          <Divider sx={{ mb: 2 }} />
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Storage
-          </Typography>
+          <Divider sx={{ my: 2 }} />
           <QuotaMeter drive={drive} />
         </CardContent>
       </Card>

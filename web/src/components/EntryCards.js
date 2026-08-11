@@ -13,14 +13,13 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowRightArrowLeft,
   faDownload,
-  faFile,
-  faFolder,
   faPen,
   faShareNodes,
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
 import { downloadUrl } from '../api/client';
 import { formatBytes } from './QuotaMeter';
+import { entryIcon, fileTypeLabel } from './entryIcons';
 
 function formatDate(value) {
   return new Date(value).toLocaleString();
@@ -29,18 +28,23 @@ function formatDate(value) {
 /**
  * Stacked accessible cards used below 768px. Receives the exact same
  * row/action model as EntryTable so mobile and desktop behave identically.
+ * Action buttons stay always visible here — touch has no hover state.
  */
 export default function EntryCards({ entries, actions }) {
   return (
     <List data-testid="entry-cards" aria-label="Files and folders" disablePadding>
       {entries.map((entry) => {
         const isFolder = entry.kind === 'folder';
+        const { icon, color } = entryIcon(entry);
         const meta = isFolder
-          ? 'Folder'
+          ? fileTypeLabel(entry)
           : `${formatBytes(entry.sizeBytes)} · ${formatDate(entry.updatedAt)}`;
         return (
           <ListItem key={entry.id} disableGutters disablePadding sx={{ mb: 1 }}>
-            <Card variant="outlined" sx={{ width: '100%' }}>
+            <Card
+              variant="outlined"
+              sx={{ width: '100%', borderRadius: '15px', bgcolor: 'surface1' }}
+            >
               <CardContent
                 sx={{
                   display: 'flex',
@@ -50,13 +54,19 @@ export default function EntryCards({ entries, actions }) {
                   '&:last-child': { pb: 1.5 },
                 }}
               >
-                <FontAwesomeIcon icon={isFolder ? faFolder : faFile} aria-hidden="true" />
+                <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" />
                 <Box sx={{ minWidth: 0, flexGrow: 1 }}>
                   {isFolder ? (
                     <Button
                       size="small"
                       onClick={() => actions.onOpenFolder(entry)}
-                      sx={{ textTransform: 'none', fontWeight: 500, p: 0, minWidth: 0 }}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        color: 'ink',
+                        p: 0,
+                        minWidth: 0,
+                      }}
                     >
                       {entry.name}
                     </Button>
@@ -73,7 +83,6 @@ export default function EntryCards({ entries, actions }) {
                   <IconButton
                     component="a"
                     href={downloadUrl(entry.id)}
-                    size="small"
                     aria-label={`Download ${entry.name}`}
                     title="Download"
                   >
@@ -82,7 +91,6 @@ export default function EntryCards({ entries, actions }) {
                 )}
                 {!isFolder && (
                   <IconButton
-                    size="small"
                     aria-label={`Share ${entry.name}`}
                     title="Share"
                     onClick={() => actions.onShare(entry)}
@@ -91,7 +99,6 @@ export default function EntryCards({ entries, actions }) {
                   </IconButton>
                 )}
                 <IconButton
-                  size="small"
                   aria-label={`Rename ${entry.name}`}
                   title="Rename"
                   onClick={() => actions.onRename(entry)}
@@ -99,7 +106,6 @@ export default function EntryCards({ entries, actions }) {
                   <FontAwesomeIcon icon={faPen} />
                 </IconButton>
                 <IconButton
-                  size="small"
                   aria-label={`Move ${entry.name}`}
                   title="Move"
                   onClick={() => actions.onMove(entry)}
@@ -107,10 +113,17 @@ export default function EntryCards({ entries, actions }) {
                   <FontAwesomeIcon icon={faArrowRightArrowLeft} />
                 </IconButton>
                 <IconButton
-                  size="small"
                   aria-label={`Delete ${entry.name}`}
                   title="Delete"
+                  color="error"
                   onClick={() => actions.onDelete(entry)}
+                  sx={{
+                    color: 'error.main',
+                    '&:hover': {
+                      color: '#FF7575',
+                      backgroundColor: 'rgba(255,92,92,0.08)',
+                    },
+                  }}
                 >
                   <FontAwesomeIcon icon={faTrash} />
                 </IconButton>

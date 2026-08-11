@@ -1,18 +1,13 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { createTheme, ThemeProvider } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import theme from './theme';
 import { AuthProvider } from './auth/AuthProvider';
 import LoginPage from './pages/LoginPage';
 import DrivePage from './pages/DrivePage';
 import SharePage from './pages/SharePage';
 import SettingsPage from './pages/SettingsPage';
-
-const theme = createTheme({
-  palette: {
-    primary: { main: '#5865F2' },
-  },
-});
 
 export default function App() {
   return (

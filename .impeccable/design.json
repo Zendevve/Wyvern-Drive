@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-11T00:00:00.000Z",
+  "title": "Design System: Wyvern Drive",
+  "extensions": {
+    "colorMeta": {
+      "canvas": { "role": "neutral", "displayName": "Canvas", "canonical": "#0E0E10", "tonalRamp": ["#0A0A0C", "#0E0E10", "#141417"] },
+      "surface-1": { "role": "neutral", "displayName": "Surface One", "canonical": "#1A1A1D", "tonalRamp": ["#161619", "#1A1A1D", "#202024"] },
+      "surface-2": { "role": "neutral", "displayName": "Surface Two", "canonical": "#242428", "tonalRamp": ["#202024", "#242428", "#2A2A2F"] },
+      "ink": { "role": "primary", "displayName": "Ink", "canonical": "#FFFFFF" },
+      "ink-muted": { "role": "neutral", "displayName": "Ink Muted", "canonical": "#999999" },
+      "accent-blue": { "role": "secondary", "displayName": "Accent Blue", "canonical": "#0099FF", "tonalRamp": ["rgba(0,153,255,0.15)", "#0099FF", "#33ADFF"] },
+      "success": { "role": "tertiary", "displayName": "Success", "canonical": "#3AC36F" },
+      "danger": { "role": "tertiary", "displayName": "Danger", "canonical": "#FF5C5C" },
+      "warning": { "role": "tertiary", "displayName": "Warning", "canonical": "#F5A524" },
+      "violet-base": { "role": "tertiary", "displayName": "Violet Base", "canonical": "#7C3AED" },
+      "magenta-base": { "role": "tertiary", "displayName": "Magenta Base", "canonical": "#DB2777" },
+      "orange-base": { "role": "tertiary", "displayName": "Orange Base", "canonical": "#F97316" },
+      "coral-base": { "role": "tertiary", "displayName": "Coral Base", "canonical": "#FB7185" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page titles, shared-file names, empty-state heading." },
+      "display-hero": { "displayName": "Display Hero", "purpose": "Login poster headline only." },
+      "headline": { "displayName": "Headline", "purpose": "Dialog titles." },
+      "body": { "displayName": "Body", "purpose": "Default body, file names, descriptions. OpenType variants cv01/cv05/cv09/cv11/ss03/ss07/dlig are the brand voice." },
+      "body-sm": { "displayName": "Body Sm", "purpose": "Dense data, table meta, dialog descriptions." },
+      "label": { "displayName": "Label", "purpose": "Table headers, quota readouts, footer, eyebrows." }
+    },
+    "shadows": [
+      { "name": "light-edge", "value": "inset 0 1px 0 rgba(255,255,255,0.10), 0 10px 30px rgba(0,0,0,0.25)", "purpose": "Floating cards, upload queue, menus, hovered grid cards." },
+      { "name": "light-edge-strong", "value": "inset 0 1px 0 rgba(255,255,255,0.12), 0 16px 40px rgba(0,0,0,0.35)", "purpose": "Selection bar, dialogs, elevated panels." },
+      { "name": "focus-ring", "value": "0 0 0 1px rgba(0,153,255,0.15)", "purpose": "Focused inputs — same surface, blue ring, no surface change." }
+    ],
+    "motion": [
+      { "name": "state-ease", "value": "150ms ease", "purpose": "Default easing for state transitions (hover, focus)." },
+      { "name": "pressed", "value": "transform 120ms ease, scale(0.97)", "purpose": "Pressed button state — shrink, never darken." },
+      { "name": "row-reveal", "value": "opacity 120ms ease", "purpose": "Hover-revealed row actions in the entry table." }
+    ],
+    "breakpoints": [
+      { "name": "rail-collapse", "value": "768px", "purpose": "Side rail becomes app bar + drawer; table becomes cards." },
+      { "name": "grid-collapse", "value": "810px", "purpose": "Entry grid collapses to one column." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The only primary CTA — white pill on canvas.",
+      "html": "<button class=\"ds-btn-primary\">Upload</button>",
+      "css": ".ds-btn-primary { background: #FFFFFF; color: #0E0E10; padding: 10px 15px; border-radius: 100px; border: none; font: 500 14px/1 'Inter Variable'; letter-spacing: -0.14px; transition: transform 120ms ease, background-color 150ms ease; } .ds-btn-primary:hover { background: rgba(255,255,255,0.88); } .ds-btn-primary:active { transform: scale(0.97); } .ds-btn-primary:disabled { background: rgba(255,255,255,0.25); color: rgba(255,255,255,0.4); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Charcoal pill for secondary actions.",
+      "html": "<button class=\"ds-btn-secondary\">New folder</button>",
+      "css": ".ds-btn-secondary { background: #1A1A1D; color: #FFFFFF; padding: 10px 15px; border-radius: 100px; border: 1px solid rgba(255,255,255,0.08); font: 500 14px/1 'Inter Variable'; letter-spacing: -0.14px; transition: background-color 150ms ease, border-color 150ms ease; } .ds-btn-secondary:hover { background: #242428; border-color: rgba(255,255,255,0.14); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "text-input",
+      "description": "Form fields — surface-1 fill, hairline border, blue focus ring.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search files and folders\" />",
+      "css": ".ds-input { background: #1A1A1D; color: #FFFFFF; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; font: 400 15px/1.3 'Inter Variable'; letter-spacing: -0.15px; transition: border-color 150ms ease, box-shadow 150ms ease; } .ds-input::placeholder { color: #999999; } .ds-input:focus { outline: none; box-shadow: 0 0 0 1px rgba(0,153,255,0.15); border-color: transparent; }"
+    },
+    {
+      "name": "Spotlight Card",
+      "kind": "card",
+      "refersTo": "spotlight-card",
+      "description": "The single gradient atmosphere card — the drive empty state.",
+      "html": "<div class=\"ds-spotlight\"><h2>This folder is empty</h2><p>Drag and drop files here, or use the buttons above.</p><button>Upload your first file</button></div>",
+      "css": ".ds-spotlight { background: linear-gradient(140deg, #5B21B6 0%, #7C3AED 48%, #A78BFA 100%); border-radius: 30px; padding: 40px; text-align: center; max-width: 560px; margin: 0 auto; color: #FFFFFF; } .ds-spotlight h2 { font: 500 32px/1.13 'Mona Sans Variable'; letter-spacing: -1.0px; color: #FFFFFF; margin: 15px 0 5px; } .ds-spotlight p { color: rgba(255,255,255,0.85); font: 400 13px/1.2 'Inter Variable'; } .ds-spotlight button { background: rgba(255,255,255,0.14); color: #FFFFFF; border: 1px solid rgba(255,255,255,0.35); border-radius: 100px; padding: 10px 15px; font: 500 14px/1 'Inter Variable'; } .ds-spotlight button:hover { background: rgba(255,255,255,0.22); }"
+    },
+    {
+      "name": "Entry Table Row",
+      "kind": "custom",
+      "description": "Canvas row, surface-1 hover, surface-2 selected; hover reveals circular action icons.",
+      "html": "<tr class=\"ds-row\"><td>notes.txt</td><td>1.2 KiB</td></tr>",
+      "css": ".ds-row { cursor: pointer; } .ds-row td { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06); color: #FFFFFF; font: 400 15px/1.3 'Inter Variable'; letter-spacing: -0.15px; } .ds-row:hover { background: #1A1A1D; } .ds-row.selected { background: #242428; }"
+    },
+    {
+      "name": "Dialog",
+      "kind": "custom",
+      "refersTo": "dialog",
+      "description": "Surface-2 modal with light-edge-strong elevation, 20px radius.",
+      "html": "<div class=\"ds-dialog\"><h3>New folder</h3><p>Folders can contain files and other folders.</p></div>",
+      "css": ".ds-dialog { background: #242428; border-radius: 20px; padding: 24px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 24px 64px rgba(0,0,0,0.5); color: #FFFFFF; } .ds-dialog h3 { font: 700 22px/1.2 'Inter Variable'; letter-spacing: -0.8px; margin: 0 0 16px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Dark Canvas",
+    "overview": "Wyvern Drive wears the Framer dark-canvas marketing world the way Framer wears it: a near-black canvas with a faint warmth, oversized white display type with hard negative tracking, and one chromatic accent (blue) that is a signal, never a fill. The app is a poster at the edges (login, share links) and a quiet instrument in the middle (the drive itself): scanability, density, and the familiar cloud-drive idioms outrank expression once the user is inside. Hierarchy is carried by surface lift — canvas to surface-1 to surface-2 — never by color ramps or opacity tricks on white type. The text scale is binary: ink or ink-muted. The only chromatic depth in the whole system is the scarce gradient spotlight card (the drive's empty state).",
+    "keyCharacteristics": [
+      "Near-black canvas everywhere; no light mode",
+      "Massive negative letter-spacing on display sizes (Mona Sans 500)",
+      "White pill is the only primary CTA",
+      "One gradient spotlight card — the drive empty state",
+      "Inter Variable body with OpenType variants cv01/cv05/cv09/cv11/ss03/ss07/dlig",
+      "5px spacing base; pill/20px/30px radius scale",
+      "Cloud-drive side rail; monochrome file-type glyphs",
+      "Light-edge elevation: white top edge over a deep drop shadow"
+    ],
+    "rules": [
+      { "name": "The One Blue Rule", "body": "Accent blue is reserved for links, focus, and selection. If you reach for a second blue — or a blue button fill — the brand is drifting.", "section": "colors" },
+      { "name": "The Binary Ink Rule", "body": "Secondary type is ink-muted (#999999) or it is ink. No mid-tone grays, no opacity gradients on white type.", "section": "colors" },
+      { "name": "The Lift Rule", "body": "Hierarchy on dark is marked by surface lift (canvas to surface-1 to surface-2), never by color or brightness of type.", "section": "colors" },
+      { "name": "The Tracking Rule", "body": "Letter-spacing scales with size, hard: display pulls ~5% negative, body sticks to ~1%. Reduce size before reducing the percentage.", "section": "typography" },
+      { "name": "The Variant Rule", "body": "The Inter OpenType variants (cv01 cv05 cv09 cv11 ss03 ss07 dlig) are the body voice. Switching them off visibly changes the brand.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat until they float (hover, selection, dialog). Shadows mark floating, never resting.", "section": "elevation" }
+    ],
+    "dos": [
+      "Keep canvas and ink as the system's two anchor surfaces; every band chooses one or the other.",
+      "Push display tracking hard negative and keep the Inter OpenType variants on.",
+      "Use blue only for links, focus, selection — and the drop-target ring.",
+      "Mark hierarchy with surface lift; selected = one step up, never a tint.",
+      "Compose every CTA as a pill and every icon action as a circle.",
+      "Keep the gradient scarce — one spotlight card, ever."
+    ],
+    "donts": [
+      "Ship a light surface anywhere. The brand is dark.",
+      "Introduce mid-tone grays outside ink-muted.",
+      "Make the blue a brand fill — no blue pills, no blue logo tiles.",
+      "Square off CTAs or use bordered ghost buttons with transparent fills.",
+      "Reduce display negative tracking for accessibility — reduce size, keep the percentage.",
+      "Apply gradients to whole sections; gradients are cards.",
+      "Color-code file types; the glyph carries the type, folders are ink and files are ink-muted."
+    ]
+  }
+}

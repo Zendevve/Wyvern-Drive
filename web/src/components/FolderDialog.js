@@ -5,9 +5,9 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
   TextField,
+  Typography,
 } from '@mui/material';
 
 /**
@@ -58,7 +58,9 @@ export default function FolderDialog({
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
-        <DialogContentText sx={{ mb: 2 }}>{description}</DialogContentText>
+        <Typography variant="body2" color="inkMuted" sx={{ mb: 2 }}>
+          {description}
+        </Typography>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
@@ -66,6 +68,7 @@ export default function FolderDialog({
         )}
         <TextField
           autoFocus
+          size="small"
           fullWidth
           label={label}
           value={name}

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Alert, Box, Button, CircularProgress, Paper, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faRightToBracket } from '@fortawesome/free-solid-svg-icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -42,12 +42,25 @@ export default function LoginPage() {
         p: 2,
       }}
     >
-      <Paper variant="outlined" sx={{ p: 4, maxWidth: 420, width: '100%', textAlign: 'center' }}>
-        <Typography variant="h4" component="h1" gutterBottom>
+      <Box sx={{ width: '100%', maxWidth: 520, textAlign: 'center' }}>
+        <Typography
+          component="div"
+          sx={{
+            fontFamily: "'Mona Sans Variable', sans-serif",
+            fontWeight: 500,
+            fontSize: 15,
+            letterSpacing: '-0.5px',
+            color: 'ink',
+            mb: 2,
+          }}
+        >
           Wyvern Drive
         </Typography>
-        <Typography color="textSecondary" sx={{ mb: 3 }}>
-          Your files, encrypted, stored on Discord.
+        <Typography variant="h1" component="h1" sx={{ mb: 2 }}>
+          Your files, encrypted.
+        </Typography>
+        <Typography variant="h4" sx={{ color: 'inkMuted', mb: 4 }}>
+          Stored on Discord, under your control.
         </Typography>
         {error === 'storage_unavailable' && (
           <Alert severity="warning" sx={{ mb: 2 }} data-testid="storage-unavailable">
@@ -67,7 +80,10 @@ export default function LoginPage() {
         >
           Sign in with Discord
         </Button>
-      </Paper>
+        <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: 'inkMuted' }}>
+          Self-hosted · AES-256-GCM · Discord-backed
+        </Typography>
+      </Box>
     </Box>
   );
 }

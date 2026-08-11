@@ -1,13 +1,40 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Button, CircularProgress, Paper, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Typography } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faDownload, faFileCircleXmark } from '@fortawesome/free-solid-svg-icons';
+import {
+  faDownload,
+  faFile,
+  faFileAudio,
+  faFileCircleXmark,
+  faFileImage,
+  faFilePdf,
+  faFileVideo,
+} from '@fortawesome/free-solid-svg-icons';
 import { useParams } from 'react-router-dom';
 import { api, shareDownloadUrl } from '../api/client';
 import { formatBytes } from '../components/QuotaMeter';
 
 function formatDate(value) {
   return new Date(value).toLocaleString();
+}
+
+function mimeIcon(mimeType) {
+  if (!mimeType) {
+    return faFile;
+  }
+  if (mimeType.startsWith('image/')) {
+    return faFileImage;
+  }
+  if (mimeType.startsWith('video/')) {
+    return faFileVideo;
+  }
+  if (mimeType.startsWith('audio/')) {
+    return faFileAudio;
+  }
+  if (mimeType === 'application/pdf') {
+    return faFilePdf;
+  }
+  return faFile;
 }
 
 /**
@@ -52,7 +79,7 @@ export default function SharePage() {
           justifyContent: 'center',
         }}
       >
-        <CircularProgress aria-label="Loading share" />
+        <CircularProgress aria-label="Loading" />
       </Box>
     );
   }
@@ -67,20 +94,19 @@ export default function SharePage() {
           justifyContent: 'center',
           p: 2,
         }}
+        data-testid="share-not-found"
       >
-        <Paper
-          variant="outlined"
-          sx={{ p: 4, maxWidth: 420, width: '100%', textAlign: 'center' }}
-          data-testid="share-not-found"
-        >
-          <FontAwesomeIcon icon={faFileCircleXmark} size="3x" aria-hidden="true" />
-          <Typography variant="h6" sx={{ mt: 2 }}>
+        <Box sx={{ width: '100%', maxWidth: 520, textAlign: 'center' }}>
+          <Box sx={{ color: 'inkMuted', fontSize: 48, lineHeight: 1 }}>
+            <FontAwesomeIcon icon={faFileCircleXmark} aria-hidden="true" />
+          </Box>
+          <Typography variant="h3" component="h1" sx={{ mt: 3, color: 'ink' }}>
             This share is not available
           </Typography>
-          <Typography color="textSecondary">
-            The link may have been revoked or expired, or it may never have existed.
+          <Typography sx={{ mt: 1, color: 'inkMuted' }}>
+            It may have been revoked or expired.
           </Typography>
-        </Paper>
+        </Box>
       </Box>
     );
   }
@@ -94,29 +120,52 @@ export default function SharePage() {
         justifyContent: 'center',
         p: 2,
       }}
+      data-testid="share-meta"
     >
-      <Paper variant="outlined" sx={{ p: 4, maxWidth: 420, width: '100%' }} data-testid="share-meta">
-        <Typography variant="h5" component="h1" noWrap>
+      <Box sx={{ width: '100%', maxWidth: 520, textAlign: 'center' }}>
+        <Typography
+          component="p"
+          sx={{
+            fontFamily: "'Mona Sans Variable', 'Inter Variable', sans-serif",
+            fontWeight: 500,
+            fontSize: 15,
+            letterSpacing: '-0.5px',
+            color: 'ink',
+            mb: 5,
+          }}
+        >
+          Wyvern Drive
+        </Typography>
+        <Box sx={{ color: 'inkMuted', fontSize: 48, lineHeight: 1 }}>
+          <FontAwesomeIcon icon={mimeIcon(share.mimeType)} aria-hidden="true" />
+        </Box>
+        <Typography variant="h2" component="h1" noWrap sx={{ mt: 2, color: 'ink' }}>
           {share.name}
         </Typography>
-        <Typography color="textSecondary" sx={{ mt: 1 }}>
+        <Typography sx={{ mt: 0.5, color: 'inkMuted' }}>
           {formatBytes(share.sizeBytes)}
         </Typography>
-        <Typography color="textSecondary">{share.mimeType || 'Unknown type'}</Typography>
+        <Typography sx={{ mt: 0.5, color: 'inkMuted' }}>
+          {share.mimeType || 'Unknown type'}
+        </Typography>
         {share.expiresAt && (
-          <Typography color="textSecondary">Expires {formatDate(share.expiresAt)}</Typography>
+          <Typography sx={{ mt: 0.5, color: 'inkMuted' }}>
+            Expires {formatDate(share.expiresAt)}
+          </Typography>
         )}
         <Button
           component="a"
           href={shareDownloadUrl(token)}
           download
           variant="contained"
+          size="large"
+          fullWidth
           startIcon={<FontAwesomeIcon icon={faDownload} />}
           sx={{ mt: 3 }}
         >
           Download
         </Button>
-      </Paper>
+      </Box>
     </Box>
   );
 }

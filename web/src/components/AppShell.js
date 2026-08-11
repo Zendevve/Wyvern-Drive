@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
   AppBar,
+  Avatar,
   Box,
-  Divider,
   Drawer,
   IconButton,
   List,
@@ -17,23 +17,23 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faBars,
+  faFolder,
   faFolderOpen,
   faGear,
   faRightFromBracket,
 } from '@fortawesome/free-solid-svg-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
-import QuotaMeter from './QuotaMeter';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
 
 const DRAWER_WIDTH = 240;
 
 /**
- * Responsive shell: fixed sidebar with navigation, logout, and quota on
- * desktop; a temporary drawer below 768px.
+ * Responsive shell: fixed sidebar with navigation and logout on desktop;
+ * a temporary drawer below 768px.
  */
 export default function AppShell({ title, children }) {
-  const { user, drive, refresh } = useAuth();
+  const { user, refresh } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -61,45 +61,146 @@ export default function AppShell({ title, children }) {
 
   const navContent = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <List>
-        {navItems.map((item) => (
-          <ListItem key={item.to} disablePadding>
-            <ListItemButton
-              selected={location.pathname.startsWith(item.to)}
-              onClick={() => go(item.to)}
-              aria-current={location.pathname.startsWith(item.to) ? 'page' : undefined}
-            >
-              <ListItemIcon>
-                <FontAwesomeIcon icon={item.icon} />
-              </ListItemIcon>
-              <ListItemText primary={item.label} />
-            </ListItemButton>
-          </ListItem>
-        ))}
+      <Box
+        sx={{
+          px: 2,
+          height: 64,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+        }}
+      >
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'surface2',
+            borderRadius: '50%',
+          }}
+        >
+          <FontAwesomeIcon icon={faFolder} color="#fff" size="lg" />
+        </Box>
+        <Typography
+          variant="h6"
+          noWrap
+          sx={{
+            fontFamily: "'Mona Sans Variable', sans-serif",
+            fontWeight: 500,
+            letterSpacing: '-0.5px',
+            color: 'ink',
+          }}
+        >
+          Wyvern Drive
+        </Typography>
+      </Box>
+      <List sx={{ px: 1 }}>
+        {navItems.map((item) => {
+          const selected = location.pathname.startsWith(item.to);
+          return (
+            <ListItem key={item.to} disablePadding>
+              <ListItemButton
+                selected={selected}
+                onClick={() => go(item.to)}
+                aria-current={selected ? 'page' : undefined}
+                sx={{
+                  gap: 1,
+                  color: 'inkMuted',
+                  '&:hover': { bgcolor: 'surface1' },
+                  '& .MuiListItemIcon-root': { color: 'inkMuted' },
+                  '&:hover .MuiListItemIcon-root': { color: 'ink' },
+                  ...(selected && {
+                    color: 'ink',
+                    fontWeight: 600,
+                    '& .MuiListItemIcon-root': { color: 'ink' },
+                    '&:hover': { bgcolor: 'surface2' },
+                  }),
+                }}
+              >
+                <ListItemIcon>
+                  <FontAwesomeIcon icon={item.icon} />
+                </ListItemIcon>
+                <ListItemText primary={item.label} />
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
       </List>
       <Box sx={{ flexGrow: 1 }} />
-      <Divider />
-      <List>
-        <ListItem disablePadding>
-          <ListItemButton onClick={handleLogout} data-testid="sidebar-logout">
-            <ListItemIcon>
-              <FontAwesomeIcon icon={faRightFromBracket} />
-            </ListItemIcon>
-            <ListItemText primary="Log out" />
-          </ListItemButton>
-        </ListItem>
-      </List>
-      <Box sx={{ p: 2 }}>
-        <QuotaMeter drive={drive} />
+      <Box
+        sx={{
+          borderTop: 1,
+          borderColor: 'hairline',
+          p: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1.5,
+        }}
+      >
+        {user && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Avatar
+              src={user.avatarUrl || undefined}
+              sx={{ width: 24, height: 24, fontSize: 12 }}
+            >
+              {user.username ? user.username.charAt(0).toUpperCase() : ''}
+            </Avatar>
+            <Typography variant="body2" noWrap sx={{ flexGrow: 1, color: 'inkMuted' }}>
+              {user.username}
+            </Typography>
+          </Box>
+        )}
+        <List disablePadding sx={{ px: 1 }}>
+          <ListItem disablePadding>
+            <ListItemButton
+              onClick={handleLogout}
+              data-testid="sidebar-logout"
+              sx={{
+                '&:hover': { bgcolor: 'surface1' },
+                '& .MuiListItemIcon-root': { color: 'inkMuted' },
+                '&:hover .MuiListItemIcon-root': { color: 'ink' },
+              }}
+            >
+              <ListItemIcon>
+                <FontAwesomeIcon icon={faRightFromBracket} />
+              </ListItemIcon>
+              <ListItemText primary="Log out" />
+            </ListItemButton>
+          </ListItem>
+        </List>
       </Box>
     </Box>
   );
 
   return (
     <Box sx={{ minHeight: '100vh' }}>
-      <AppBar position="fixed" sx={{ zIndex: 1300 }}>
-        <Toolbar>
-          {!isDesktop && (
+      {isDesktop ? (
+        <Box
+          component="nav"
+          aria-label="Navigation"
+          sx={{
+            position: 'fixed',
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: DRAWER_WIDTH,
+            zIndex: 1200,
+            bgcolor: 'canvas',
+            borderRight: 1,
+            borderColor: 'hairline',
+          }}
+        >
+          {navContent}
+        </Box>
+      ) : (
+        <AppBar
+          position="fixed"
+          elevation={0}
+          sx={{ bgcolor: 'canvas', color: 'inherit' }}
+        >
+          <Toolbar>
             <IconButton
               edge="start"
               color="inherit"
@@ -109,39 +210,23 @@ export default function AppShell({ title, children }) {
             >
               <FontAwesomeIcon icon={faBars} />
             </IconButton>
-          )}
-          <Typography variant="h6" component="h1" noWrap>
-            {title}
-          </Typography>
-          {user && (
             <Typography
-              variant="body2"
-              sx={{ ml: 'auto', display: { xs: 'none', sm: 'block' } }}
+              variant="h6"
+              component="h1"
+              noWrap
+              sx={{
+                fontFamily: "'Mona Sans Variable', sans-serif",
+                fontWeight: 500,
+                letterSpacing: '-0.5px',
+                color: 'ink',
+              }}
             >
-              {user.username}
+              Wyvern Drive
             </Typography>
-          )}
-        </Toolbar>
-      </AppBar>
-      {isDesktop ? (
-        <Box
-          component="nav"
-          aria-label="Navigation"
-          sx={{
-            position: 'fixed',
-            top: 64,
-            bottom: 0,
-            left: 0,
-            width: DRAWER_WIDTH,
-            zIndex: 1200,
-            bgcolor: 'background.paper',
-            borderRight: 1,
-            borderColor: 'divider',
-          }}
-        >
-          {navContent}
-        </Box>
-      ) : (
+          </Toolbar>
+        </AppBar>
+      )}
+      {!isDesktop && (
         <Drawer
           variant="temporary"
           open={mobileOpen}
@@ -154,9 +239,9 @@ export default function AppShell({ title, children }) {
       <Box
         component="main"
         sx={{
-          ml: isDesktop ? `${DRAWER_WIDTH}px` : 0,
+          ml: isDesktop ? '240px' : 0,
           p: { xs: 2, md: 3 },
-          pt: 10,
+          pt: isDesktop ? 3 : 10,
         }}
       >
         {children}

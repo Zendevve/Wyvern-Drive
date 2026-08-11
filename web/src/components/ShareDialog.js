@@ -110,11 +110,24 @@ export default function ShareDialog({ open, entry, onClose }) {
         )}
         {createdShare && (
           <Alert severity="success" sx={{ mb: 2 }} data-testid="share-created">
-            <Typography variant="body2" component="p" sx={{ wordBreak: 'break-all' }}>
-              {createdShare.url}
-            </Typography>
-            <Button size="small" onClick={() => handleCopy(createdShare.url)} data-testid="copy-share-url">
-              <FontAwesomeIcon icon={faCopy} /> {copied ? 'Copied' : 'Copy link'}
+            <Box sx={{ bgcolor: 'surface1', borderRadius: '10px', px: 2, py: 1.5, mb: 1 }}>
+              <Typography
+                variant="body2"
+                color="inkMuted"
+                component="p"
+                sx={{ fontFamily: "'Consolas', monospace", wordBreak: 'break-all' }}
+              >
+                {createdShare.url}
+              </Typography>
+            </Box>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<FontAwesomeIcon icon={faCopy} />}
+              onClick={() => handleCopy(createdShare.url)}
+              data-testid="copy-share-url"
+            >
+              {copied ? 'Copied' : 'Copy link'}
             </Button>
           </Alert>
         )}
@@ -159,11 +172,13 @@ export default function ShareDialog({ open, entry, onClose }) {
                     </Typography>
                   }
                   secondary={
-                    share.revokedAt
-                      ? 'Revoked'
-                      : share.expiresAt
-                        ? `Expires ${formatDate(share.expiresAt)}`
-                        : 'Never expires'
+                    <Typography variant="caption" color="inkMuted">
+                      {share.revokedAt
+                        ? 'Revoked'
+                        : share.expiresAt
+                          ? `Expires ${formatDate(share.expiresAt)}`
+                          : 'Never expires'}
+                    </Typography>
                   }
                 />
                 {!share.revokedAt && (

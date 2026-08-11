@@ -163,7 +163,12 @@ export default function MoveDialog({ open, entry, currentParentId, onClose, onMo
           onClick={() => {
             if (!isForbidden) setTargetId(node.id);
           }}
-          sx={{ pl: 2 + depth * 3, borderRadius: 1 }}
+          sx={{
+            pl: 2 + depth * 3,
+            borderRadius: '10px',
+            opacity: isForbidden ? 0.4 : undefined,
+            '&:hover:not(.Mui-selected)': { bgcolor: 'surface1' },
+          }}
         >
           <IconButton
             size="small"
@@ -181,11 +186,11 @@ export default function MoveDialog({ open, entry, currentParentId, onClose, onMo
             <FontAwesomeIcon icon={isExpanded ? faChevronDown : faChevronRight} />
           </IconButton>
           <ListItemIcon sx={{ minWidth: 32 }}>
-            <FontAwesomeIcon icon={faFolder} />
+            <FontAwesomeIcon icon={faFolder} color="#FFFFFF" />
           </ListItemIcon>
           <ListItemText primary={node.name} />
           {isForbidden && (
-            <Typography variant="caption" color="textSecondary">
+            <Typography variant="caption" color="inkMuted">
               Cannot move here
             </Typography>
           )}

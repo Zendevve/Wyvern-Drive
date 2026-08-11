@@ -14,34 +14,48 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  IconButton,
   Paper,
   Skeleton,
   TextField,
   Typography,
   useMediaQuery,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
+  faArrowRightArrowLeft,
+  faDownload,
+  faFolderOpen,
   faFolderPlus,
   faMagnifyingGlass,
+  faPen,
+  faShareNodes,
+  faTableCellsLarge,
+  faTableList,
+  faTrash,
   faUpload,
+  faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import AppShell from '../components/AppShell';
 import Breadcrumbs from '../components/Breadcrumbs';
 import EntryCards from '../components/EntryCards';
+import EntryGrid from '../components/EntryGrid';
 import EntryTable from '../components/EntryTable';
 import ErrorNotice from '../components/ErrorNotice';
 import FolderDialog from '../components/FolderDialog';
 import MoveDialog from '../components/MoveDialog';
 import ShareDialog from '../components/ShareDialog';
+import QuotaMeter from '../components/QuotaMeter';
 import UploadQueue from '../components/UploadQueue';
-import { api, uploadFile } from '../api/client';
+import { api, downloadUrl, uploadFile } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
+import { gradients } from '../theme';
 
 let nextJobId = 1;
 
 export default function DrivePage() {
-  const { user, loading, refresh } = useAuth();
+  const { user, drive, loading, refresh } = useAuth();
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
   const [trail, setTrail] = useState([]); // { id, name } ancestors; [] = root
@@ -63,6 +77,24 @@ export default function DrivePage() {
   const [moveEntry, setMoveEntry] = useState(null);
   const [deleteEntry, setDeleteEntry] = useState(null);
   const [shareEntry, setShareEntry] = useState(null);
+
+  const [view, setView] = useState(() => {
+    try {
+      return localStorage.getItem('wyvern.view') === 'grid' ? 'grid' : 'list';
+    } catch {
+      return 'list';
+    }
+  });
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('wyvern.view', view);
+    } catch {
+      // Storage may be unavailable; the view still works for this session.
+    }
+  }, [view]);
 
   const currentParentId = trail.length > 0 ? trail[trail.length - 1].id : null;
 
@@ -111,22 +143,50 @@ export default function DrivePage() {
     }
   }, [refresh]);
 
-  const openFolder = useCallback((entry) => {
-    setTrail((prev) => [...prev, { id: entry.id, name: entry.name }]);
-  }, []);
-
-  const navigateTo = useCallback((folderId) => {
-    setTrail((prev) => {
-      if (folderId === null) {
-        return [];
+  const toggleSelect = useCallback((id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
       }
-      const index = prev.findIndex((part) => part.id === folderId);
-      if (index === -1) {
-        return prev;
-      }
-      return prev.slice(0, index + 1);
+      return next;
     });
   }, []);
+
+  const toggleSelectAll = useCallback((ids, checked) => {
+    setSelectedIds(checked ? new Set(ids) : new Set());
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const openFolder = useCallback(
+    (entry) => {
+      clearSelection();
+      setTrail((prev) => [...prev, { id: entry.id, name: entry.name }]);
+    },
+    [clearSelection]
+  );
+
+  const navigateTo = useCallback(
+    (folderId) => {
+      clearSelection();
+      setTrail((prev) => {
+        if (folderId === null) {
+          return [];
+        }
+        const index = prev.findIndex((part) => part.id === folderId);
+        if (index === -1) {
+          return prev;
+        }
+        return prev.slice(0, index + 1);
+      });
+    },
+    [clearSelection]
+  );
 
   const handleSort = useCallback((field) => {
     setSort((prevSort) => {
@@ -174,10 +234,9 @@ export default function DrivePage() {
     [currentParentId, reload, refreshQuota]
   );
 
-  const handleFilesSelected = useCallback(
-    (event) => {
-      const files = Array.from(event.target.files || []);
-      if (files.length === 0) {
+  const enqueueFiles = useCallback(
+    (files) => {
+      if (!files || files.length === 0) {
         return;
       }
       const jobs = files.map((file) => ({
@@ -192,9 +251,16 @@ export default function DrivePage() {
       jobs.forEach((job) => {
         runUpload(job.id, job.file);
       });
-      event.target.value = '';
     },
     [runUpload]
+  );
+
+  const handleFilesSelected = useCallback(
+    (event) => {
+      enqueueFiles(Array.from(event.target.files || []));
+      event.target.value = '';
+    },
+    [enqueueFiles]
   );
 
   const retryUpload = useCallback(
@@ -282,8 +348,9 @@ export default function DrivePage() {
     if (ok) {
       await reload();
       await refreshQuota();
+      clearSelection();
     }
-  }, [deleteEntry, runMutation, reload, refreshQuota]);
+  }, [deleteEntry, runMutation, reload, refreshQuota, clearSelection]);
 
   const actions = useMemo(
     () => ({
@@ -294,6 +361,62 @@ export default function DrivePage() {
       onDelete: setDeleteEntry,
     }),
     [openFolder]
+  );
+
+  // Exactly one selected entry (if any) — the object the single-item
+  // selection bar actions operate on.
+  const singleSelected = useMemo(() => {
+    if (selectedIds.size !== 1) {
+      return null;
+    }
+    const id = [...selectedIds][0];
+    return entries.find((entry) => entry.id === id) || null;
+  }, [selectedIds, entries]);
+
+  const singleSelectedFile =
+    singleSelected && singleSelected.kind !== 'folder' ? singleSelected : null;
+
+  const handleBulkDelete = useCallback(async () => {
+    for (const id of [...selectedIds]) {
+      const ok = await runMutation(() => api.deleteEntry(id));
+      if (!ok) {
+        break;
+      }
+    }
+    await reload();
+    await refreshQuota();
+    clearSelection();
+  }, [selectedIds, runMutation, reload, refreshQuota, clearSelection]);
+
+  const handleDragOver = useCallback(
+    (event) => {
+      event.preventDefault();
+      if (!entriesLoading) {
+        setDragging(true);
+      }
+    },
+    [entriesLoading]
+  );
+
+  const handleDragLeave = useCallback((event) => {
+    event.preventDefault();
+    if (
+      !event.relatedTarget ||
+      !event.currentTarget.contains(event.relatedTarget)
+    ) {
+      setDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+      setDragging(false);
+      if (event.dataTransfer && event.dataTransfer.files) {
+        enqueueFiles(Array.from(event.dataTransfer.files));
+      }
+    },
+    [enqueueFiles]
   );
 
   if (loading) {
@@ -337,7 +460,12 @@ export default function DrivePage() {
           inputProps={{ 'aria-label': 'Search files and folders' }}
           InputProps={{
             startAdornment: (
-              <FontAwesomeIcon icon={faMagnifyingGlass} aria-hidden="true" />
+              <Box
+                component="span"
+                sx={{ color: 'inkMuted', display: 'inline-flex' }}
+              >
+                <FontAwesomeIcon icon={faMagnifyingGlass} aria-hidden="true" />
+              </Box>
             ),
           }}
         />
@@ -356,6 +484,43 @@ export default function DrivePage() {
         >
           New folder
         </Button>
+        {isDesktop && (
+          <Box sx={{ display: 'inline-flex', gap: 1 }}>
+            <IconButton
+              aria-label="List view"
+              aria-pressed={view === 'list'}
+              onClick={() => setView('list')}
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                color: view === 'list' ? 'ink' : 'inkMuted',
+                bgcolor: view === 'list' ? 'surface2' : 'transparent',
+              }}
+            >
+              <FontAwesomeIcon icon={faTableList} />
+            </IconButton>
+            <IconButton
+              aria-label="Grid view"
+              aria-pressed={view === 'grid'}
+              onClick={() => setView('grid')}
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                color: view === 'grid' ? 'ink' : 'inkMuted',
+                bgcolor: view === 'grid' ? 'surface2' : 'transparent',
+              }}
+            >
+              <FontAwesomeIcon icon={faTableCellsLarge} />
+            </IconButton>
+          </Box>
+        )}
+        <Box
+          sx={{ ml: 'auto', width: 200, display: isDesktop ? 'block' : 'none' }}
+        >
+          <QuotaMeter drive={drive} />
+        </Box>
         <input
           ref={fileInputRef}
           type="file"
@@ -366,45 +531,196 @@ export default function DrivePage() {
         />
       </Box>
 
-      <UploadQueue jobs={uploads} onRetry={retryUpload} onRemove={removeUpload} />
-
-      <Breadcrumbs trail={trail} onNavigate={navigateTo} />
-
-      {entriesError && <ErrorNotice error={entriesError} onRetry={reload} />}
-
-      {entriesLoading ? (
-        <Box data-testid="entries-loading" aria-label="Loading entries">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} variant="rectangular" height={48} sx={{ mb: 1 }} />
-          ))}
-        </Box>
-      ) : entries.length === 0 ? (
+      {isDesktop && selectedIds.size > 0 && (
         <Paper
-          variant="outlined"
-          sx={{ p: 4, textAlign: 'center' }}
-          data-testid="empty-state"
+          elevation={3}
+          data-testid="selection-bar"
+          sx={{
+            bgcolor: 'surface2',
+            borderRadius: '20px',
+            px: 3,
+            py: 1.5,
+            mb: 2,
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 1,
+            alignItems: 'center',
+          }}
         >
-          <Typography variant="body1" gutterBottom>
-            This folder is empty
+          <Typography variant="caption" color="ink" sx={{ mr: 1 }}>
+            {selectedIds.size} selected
           </Typography>
           <Button
-            variant="contained"
-            onClick={() => fileInputRef.current && fileInputRef.current.click()}
+            variant="outlined"
+            size="small"
+            startIcon={<FontAwesomeIcon icon={faDownload} />}
+            disabled={!singleSelectedFile}
+            onClick={() => {
+              if (singleSelectedFile) {
+                window.location.href = downloadUrl(singleSelectedFile.id);
+              }
+            }}
           >
-            Upload your first file
+            Download
           </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FontAwesomeIcon icon={faShareNodes} />}
+            disabled={!singleSelectedFile}
+            onClick={() => singleSelectedFile && setShareEntry(singleSelectedFile)}
+          >
+            Share
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FontAwesomeIcon icon={faPen} />}
+            disabled={!singleSelected}
+            onClick={() => singleSelected && setRenameEntry(singleSelected)}
+          >
+            Rename
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FontAwesomeIcon icon={faArrowRightArrowLeft} />}
+            disabled={!singleSelected}
+            onClick={() => singleSelected && setMoveEntry(singleSelected)}
+          >
+            Move
+          </Button>
+          <Button
+            size="small"
+            color="error"
+            startIcon={<FontAwesomeIcon icon={faTrash} />}
+            onClick={handleBulkDelete}
+          >
+            Delete
+          </Button>
+          <IconButton
+            aria-label="Clear selection"
+            onClick={clearSelection}
+            sx={{ ml: 'auto' }}
+          >
+            <FontAwesomeIcon icon={faXmark} />
+          </IconButton>
         </Paper>
-      ) : isDesktop ? (
-        <EntryTable
-          entries={entries}
-          sort={sort}
-          direction={direction}
-          onSort={handleSort}
-          actions={actions}
-        />
-      ) : (
-        <EntryCards entries={entries} actions={actions} />
       )}
+
+      <Box
+        position="relative"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <Breadcrumbs trail={trail} onNavigate={navigateTo} />
+
+        {entriesError && <ErrorNotice error={entriesError} onRetry={reload} />}
+
+        {entriesLoading ? (
+          <Paper
+            elevation={0}
+            sx={{ p: 2 }}
+            data-testid="entries-loading"
+            aria-label="Loading entries"
+          >
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} variant="rectangular" height={48} sx={{ mb: 1 }} />
+            ))}
+          </Paper>
+        ) : entries.length === 0 ? (
+          <Box
+            data-testid="empty-state"
+            sx={{
+              background: gradients.violet,
+              borderRadius: '30px',
+              p: 8,
+              mt: 3,
+              textAlign: 'center',
+              maxWidth: 560,
+              mx: 'auto',
+            }}
+          >
+            <FontAwesomeIcon
+              icon={faFolderOpen}
+              size="4x"
+              color="#FFFFFF"
+              aria-hidden="true"
+            />
+            <Typography variant="h2" sx={{ mt: 3, color: '#FFFFFF' }}>
+              This folder is empty
+            </Typography>
+            <Typography
+              variant="caption"
+              component="p"
+              sx={{ mt: 1, mb: 3, color: 'rgba(255,255,255,0.85)' }}
+            >
+              Drag and drop files here, or use the buttons above.
+            </Typography>
+            <Button
+              variant="outlined"
+              onClick={() => fileInputRef.current && fileInputRef.current.click()}
+              sx={{
+                bgcolor: 'rgba(255,255,255,0.14)',
+                borderColor: 'rgba(255,255,255,0.35)',
+                color: '#FFFFFF',
+                '&:hover': {
+                  bgcolor: 'rgba(255,255,255,0.22)',
+                  borderColor: 'rgba(255,255,255,0.35)',
+                },
+              }}
+            >
+              Upload your first file
+            </Button>
+          </Box>
+        ) : isDesktop ? (
+          view === 'grid' ? (
+            <EntryGrid
+              entries={entries}
+              actions={actions}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+            />
+          ) : (
+            <EntryTable
+              entries={entries}
+              sort={sort}
+              direction={direction}
+              onSort={handleSort}
+              actions={actions}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              onToggleSelectAll={toggleSelectAll}
+            />
+          )
+        ) : (
+          <EntryCards entries={entries} actions={actions} />
+        )}
+
+        {dragging && (
+          <Box
+            sx={(theme) => ({
+              position: 'absolute',
+              inset: 0,
+              border: `2px dashed ${theme.palette.accentBlue}`,
+              borderRadius: '15px',
+              bgcolor: alpha(theme.palette.accentBlue, 0.06),
+              zIndex: 1100,
+              pointerEvents: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            })}
+          >
+            <Typography fontWeight={600} sx={{ color: 'accentBlue' }}>
+              Drop files to upload to this folder
+            </Typography>
+          </Box>
+        )}
+      </Box>
+
+      <UploadQueue jobs={uploads} onRetry={retryUpload} onRemove={removeUpload} />
 
       <FolderDialog
         open={folderDialogOpen}

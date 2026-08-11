@@ -17,7 +17,7 @@ URLs, or raw Discord attachment URLs.
 - Folders; rename, move, and permanent recursive delete
 - Server-backed search and sort
 - Anonymous read-only share links with optional expiry and revocation
-- Responsive desktop (table) and mobile (cards) UI
+- Cloud-service-style UI (Google Drive / Dropbox / Mega flow): desktop list + grid views, row/card selection with bulk actions, hover-revealed actions, drag-and-drop upload, floating upload progress manager; responsive (desktop table/grid, mobile cards)
 - Rate limiting on OAuth, mutations, and public share downloads
 
 ## Architecture

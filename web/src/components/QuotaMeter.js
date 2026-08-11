@@ -28,13 +28,17 @@ export default function QuotaMeter({ drive }) {
     quotaBytes > 0 ? Math.min(100, Math.round((usedBytes / quotaBytes) * 100)) : 0;
   return (
     <Box>
-      <Typography variant="caption" color="textSecondary" component="p">
+      <Typography variant="caption" color="inkMuted" component="p">
+        Storage
+      </Typography>
+      <Typography variant="caption" color="inkMuted" component="p">
         {formatBytes(usedBytes)} of {formatBytes(quotaBytes)} used
       </Typography>
       <LinearProgress
         variant="determinate"
         value={percent}
         aria-label={`${percent}% of quota used`}
+        sx={{ mt: 1 }}
       />
     </Box>
   );
