@@ -1,0 +1,585 @@
+// Copyright 2022 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package storage
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	"cloud.google.com/go/storage"
+	control "cloud.google.com/go/storage/control/apiv2"
+	"cloud.google.com/go/storage/control/apiv2/controlpb"
+	"cloud.google.com/go/storage/experimental"
+	"github.com/google/uuid"
+	"github.com/googleapis/gax-go/v2"
+	"github.com/googlecloudplatform/gcsfuse/v3/cfg"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/logger"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/storage/gcs"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/storage/storageutil"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"golang.org/x/oauth2"
+	option "google.golang.org/api/option"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	// Side effect to run grpc client with direct-path on gcp machine.
+	_ "google.golang.org/grpc/balancer/rls"
+	_ "google.golang.org/grpc/xds/googledirectpath"
+)
+
+const (
+	// Used to modify the hidden options in go-sdk for read stall retry.
+	// Ref: https://github.com/googleapis/google-cloud-go/blob/main/storage/option.go#L30
+	dynamicReadReqIncreaseRateEnv   = "DYNAMIC_READ_REQ_INCREASE_RATE"
+	dynamicReadReqInitialTimeoutEnv = "DYNAMIC_READ_REQ_INITIAL_TIMEOUT"
+
+	zonalLocationType = "zone"
+
+	// DirectPath detection parameters - used for fast-fail detection during client creation
+	directPathDetectionMaxAttempts = 5
+	directPathDetectionTimeout     = 15 * time.Second
+	directPathDetectionMaxBackoff  = 5 * time.Second
+
+	// nonExistentObjectName is the object name used for bucket existence/access check when HNS feature is disabled by providing "--enable-hns:false". E.g. Using Regional Endpoints which do not support GRPC protocol.
+	nonExistentObjectName = "gcsfuse-nonexistent-object-check"
+)
+
+type StorageHandle interface {
+	// In case of non-empty billingProject, this project is set as user-project for
+	// all subsequent calls on the bucket. Calls with user-project will be billed
+	// to that project rather than to the bucket's owning project.
+	//
+	// A user-project is required for all operations on Requester Pays buckets.
+	BucketHandle(ctx context.Context, bucketName string, billingProject string) (bh *bucketHandle, err error)
+}
+
+type storageClient struct {
+	httpClient               *storage.Client
+	grpcClient               *storage.Client
+	grpcClientWithBidiConfig *storage.Client
+	clientConfig             storageutil.StorageClientConfig
+	// rawStorageControlClient is the underlying base client without any retries configured.
+	// WARNING: Do not mutate this client or its CallOptions in-place after initialization.
+	// It serves as a shared template to derive new control clients (e.g., wrapped with
+	// folder stall retries and billing projects) for each BucketHandle invocation.
+	rawStorageControlClient *control.StorageControlClient
+	// storageControlClient is with retry for GetStorageLayout and with handling for billing project.
+	storageControlClient StorageControlClient
+}
+
+// Return clientOpts for both gRPC client and control client.
+func createClientOptionForGRPCClient(ctx context.Context, clientConfig *storageutil.StorageClientConfig, enableBidiConfig bool) (clientOpts []option.ClientOption, err error) {
+	// Add custom endpoint if provided.
+	if clientConfig.CustomEndpoint != "" {
+		clientOpts = append(clientOpts, option.WithEndpoint(storageutil.StripScheme(clientConfig.CustomEndpoint)))
+
+		// TODO(b/390799251): Check if this line can be merged with below anonymousAccess check.
+		if clientConfig.AnonymousAccess {
+			clientOpts = append(clientOpts, option.WithGRPCDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())))
+		}
+	}
+
+	// Configure authentication.
+	if clientConfig.AnonymousAccess {
+		clientOpts = append(clientOpts, option.WithoutAuthentication())
+	} else if clientConfig.EnableGoogleLibAuth {
+		var authOpts []option.ClientOption
+		authOpts, _, err = storageutil.GetClientAuthOptionsAndToken(ctx, clientConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get client auth options and token: %w", err)
+		}
+		clientOpts = append(clientOpts, authOpts...)
+	} else {
+		var tokenSrc oauth2.TokenSource
+		tokenSrc, err = storageutil.CreateTokenSource(clientConfig)
+		if err != nil {
+			return nil, fmt.Errorf("while fetching token source: %w", err)
+		}
+		clientOpts = append(clientOpts, option.WithTokenSource(tokenSrc))
+	}
+
+	// Additional client options.
+	if enableBidiConfig {
+		clientOpts = append(clientOpts, experimental.WithGRPCBidiReads())
+	}
+
+	if clientConfig.LocalSocketAddress != "" {
+		dialer := &net.Dialer{}
+		// The port can be 0, in which case the OS will choose a local port.
+		// The format of SocketAddress is expected to be IP address.
+		// TODO: check if this approach works for CTK or whether interface name needs to be passed.
+		if err := storageutil.ConfigureDialerWithLocalAddr(dialer, clientConfig.LocalSocketAddress); err != nil {
+			return nil, fmt.Errorf("failed to configure dialer with local-socket-address %q: %w", clientConfig.LocalSocketAddress, err)
+		}
+		clientOpts = append(clientOpts, option.WithGRPCDialOption(grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+			return dialer.DialContext(ctx, "tcp", addr)
+		})))
+	}
+
+	if clientConfig.TracingEnabled {
+		clientOpts = append(clientOpts, option.WithGRPCDialOption(grpc.WithStatsHandler(otelgrpc.NewClientHandler())))
+	}
+
+	clientOpts = append(clientOpts, option.WithGRPCConnectionPool(clientConfig.GrpcConnPoolSize))
+	clientOpts = append(clientOpts, option.WithUserAgent(clientConfig.UserAgent))
+
+	if clientConfig.EnableGrpcMetrics && clientConfig.IsGKE {
+		// Pass the OpenTelemetry MeterProvider to the Go storage client,
+		// using the new WithMeterProvider client option.
+		mp := otel.GetMeterProvider()
+		if sdkmp, ok := mp.(*sdkmetric.MeterProvider); ok {
+			// pass in if sdkmp is of type *sdkmetric.MeterProvider (not a No-op)
+			clientOpts = append(clientOpts, experimental.WithMeterProvider(sdkmp))
+		}
+	} else if !clientConfig.EnableGrpcMetrics {
+		clientOpts = append(clientOpts, storage.WithDisabledClientMetrics())
+	}
+
+	return clientOpts, nil
+}
+
+func setRetryConfig(ctx context.Context, sc *storage.Client, clientConfig *storageutil.StorageClientConfig) {
+	if sc == nil || clientConfig == nil {
+		logger.Fatal("setRetryConfig: Empty storage client or clientConfig")
+		return
+	}
+
+	// ShouldRetry function checks if an operation should be retried based on the
+	// response of operation (error.Code).
+	// RetryAlways causes all operations to be checked for retries using
+	// ShouldRetry function.
+	// Without RetryAlways, only those operations are checked for retries which
+	// are idempotent.
+	// https://github.com/googleapis/google-cloud-go/blob/main/storage/storage.go#L1953
+	retryOpts := []storage.RetryOption{storage.WithBackoff(gax.Backoff{
+		Max:        clientConfig.MaxRetrySleep,
+		Multiplier: clientConfig.RetryMultiplier,
+	}),
+		storage.WithPolicy(storage.RetryAlways),
+		storage.WithMaxAttempts(clientConfig.MaxRetryAttempts),
+		storage.WithMaxRetryDuration(0),
+		storage.WithErrorFuncWithContext(func(err error, retryCtx *storage.RetryContext) bool {
+			return storageutil.ShouldRetryWithMonitoringAndRetryContext(ctx, err, retryCtx, clientConfig.MetricHandle)
+		})}
+
+	sc.SetRetry(retryOpts...)
+}
+
+// Followed https://pkg.go.dev/cloud.google.com/go/storage#hdr-Experimental_gRPC_API to create the gRPC client.
+func createGRPCClientHandle(ctx context.Context, clientConfig *storageutil.StorageClientConfig, isbucketRapid bool, enableBidiConfig bool, bucketName string, billingProject string) (*storage.Client, error) {
+	if err := os.Setenv("GOOGLE_CLOUD_ENABLE_DIRECT_PATH_XDS", "true"); err != nil {
+		return nil, fmt.Errorf("error setting direct path env var: %w", err)
+	}
+	defer unSetDirectPathEnvVariable()
+
+	var clientOpts []option.ClientOption
+	clientOpts, err := createClientOptionForGRPCClient(ctx, clientConfig, enableBidiConfig)
+	if err != nil {
+		return nil, fmt.Errorf("error in getting clientOpts for gRPC client: %w", err)
+	}
+
+	// Add DirectPath enforcement - client creation will fail if DirectPath is not available
+	clientOpts = append(clientOpts, experimental.WithDirectConnectivityEnforced())
+
+	sc, err := storage.NewGRPCClient(ctx, clientOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("NewGRPCClient: %w", err)
+	}
+
+	// Set the production level retry config.
+	defer func() {
+		logger.Infof("Applying production retry config after DirectPath verification.")
+		setRetryConfig(ctx, sc, clientConfig)
+	}()
+
+	// Direct-path verification is fatal for regional. Todo(b/503624405): Make it fatal for all after making the dummy-stat reliable.
+	if verifyErr := verifyDirectPathConnectivity(ctx, clientConfig, bucketName, sc, billingProject); verifyErr != nil {
+		logger.Warnf("DirectPath verification failed with error: %v", verifyErr)
+		if !isbucketRapid {
+			return nil, verifyErr
+		}
+	} else {
+		logger.Infof("DirectPath verification succeeded, continuing with DirectPath.")
+	}
+
+	return sc, nil
+}
+
+func verifyDirectPathConnectivity(ctx context.Context, clientConfig *storageutil.StorageClientConfig, bucketName string, sc *storage.Client, billingProject string) error {
+	// Verify DirectPath connection by performing an stat call on the bucket
+	logger.Infof("Verifying DirectPath connectivity for bucket %q with stat call", bucketName)
+
+	var notFoundError *gcs.NotFoundError
+	var testObject = "gcsfuse-dp-object"
+	if clientConfig.OnlyDir != "" {
+		testObject = clientConfig.OnlyDir + testObject
+	}
+	bucketHandle := sc.Bucket(bucketName)
+	if billingProject != "" {
+		bucketHandle = bucketHandle.UserProject(billingProject)
+	}
+
+	// Disable Go SDK retries for this call to let ExecuteWithRetry handle it.
+	bucketHandle = bucketHandle.Retryer(storage.WithMaxAttempts(1))
+
+	dpClientConfig := &storageutil.StorageClientConfig{
+		MaxRetrySleep:    directPathDetectionMaxBackoff,
+		RetryMultiplier:  clientConfig.RetryMultiplier,
+		MaxRetryAttempts: directPathDetectionMaxAttempts,
+	}
+	retryConfig := storageutil.NewCustomRetryConfig(dpClientConfig, directPathDetectionTimeout)
+
+	apiCall := func(attemptCtx context.Context) (*storage.ObjectAttrs, error) {
+		return bucketHandle.Object(testObject).Attrs(attemptCtx)
+	}
+
+	_, statErr := storageutil.ExecuteWithRetryAtLogLevel(ctx, retryConfig, "Attrs", testObject, uuid.NewString(), apiCall, logger.LevelInfo)
+
+	// We should get a notFound error and not any error when the object doesn't exist.
+	// Any error other than notFound is treated as dp connection failure.
+	if statErr != nil && !errors.As(gcs.GetGCSError(statErr), &notFoundError) {
+		return fmt.Errorf("DirectPath verification failed for bucket %q: %w", bucketName, statErr)
+	}
+
+	return nil
+}
+
+func unSetDirectPathEnvVariable() {
+	// Unset the environment variable, since it's used only while creation of grpc client.
+	if err := os.Unsetenv("GOOGLE_CLOUD_ENABLE_DIRECT_PATH_XDS"); err != nil {
+		logger.Errorf("error while unsetting direct path env var: %v", err)
+	}
+}
+
+func createHTTPClientHandle(ctx context.Context, clientConfig *storageutil.StorageClientConfig) (sc *storage.Client, err error) {
+	var clientOpts []option.ClientOption
+	var tokenSrc oauth2.TokenSource = nil
+
+	if clientConfig.AnonymousAccess {
+		clientOpts = append(clientOpts, option.WithoutAuthentication())
+	} else if clientConfig.EnableGoogleLibAuth {
+		var authOpts []option.ClientOption
+		authOpts, tokenSrc, err = storageutil.GetClientAuthOptionsAndToken(ctx, clientConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get client auth options and token: %w", err)
+		}
+		clientOpts = append(clientOpts, authOpts...)
+	} else {
+		tokenSrc, err = storageutil.CreateTokenSource(clientConfig)
+		if err != nil {
+			return nil, fmt.Errorf("while fetching tokenSource: %w", err)
+		}
+	}
+
+	if clientConfig.ClientProtocol == cfg.HTTPMtls {
+		clientOpts = append(clientOpts, option.WithUserAgent(clientConfig.UserAgent))
+		// When googleLibAuth is enabled, clientOpts already has tokenSrc.
+		if !clientConfig.EnableGoogleLibAuth && tokenSrc != nil {
+			clientOpts = append(clientOpts, option.WithTokenSource(tokenSrc))
+		}
+	}
+
+	// Add WithHttpClient option.
+	if clientConfig.ClientProtocol != cfg.HTTPMtls {
+		var httpClient *http.Client
+		httpClient, err = storageutil.CreateHttpClient(clientConfig, tokenSrc)
+		if err != nil {
+			err = fmt.Errorf("while creating http endpoint: %w", err)
+			return
+		}
+		clientOpts = append(clientOpts, option.WithHTTPClient(httpClient))
+	}
+
+	// Create client with JSON read flow, if EnableJasonRead flag is set.
+	if clientConfig.ExperimentalEnableJsonRead {
+		clientOpts = append(clientOpts, storage.WithJSONReads())
+	}
+
+	// Add Custom endpoint option.
+	if clientConfig.CustomEndpoint != "" {
+		clientOpts = append(clientOpts, option.WithEndpoint(clientConfig.CustomEndpoint))
+	}
+
+	if clientConfig.ReadStallRetryConfig.Enable {
+		// Hidden way to modify the increase rate for dynamic delay algorithm in go-sdk.
+		// Ref: https://github.com/googleapis/google-cloud-go/blob/main/storage/option.go#L47
+		// Temporarily we kept an option to change the increase-rate, will be removed
+		// once we get a good default.
+		err = os.Setenv(dynamicReadReqIncreaseRateEnv, strconv.FormatFloat(clientConfig.ReadStallRetryConfig.ReqIncreaseRate, 'f', -1, 64))
+		if err != nil {
+			logger.Warnf("Error while setting the env %s: %v", dynamicReadReqIncreaseRateEnv, err)
+		}
+
+		// Hidden way to modify the initial-timeout of the dynamic delay algorithm in go-sdk.
+		// Ref: https://github.com/googleapis/google-cloud-go/blob/main/storage/option.go#L62
+		// Temporarily we kept an option to change the initial-timeout, will be removed
+		// once we get a good default.
+		err = os.Setenv(dynamicReadReqInitialTimeoutEnv, clientConfig.ReadStallRetryConfig.InitialReqTimeout.String())
+		if err != nil {
+			logger.Warnf("Error while setting the env %s: %v", dynamicReadReqInitialTimeoutEnv, err)
+		}
+		clientOpts = append(clientOpts, experimental.WithReadStallTimeout(&experimental.ReadStallTimeoutConfig{
+			Min:              clientConfig.ReadStallRetryConfig.MinReqTimeout,
+			TargetPercentile: clientConfig.ReadStallRetryConfig.ReqTargetPercentile,
+		}))
+	}
+	sc, err = storage.NewClient(ctx, clientOpts...)
+	if err != nil {
+		err = fmt.Errorf("go http storage client creation failed: %w", err)
+		return
+	}
+	setRetryConfig(ctx, sc, clientConfig)
+	return
+}
+
+// verifyNonHNSBucketAccess performs an Attrs call on a non-existent object
+// to verify bucket existence and authorization when HNS is disabled.
+func (sh *storageClient) verifyNonHNSBucketAccess(ctx context.Context, bucketHandle *storage.BucketHandle, bucketName string) error {
+	testObject := nonExistentObjectName
+	if sh.clientConfig.OnlyDir != "" {
+		testObject = sh.clientConfig.OnlyDir + testObject
+	}
+
+	apiCall := func(attemptCtx context.Context) (*storage.ObjectAttrs, error) {
+		return bucketHandle.Object(testObject).Attrs(attemptCtx)
+	}
+
+	retryConfig := storageutil.NewRetryConfig(&sh.clientConfig)
+	_, err := storageutil.ExecuteWithCustomShouldRetryAtLogLevel(
+		ctx,
+		retryConfig,
+		"Attrs",
+		fmt.Sprintf("%s/%s", bucketName, testObject),
+		uuid.NewString(),
+		apiCall,
+		storageutil.ShouldRetryOnMount,
+		logger.LevelInfo,
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	// An Object NotFound error indicates that the bucket exists and access is authorized.
+	var notFoundError *gcs.NotFoundError
+	if errors.As(gcs.GetGCSError(err), &notFoundError) && !strings.Contains(strings.ToLower(err.Error()), storageutil.ErrStrBucketNotExist) {
+		return nil
+	}
+
+	return err
+}
+
+func (sh *storageClient) lookupBucketType(bucketName string) (*gcs.BucketType, error) {
+	if sh.storageControlClient == nil {
+		return &gcs.BucketType{}, nil // Assume defaults
+	}
+
+	startTime := time.Now()
+	prefix := sh.clientConfig.OnlyDir
+	logger.Infof("GetStorageLayout <- (%s, prefix: %q)", bucketName, prefix)
+	storageLayout, err := sh.getStorageLayout(bucketName)
+	duration := time.Since(startTime)
+
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Infof("GetStorageLayout -> (%s, prefix: %q) %v msec", bucketName, prefix, duration.Milliseconds())
+
+	// TODO (b/483608308): Once GetStorageLayout starts returning Pirlo bucket type,
+	// update this logic to use the response instead of inferring from clientConfig.
+	pirloState := gcs.PirloStateNone
+	if sh.clientConfig.ExperimentalEnablePirlo {
+		if sh.clientConfig.WriteConfig != nil && sh.clientConfig.WriteConfig.EnableRapidWrites {
+			pirloState = gcs.PirloStateRapidWritesEnabled
+		} else {
+			pirloState = gcs.PirloStateRapidWritesDisabled
+		}
+	}
+
+	return &gcs.BucketType{
+		Hierarchical: storageLayout.GetHierarchicalNamespace().GetEnabled(),
+		Zonal:        storageLayout.GetLocationType() == zonalLocationType,
+		Pirlo:        pirloState,
+	}, nil
+}
+
+func (sh *storageClient) getStorageLayout(bucketName string) (*controlpb.StorageLayout, error) {
+	var callOptions []gax.CallOption
+
+	storageLayout, err := sh.storageControlClient.GetStorageLayout(context.Background(), &controlpb.GetStorageLayoutRequest{
+		Name:      fmt.Sprintf("projects/_/buckets/%s/storageLayout", bucketName),
+		Prefix:    sh.clientConfig.OnlyDir,
+		RequestId: uuid.NewString(),
+	}, callOptions...)
+
+	return storageLayout, err
+}
+
+// NewStorageHandle creates control client and stores client config to allow dynamic
+// creation of http or grpc client.
+func NewStorageHandle(ctx context.Context, clientConfig storageutil.StorageClientConfig, billingProject string) (sh StorageHandle, err error) {
+	// Ensure trailing slash for GCS prefix-based API calls.
+	if clientConfig.OnlyDir != "" {
+		clientConfig.OnlyDir += "/"
+	}
+	// The default protocol for the Go Storage control client's folders API is gRPC.
+	// gcsfuse will initially mirror this behavior due to the client's lack of HTTP support.
+	var controlClient StorageControlClient
+	var rawStorageControlClient *control.StorageControlClient
+	var clientOpts []option.ClientOption
+
+	// Control-client is needed for folder APIs and for getting storage-layout of the bucket.
+	// Bypassed for HTTP storage testbenches that inject the legacy REST API path.
+	if clientConfig.EnableHNS && !strings.Contains(clientConfig.CustomEndpoint, "/storage/v1") {
+		// For control client, we don't pass billingProject to avoid setting it globally via option.WithQuotaProject.
+		// The wrapper storageControlClientWithBillingProject will manually add it to the context for supported calls.
+		clientOpts, err = createClientOptionForGRPCClient(ctx, &clientConfig, false)
+		if err != nil {
+			return nil, fmt.Errorf("error in getting clientOpts for gRPC client: %w", err)
+		}
+		rawStorageControlClient, err = storageutil.CreateGRPCControlClient(ctx, clientOpts, true)
+		if err != nil {
+			return nil, fmt.Errorf("could not create StorageControl Client without default gax retries: %w", err)
+		}
+		// Create a default storage control client with billing project.
+		// This client is used during mount initialization and subsequent bucket type lookups
+		// for GetStorageLayout operations only, and has stall retries enabled by default on GetStorageLayout calls.
+		controlClient = NewStorageControlClient(rawStorageControlClient, &clientConfig,
+			WithBillingProject(billingProject),
+		)
+	} else if clientConfig.EnableHNS {
+		logger.Infof("Skipping storage control client creation for custom-endpoint %q.", clientConfig.CustomEndpoint)
+	}
+
+	sh = &storageClient{
+		rawStorageControlClient: rawStorageControlClient,
+		storageControlClient:    controlClient,
+		clientConfig:            clientConfig,
+	}
+	return
+}
+
+func (sh *storageClient) getClient(ctx context.Context, isBucketRapid bool, bucketName string, billingProject string) (*storage.Client, error) {
+	var err error
+	if isBucketRapid {
+		if sh.grpcClientWithBidiConfig == nil {
+			sh.grpcClientWithBidiConfig, err = createGRPCClientHandle(ctx, &sh.clientConfig, isBucketRapid, true, bucketName, billingProject)
+		}
+		return sh.grpcClientWithBidiConfig, err
+	}
+
+	if sh.clientConfig.ClientProtocol == cfg.GRPC {
+		return sh.createNonBidiGRPCClientWithHttpFallback(ctx, bucketName, billingProject)
+	}
+
+	if sh.clientConfig.ClientProtocol == cfg.HTTP1 || sh.clientConfig.ClientProtocol == cfg.HTTP2 || sh.clientConfig.ClientProtocol == cfg.HTTPMtls {
+		if sh.httpClient == nil {
+			sh.httpClient, err = createHTTPClientHandle(ctx, &sh.clientConfig)
+		}
+		return sh.httpClient, err
+	}
+
+	return nil, fmt.Errorf("invalid client-protocol requested: %s", sh.clientConfig.ClientProtocol)
+}
+
+func (sh *storageClient) createNonBidiGRPCClientWithHttpFallback(ctx context.Context, bucketName string, billingProject string) (*storage.Client, error) {
+	if sh.grpcClient != nil {
+		return sh.grpcClient, nil
+	}
+
+	var err error
+	sh.grpcClient, err = createGRPCClientHandle(ctx, &sh.clientConfig, false, false, bucketName, billingProject)
+	// No error means we are able to successfully create a grpc client with direct path. Return it.
+	if err == nil {
+		return sh.grpcClient, nil
+	}
+
+	// We will reach here when we failed to create a grpc client with direct path.
+	// Decide whether to create a http client based on grpPathStrategy param.
+	if sh.clientConfig.GrpcPathStrategy == cfg.DirectPathOnly {
+		logger.Infof("Grpc dp is not available and not falling back to Http as gRPC path strategy is set to DirectPathOnly")
+		return nil, err
+	}
+
+	// When grpcPathStrategy=DirectPathWithFallback, create a http client.
+	logger.Infof("Grpc dp is not available and falling back to Http.")
+	if sh.httpClient == nil {
+		sh.httpClient, err = createHTTPClientHandle(ctx, &sh.clientConfig)
+	}
+
+	return sh.httpClient, err
+}
+
+func (sh *storageClient) BucketHandle(ctx context.Context, bucketName string, billingProject string) (bh *bucketHandle, err error) {
+	var client *storage.Client
+	bucketType, err := sh.lookupBucketType(bucketName)
+	if err != nil {
+		return nil, fmt.Errorf("storageLayout call failed: %s", err)
+	}
+
+	client, err = sh.getClient(ctx, bucketType.IsRapid(), bucketName, billingProject)
+	if err != nil {
+		return nil, err
+	}
+
+	storageBucketHandle := client.Bucket(bucketName)
+	if billingProject != "" {
+		storageBucketHandle = storageBucketHandle.UserProject(billingProject)
+	}
+	if sh.storageControlClient == nil && sh.clientConfig.EnableMountRetries {
+		err = sh.verifyNonHNSBucketAccess(ctx, storageBucketHandle, bucketName)
+		if err != nil {
+			return nil, fmt.Errorf("bucket access check failed for %q: %s", bucketName, err)
+		}
+	}
+
+	var controlClient StorageControlClient
+	if sh.rawStorageControlClient != nil {
+		controlClient = NewStorageControlClient(sh.rawStorageControlClient, &sh.clientConfig,
+			WithRetriesOnFolderAPI(),
+			WithBillingProject(billingProject),
+		)
+	}
+
+	// By default, follow the user's flag
+	disableGrpcReadChecksums := !sh.clientConfig.EnableGrpcReadChecksums
+	// If the user configures an HTTP connection on a Standard (regional) bucket, grpc checksums
+	// do not apply, so we unconditionally disable them regardless of the flag's value.
+	if !bucketType.IsRapid() && sh.clientConfig.ClientProtocol != cfg.GRPC {
+		disableGrpcReadChecksums = true
+	}
+
+	bh = &bucketHandle{
+		bucket:                   storageBucketHandle,
+		bucketName:               bucketName,
+		controlClient:            controlClient,
+		bucketType:               bucketType,
+		billingProject:           billingProject,
+		writeConfig:              sh.clientConfig.WriteConfig,
+		disableGrpcReadChecksums: disableGrpcReadChecksums,
+	}
+
+	return
+}

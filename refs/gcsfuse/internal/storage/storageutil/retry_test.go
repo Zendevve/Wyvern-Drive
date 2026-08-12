@@ -1,0 +1,644 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package storageutil
+
+import (
+	"context"
+	"errors"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/logger"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+type ExponentialBackoffTestSuite struct {
+	suite.Suite
+}
+
+func TestExponentialBackoffTestSuite(t *testing.T) {
+	suite.Run(t, new(ExponentialBackoffTestSuite))
+}
+
+func TestExecuteWithRetryTestSuite(t *testing.T) {
+	suite.Run(t, new(ExecuteWithRetryTestSuite))
+}
+
+func TestRetryConfigTestSuite(t *testing.T) {
+	suite.Run(t, new(RetryConfigTestSuite))
+}
+
+func (t *ExponentialBackoffTestSuite) TestNewBackoff() {
+	initial := 1 * time.Second
+	maxValue := 10 * time.Second
+	multiplier := 2.0
+
+	b := newExponentialBackoff(&exponentialBackoffConfig{
+		initial:    initial,
+		max:        maxValue,
+		multiplier: multiplier,
+	})
+
+	assert.NotNil(t.T(), b)
+	assert.Equal(t.T(), initial, b.next)
+	assert.Equal(t.T(), initial, b.config.initial)
+	assert.Equal(t.T(), maxValue, b.config.max)
+	assert.Equal(t.T(), multiplier, b.config.multiplier)
+}
+
+func (t *ExponentialBackoffTestSuite) TestNext() {
+	initial := 1 * time.Second
+	maxValue := 3 * time.Second
+	multiplier := 2.0
+	b := newExponentialBackoff(&exponentialBackoffConfig{
+		initial:    initial,
+		max:        maxValue,
+		multiplier: multiplier,
+	})
+
+	// First call to next() should return initial, and update current.
+	assert.Equal(t.T(), 1*time.Second, b.nextDuration())
+
+	// Second call.
+	assert.Equal(t.T(), 2*time.Second, b.nextDuration())
+
+	// Third call - capped at max.
+	assert.Equal(t.T(), 3*time.Second, b.nextDuration())
+
+	// Should stay capped at max.
+	assert.Equal(t.T(), 3*time.Second, b.nextDuration())
+}
+
+func (t *ExponentialBackoffTestSuite) TestWaitWithJitter_ContextCancelled() {
+	initial := 100 * time.Microsecond // A long duration to ensure cancellation happens first.
+	maxValue := 5 * initial
+	b := newExponentialBackoff(&exponentialBackoffConfig{
+		initial:    initial,
+		max:        maxValue,
+		multiplier: 2.0,
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel the context immediately.
+	cancel()
+
+	start := time.Now()
+	err := b.waitWithJitter(ctx)
+	elapsed := time.Since(start)
+
+	assert.ErrorIs(t.T(), err, context.Canceled)
+	// The function should return almost immediately without backoff sleep.
+	assert.Less(t.T(), elapsed, 20*time.Millisecond, "waitWithJitter should return quickly when context is cancelled")
+}
+
+func (t *ExponentialBackoffTestSuite) TestWaitWithJitter_NoContextCancelled() {
+	initial := 100 * time.Millisecond // Much larger than OS scheduler latency
+	maxValue := 5 * initial
+	b := newExponentialBackoff(&exponentialBackoffConfig{
+		initial:    initial,
+		max:        maxValue,
+		multiplier: 2.0,
+	})
+	ctx := context.Background()
+
+	start := time.Now()
+	err := b.waitWithJitter(ctx)
+	elapsed := time.Since(start)
+
+	assert.NoError(t.T(), err)
+	// Strict bound: allows at most 120ms for a max 100ms sleep.
+	assert.LessOrEqual(t.T(), elapsed, initial+20*time.Millisecond, "waitWithJitter should not wait excessively long")
+}
+
+func (t *ExponentialBackoffTestSuite) TestWaitWithJitter_FirstAttemptBackoffGrowth() {
+	// Arrange
+	initial := 100 * time.Millisecond // Much larger than OS scheduler latency.
+	maxValue := 500 * time.Millisecond
+	multiplier := 2.0
+	b := newExponentialBackoff(&exponentialBackoffConfig{
+		initial:    initial,
+		max:        maxValue,
+		multiplier: multiplier,
+	})
+	ctx := context.Background()
+
+	expectedNext := initial
+
+	// Act
+	start := time.Now()
+	err := b.waitWithJitter(ctx)
+	elapsed := time.Since(start)
+
+	// Assert
+	assert.NoError(t.T(), err)
+
+	expectedNext = min(maxValue, time.Duration(float64(expectedNext)*multiplier))
+	assert.Equal(t.T(), expectedNext, b.next)
+	assert.LessOrEqual(t.T(), elapsed, initial+20*time.Millisecond)
+}
+
+func (t *ExponentialBackoffTestSuite) TestWaitWithJitter_ConsecutiveAttemptsBackoffGrowth() {
+	// Arrange
+	initial := 100 * time.Millisecond // Much larger than OS scheduler latency.
+	maxValue := 500 * time.Millisecond
+	multiplier := 2.0
+	b := newExponentialBackoff(&exponentialBackoffConfig{
+		initial:    initial,
+		max:        maxValue,
+		multiplier: multiplier,
+	})
+	ctx := context.Background()
+
+	expectedNext := initial
+
+	for range 4 {
+		// Act
+		start := time.Now()
+		err := b.waitWithJitter(ctx)
+		elapsed := time.Since(start)
+
+		currentBackoff := expectedNext
+
+		// Assert
+		require.NoError(t.T(), err)
+
+		expectedNext = min(maxValue, time.Duration(float64(expectedNext)*multiplier))
+		assert.Equal(t.T(), expectedNext, b.next)
+		require.LessOrEqual(t.T(), elapsed, currentBackoff+20*time.Millisecond)
+	}
+}
+
+func (t *ExponentialBackoffTestSuite) TestWaitWithJitter_BoundsRespectMax() {
+	// Arrange
+	initial := 5 * time.Millisecond
+	maxValue := 20 * time.Millisecond
+	multiplier := 2.0
+	b := newExponentialBackoff(&exponentialBackoffConfig{
+		initial:    initial,
+		max:        maxValue,
+		multiplier: multiplier,
+	})
+	expectedNext := initial
+	ctx := context.Background()
+
+	// Call many times to let it saturate the max value and test the ceiling bounds
+	for range 20 {
+		// Act
+		start := time.Now()
+		err := b.waitWithJitter(ctx)
+		elapsed := time.Since(start)
+
+		currentBackoff := expectedNext
+
+		// Assert
+		require.NoError(t.T(), err)
+		expectedNext = min(maxValue, time.Duration(float64(expectedNext)*multiplier))
+		// Measured wait time should be capped by current backoff ceiling plus a scheduler safety margin.
+		require.LessOrEqual(t.T(), elapsed, currentBackoff+20*time.Millisecond)
+	}
+}
+
+type RetryConfigTestSuite struct {
+	suite.Suite
+}
+
+func (t *RetryConfigTestSuite) TestNewCustomRetryConfig() {
+	// Arrange
+	clientConfig := &StorageClientConfig{
+		MaxRetrySleep:   10 * time.Second,
+		RetryMultiplier: 2.5,
+	}
+	retryDeadline := 5 * time.Second
+
+	// Act
+	retryConfig := NewCustomRetryConfig(clientConfig, retryDeadline)
+
+	// Assert
+	assert.NotNil(t.T(), retryConfig)
+	assert.Equal(t.T(), retryDeadline, retryConfig.RetryDeadline)
+	assert.Equal(t.T(), DefaultInitialBackoff, retryConfig.BackoffConfig.initial)
+	assert.Equal(t.T(), clientConfig.MaxRetrySleep, retryConfig.BackoffConfig.max)
+	assert.Equal(t.T(), clientConfig.RetryMultiplier, retryConfig.BackoffConfig.multiplier)
+}
+
+func (t *RetryConfigTestSuite) TestNewRetryConfig() {
+	// Arrange
+	clientConfig := &StorageClientConfig{
+		MaxRetrySleep:   10 * time.Second,
+		RetryMultiplier: 2.5,
+	}
+
+	// Act
+	retryConfig := NewRetryConfig(clientConfig)
+
+	// Assert
+	assert.NotNil(t.T(), retryConfig)
+	assert.Equal(t.T(), DefaultRetryDeadline, retryConfig.RetryDeadline)
+	assert.Equal(t.T(), DefaultInitialBackoff, retryConfig.BackoffConfig.initial)
+	assert.Equal(t.T(), clientConfig.MaxRetrySleep, retryConfig.BackoffConfig.max)
+	assert.Equal(t.T(), clientConfig.RetryMultiplier, retryConfig.BackoffConfig.multiplier)
+}
+
+type ExecuteWithRetryTestSuite struct {
+	suite.Suite
+	retryConfig *RetryConfig
+}
+
+func (t *ExecuteWithRetryTestSuite) SetupTest() {
+	t.retryConfig = &RetryConfig{
+		RetryDeadline: 50 * time.Millisecond,
+		BackoffConfig: exponentialBackoffConfig{
+			initial:    1 * time.Millisecond,
+			max:        10 * time.Millisecond,
+			multiplier: 2,
+		},
+	}
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithRetry_SuccessOnFirstAttempt() {
+	// Arrange
+	var callCount int
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		return "success", nil
+	}
+
+	// Act
+	result, err := ExecuteWithRetry(context.Background(), t.retryConfig, "testOp", "testReq", "test-request-id", apiCall)
+
+	// Assert
+	assert.NoError(t.T(), err)
+	assert.Equal(t.T(), "success", result)
+	assert.Equal(t.T(), 1, callCount)
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithRetry_SuccessAfterRetry() {
+	// Arrange
+	var callCount int
+	retryableErr := status.Error(codes.Unavailable, "server unavailable")
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		if callCount == 1 {
+			return "", retryableErr
+		}
+		return "success", nil
+	}
+
+	// Act
+	result, err := ExecuteWithRetry(context.Background(), t.retryConfig, "testOp", "testReq", "test-request-id", apiCall)
+
+	// Assert
+	assert.NoError(t.T(), err)
+	assert.Equal(t.T(), "success", result)
+	assert.Equal(t.T(), 2, callCount)
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithRetry_FailureOnNonRetryableError() {
+	// Arrange
+	var callCount int
+	nonRetryableErr := errors.New("non-retryable error")
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		return "", nonRetryableErr
+	}
+
+	// Act
+	result, err := ExecuteWithRetry(context.Background(), t.retryConfig, "testOp", "testReq", "test-request-id", apiCall)
+
+	// Assert
+	assert.ErrorIs(t.T(), err, nonRetryableErr)
+	assert.Empty(t.T(), result)
+	assert.Equal(t.T(), 1, callCount)
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithRetry_RetryableThenNonRetryableError() {
+	// Arrange
+	var callCount int
+	retryableErr := status.Error(codes.Unavailable, "server unavailable")
+	nonRetryableErr := errors.New("non-retryable error")
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		if callCount == 1 {
+			return "", retryableErr
+		}
+		return "", nonRetryableErr
+	}
+
+	// Act
+	result, err := ExecuteWithRetry(context.Background(), t.retryConfig, "testOp", "testReq", "test-request-id", apiCall)
+
+	// Assert
+	assert.ErrorIs(t.T(), err, nonRetryableErr)
+	assert.Empty(t.T(), result)
+	assert.Equal(t.T(), 2, callCount)
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithRetry_AllAttemptsTimeOut() {
+	// Arrange
+	t.retryConfig.MaxAttempts = 3
+	stallDuration := t.retryConfig.RetryDeadline + 100*time.Millisecond
+	var callCount int
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		// Simulate a call that always takes longer than the per-attempt deadline.
+		select {
+		case <-time.After(stallDuration):
+			// This case should not be hit, as the context deadline
+			// is shorter than stallDuration.
+			return "", errors.New("simulated apiCall finished before context timeout")
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+
+	// Act
+	_, err := ExecuteWithRetry(context.Background(), t.retryConfig, "testOp", "testReq", "test-request-id", apiCall)
+
+	// Assert
+	assert.ErrorIs(t.T(), err, context.DeadlineExceeded, "Expected context.DeadlineExceeded because each attempt is designed to "+
+		"take longer than the per-attempt deadline.")
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithRetry_ParentContextTimeoutShorterThanRetryDeadline() {
+	// Arrange
+	var callCount int
+	t.retryConfig.RetryDeadline = 100 * time.Millisecond
+	stallDuration := t.retryConfig.RetryDeadline + 100*time.Millisecond
+	// Set a parent context timeout that is shorter than the total retry budget.
+	parentCtx, cancel := context.WithTimeout(context.Background(), t.retryConfig.RetryDeadline-50*time.Millisecond)
+	defer cancel()
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		select {
+		case <-time.After(stallDuration):
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+		// This will always fail with a retryable error.
+		return "", status.Error(codes.Unavailable, "server unavailable")
+	}
+
+	// Act
+	// The parent context will be checked within ExecuteWithRetry before the first attempt,
+	// but the attempt will still proceed. The attempt's context will expire
+	// due to the parent's timeout.
+	result, err := ExecuteWithRetry(parentCtx, t.retryConfig, "testOp", "testReq", "test-request-id", apiCall)
+
+	// Assert
+	assert.ErrorIs(t.T(), err, context.DeadlineExceeded, "The error should be from the parent context's timeout")
+	assert.Empty(t.T(), result)
+	assert.Equal(t.T(), 1, callCount, "apiCall should have been called once")
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithRetry_ParentContextTimeoutBetweenDeadlines() {
+	// Arrange
+	var callCount int
+	stallDuration := t.retryConfig.RetryDeadline + 100*time.Millisecond
+	// Set a parent context timeout that is longer than one attempt but shorter than the total budget.
+	parentCtx, cancel := context.WithTimeout(context.Background(), t.retryConfig.RetryDeadline+50*time.Millisecond)
+	defer cancel()
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		select {
+		case <-time.After(stallDuration):
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+		// This will always fail with a retryable error.
+		return "", status.Error(codes.Unavailable, "server unavailable")
+	}
+
+	// Act
+	result, err := ExecuteWithRetry(parentCtx, t.retryConfig, "testOp", "testReq", "test-request-id", apiCall)
+
+	// Assert
+	assert.ErrorIs(t.T(), err, context.DeadlineExceeded, "The error should be from the parent context's timeout")
+	assert.Empty(t.T(), result)
+	assert.Greater(t.T(), callCount, 0, "apiCall should have been called at least once")
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithRetry_ParentContextAlreadyCancelled() {
+	// Arrange
+	var callCount int
+	parentCtx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel the context immediately.
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		return "should not be called", nil
+	}
+
+	// Act
+	_, err := ExecuteWithRetry(parentCtx, t.retryConfig, "testOp", "testReq", "test-request-id", apiCall)
+
+	// Assert
+	assert.ErrorIs(t.T(), err, context.Canceled)
+	assert.Equal(t.T(), 0, callCount, "apiCall should not have been executed")
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithRetry_MaxAttemptsReached() {
+	// Arrange
+	var callCount int
+	t.retryConfig.MaxAttempts = 2
+	retryableErr := status.Error(codes.Unavailable, "server unavailable")
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		return "", retryableErr
+	}
+
+	// Act
+	_, err := ExecuteWithRetry(context.Background(), t.retryConfig, "testOp", "testReq", "test-request-id", apiCall)
+
+	// Assert
+	assert.Error(t.T(), err)
+	assert.Contains(t.T(), err.Error(), "testOp for \"testReq\" failed: ")
+	assert.Contains(t.T(), err.Error(), "InvocationID: test-request-id")
+	assert.Contains(t.T(), err.Error(), "Attempt: 2")
+	assert.Equal(t.T(), 2, callCount, "apiCall should have been called exactly 2 times")
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithCustomShouldRetry_SuccessWithCustomPredicate() {
+	// Arrange
+	var callCount int
+	customErr := errors.New("my custom transient error")
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		if callCount == 1 {
+			return "", customErr
+		}
+		return "success", nil
+	}
+	customShouldRetry := func(err error) bool {
+		return errors.Is(err, customErr)
+	}
+
+	// Act
+	result, err := ExecuteWithCustomShouldRetry(context.Background(), t.retryConfig, "testOp", "testReq", "test-request-id", apiCall, customShouldRetry)
+
+	// Assert
+	assert.NoError(t.T(), err)
+	assert.Equal(t.T(), "success", result)
+	assert.Equal(t.T(), 2, callCount)
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithCustomShouldRetry_FailWithCustomPredicate() {
+	// Arrange
+	var callCount int
+	defaultRetryableErr := status.Error(codes.Unavailable, "server unavailable")
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		return "", defaultRetryableErr
+	}
+	// A custom predicate that rejects everything (returns false)
+	customShouldRetry := func(err error) bool {
+		return false
+	}
+
+	// Act
+	result, err := ExecuteWithCustomShouldRetry(context.Background(), t.retryConfig, "testOp", "testReq", "test-request-id", apiCall, customShouldRetry)
+
+	// Assert
+	assert.ErrorIs(t.T(), err, defaultRetryableErr)
+	assert.Empty(t.T(), result)
+	assert.Equal(t.T(), 1, callCount)
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithCustomShouldRetry_CompositionWithDefault() {
+	// Arrange
+	var callCount int
+	customErr := errors.New("my custom transient error")
+	defaultRetryableErr := status.Error(codes.Unavailable, "server unavailable")
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		if callCount == 1 {
+			return "", defaultRetryableErr
+		}
+		if callCount == 2 {
+			return "", customErr
+		}
+		return "success", nil
+	}
+	// Wrap default ShouldRetryWithoutLogging and also allow customErr
+	customShouldRetry := func(err error) bool {
+		return ShouldRetryWithRetryContext(err, nil) || errors.Is(err, customErr)
+	}
+
+	// Act
+	result, err := ExecuteWithCustomShouldRetry(context.Background(), t.retryConfig, "testOp", "testReq", "test-request-id", apiCall, customShouldRetry)
+
+	// Assert
+	assert.NoError(t.T(), err)
+	assert.Equal(t.T(), "success", result)
+	assert.Equal(t.T(), 3, callCount)
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithRetry_LogsErrorContext() {
+	// Arrange
+	var buf logBuffer
+	logger.SetOutput(&buf)
+	defer logger.SetOutput(os.Stdout)
+	var callCount int
+	retryableErr := errors.New("transient failure 429")
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		if callCount == 1 {
+			return "", retryableErr
+		}
+		return "success", nil
+	}
+	// We need a shouldRetry function that returns true for retryableErr.
+	customShouldRetry := func(err error) bool {
+		return err.Error() == "transient failure 429"
+	}
+
+	// Act
+	// Call ExecuteWithCustomShouldRetryAtLogLevel with LevelWarn, so we can capture the Retrying log
+	_, err := ExecuteWithCustomShouldRetryAtLogLevel(context.Background(), t.retryConfig, "testOp", "testReq", "test-request-id", apiCall, customShouldRetry, logger.LevelWarn)
+
+	// Assert
+	assert.NoError(t.T(), err)
+	assert.Equal(t.T(), 2, callCount)
+	assert.Contains(t.T(), buf.String(), "Retrying testOp")
+	assert.Contains(t.T(), buf.String(), "testReq")
+	assert.Contains(t.T(), buf.String(), "transient failure 429")
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithRetry_AttemptNumberIncreases() {
+	// Arrange
+	var buf logBuffer
+	logger.SetOutput(&buf)
+	defer logger.SetOutput(os.Stdout)
+	var callCount int
+	retryableErr := errors.New("transient failure")
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		if callCount < 3 {
+			return "", retryableErr
+		}
+		return "success", nil
+	}
+	customShouldRetry := func(err error) bool {
+		return err.Error() == "transient failure"
+	}
+
+	// Act
+	_, err := ExecuteWithCustomShouldRetryAtLogLevel(context.Background(), t.retryConfig, "testOp", "testReq", "test-request-id", apiCall, customShouldRetry, logger.LevelWarn)
+
+	// Assert
+	assert.NoError(t.T(), err)
+	assert.Equal(t.T(), 3, callCount)
+	logLines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	require.Len(t.T(), logLines, 3)
+	// Chronological assertion: attempt 2 (line index 1) must come before attempt 3 (line index 2).
+	assert.Contains(t.T(), logLines[1], "Attempt: 2")
+	assert.Contains(t.T(), logLines[2], "Attempt: 3")
+}
+
+func (t *ExecuteWithRetryTestSuite) TestExecuteWithRetry_RequestIDSameAcrossRetries() {
+	// Arrange
+	var buf logBuffer
+	logger.SetOutput(&buf)
+	defer logger.SetOutput(os.Stdout)
+	var callCount int
+	retryableErr := errors.New("transient failure")
+	apiCall := func(ctx context.Context) (string, error) {
+		callCount++
+		if callCount < 3 {
+			return "", retryableErr
+		}
+		return "success", nil
+	}
+	customShouldRetry := func(err error) bool {
+		return err.Error() == "transient failure"
+	}
+	expectedRequestID := "unique-request-id-12345"
+
+	// Act
+	_, err := ExecuteWithCustomShouldRetryAtLogLevel(context.Background(), t.retryConfig, "testOp", "testReq", expectedRequestID, apiCall, customShouldRetry, logger.LevelWarn)
+
+	// Assert
+	assert.NoError(t.T(), err)
+	assert.Equal(t.T(), 3, callCount)
+	logLines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	require.Len(t.T(), logLines, 3)
+	// Verify that the request ID is identical and present across every single attempt (initial call log + retries)
+	for _, line := range logLines {
+		assert.Contains(t.T(), line, "InvocationID: "+expectedRequestID)
+	}
+}

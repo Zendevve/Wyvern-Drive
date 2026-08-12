@@ -1,0 +1,34 @@
+{
+  "name": "agent-fs",
+  "version": "0.12.2",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc --build",
+    "test": "bun test packages/*/src/",
+    "test:coverage": "bun test --coverage packages/*/src/",
+    "build": "cd packages/cli && bun run build:npm",
+    "install-local": "bun run build && cd packages/cli && bun link",
+    "uninstall-local": "bun remove -g @desplega.ai/agent-fs && rm -f ~/.bun/bin/agent-fs",
+    "deploy:fly": "fly deploy -a agent-fs-taras"
+  },
+  "devDependencies": {
+    "@duckdb/node-api": "1.5.3-r.3",
+    "bun-types": "^1.2.0",
+    "typescript": "^5.7.0",
+    "yaml": "^2.8.2",
+    "zod-to-json-schema": "^3.25.1"
+  },
+  "overrides": {
+    "chromadb": "npm:empty-npm-package@1.0.0",
+    "chromadb-default-embed": "npm:empty-npm-package@1.0.0",
+    "@xenova/transformers": "npm:empty-npm-package@1.0.0",
+    "tree-sitter-wasms": "npm:empty-npm-package@1.0.0",
+    "web-tree-sitter": "npm:empty-npm-package@1.0.0",
+    "cohere-ai": "npm:empty-npm-package@1.0.0",
+    "voyageai": "npm:empty-npm-package@1.0.0",
+    "ollama": "npm:empty-npm-package@1.0.0"
+  }
+}

@@ -1,0 +1,1311 @@
+// Copyright 2015 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package inode
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/googlecloudplatform/gcsfuse/v3/cfg"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/block"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/buffer"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/bufferedwrites"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/cache/lru"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/contentcache"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/fs/gcsfuse_errors"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/gcsx"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/gcsx/kernel_readers"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/logger"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/storage/gcs"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/storage/storageutil"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/util"
+	"github.com/googlecloudplatform/gcsfuse/v3/metrics"
+	"github.com/googlecloudplatform/gcsfuse/v3/tracing"
+	"github.com/jacobsa/fuse/fuseops"
+	"github.com/jacobsa/syncutil"
+	"github.com/jacobsa/timeutil"
+	"golang.org/x/sync/semaphore"
+)
+
+// A GCS object metadata key for file mtimes. mtimes are UTC, and are stored in
+// the format defined by time.RFC3339Nano.
+const (
+	FileMtimeMetadataKey = gcs.MtimeMetadataKey
+	// TODO(b/447991081): Update streaming writes semantic message once semantics for ZB are updated on semantics doc.
+	StreamingWritesSemantics = "Streaming writes is supported for sequential writes to new/empty files. " +
+		"For more details, see: https://github.com/GoogleCloudPlatform/gcsfuse/blob/master/docs/semantics.md#writes"
+)
+
+// WriteContext wraps dependencies required during file write and sync operations,
+// allowing us to decouple them from the FileInode struct to save memory.
+type WriteContext struct {
+	Config             *cfg.Config
+	GlobalMaxBlocksSem *semaphore.Weighted
+	TraceHandle        tracing.TraceHandle
+	MetricHandle       metrics.MetricHandle
+}
+
+func parseMtime(m *gcs.MinObject) time.Time {
+	if m == nil {
+		return time.Time{}
+	}
+	mtime := m.UpdatedTime()
+
+	if strTimestamp, ok := m.Metadata["goog-reserved-file-mtime"]; ok {
+		if timestamp, err := strconv.ParseInt(strTimestamp, 0, 64); err == nil {
+			mtime = time.Unix(timestamp, 0)
+		} else {
+			logger.Warnf("parseMtime: Error parsing goog-reserved-file-mtime %q: %v", strTimestamp, err)
+		}
+	}
+
+	if formatted, ok := m.Metadata["gcsfuse_mtime"]; ok {
+		if timestamp, err := time.Parse(time.RFC3339Nano, formatted); err == nil {
+			mtime = timestamp
+		} else {
+			logger.Warnf("parseMtime: Error parsing gcsfuse_mtime %q: %v", formatted, err)
+		}
+	}
+	return mtime
+}
+
+type FileInode struct {
+	/////////////////////////
+	// Dependencies
+	/////////////////////////
+
+	bucket     *gcsx.SyncerBucket
+	mtimeClock timeutil.Clock
+
+	/////////////////////////
+	// Constant data
+	/////////////////////////
+
+	id           fuseops.InodeID
+	name         Name
+	contentCache *contentcache.ContentCache
+
+	/////////////////////////
+	// Mutable state
+	/////////////////////////
+
+	// A mutex that must be held when calling certain methods. See documentation
+	// for each method.
+	mu syncutil.InvariantMutex
+
+	// GUARDED_BY(mu)
+	lc lookupCount
+
+	// GUARDED_BY(mu)
+	mtime time.Time
+
+	// The source object from which this inode derives.
+	//
+	// INVARIANT: for non local files,  src.Name == name.GcsObjectName()
+	//
+	// GUARDED_BY(mu)
+	src gcs.MinObject
+
+	// The current content of this inode, or nil if the source object is still
+	// authoritative.
+	content gcsx.TempFile
+
+	// Wrapper object for multi range downloader. Needed as we will create the MRD in
+	// random reader and we can't pass fileInode object to random reader as it
+	// creates a cyclic dependency.
+	// Todo: Investigate if cyclic dependency can be removed by removing some unused
+	// code.
+	MRDWrapper *gcsx.MultiRangeDownloaderWrapper
+
+	bwh bufferedwrites.BufferedWriteHandler
+
+	// mrdInstance manages the MultiRangeDownloader instances for this inode.
+	mrdInstance               *gcsx.MrdInstance
+	kernelRangeReaderInstance *kernel_readers.KernelRangeReaderInstance
+
+	// Once write is started on the file i.e, bwh is initialized, any fileHandles
+	// opened in write mode before or after this and not yet closed are considered
+	// as writing to the file even though they are not writing.
+	// In case of successful flush, we will set bwh to nil. But in case of error,
+	// we will keep returning that error to all the fileHandles open during that time
+	// and set bwh to nil after all fileHandlers are closed.
+	// writeHandleCount tracks the count of open fileHandles in write mode.
+	writeHandleCount int32
+
+	// TODO (#640) remove bool flag and refactor contentCache to support two implementations:
+	// one implementation with original functionality and one with new persistent disk content cache
+	localFileCache bool
+
+	// Has Destroy been called?
+	//
+	// GUARDED_BY(mu)
+	destroyed bool
+
+	// Represents a local file which is not yet synced to GCS.
+	local bool
+
+	// Represents if local file has been unlinked.
+	unlinked bool
+}
+
+var _ Inode = &FileInode{}
+
+// Create a file inode for the given min object in GCS. The initial lookup count is
+// zero.
+//
+// REQUIRES: m != nil
+// REQUIRES: m.Generation > 0
+// REQUIRES: m.MetaGeneration > 0
+// REQUIRES: len(m.Name) > 0
+// REQUIRES: m.Name[len(m.Name)-1] != '/'
+func NewFileInode(
+	id fuseops.InodeID,
+	name Name,
+	m *gcs.MinObject,
+	bucket *gcsx.SyncerBucket,
+	localFileCache bool,
+	contentCache *contentcache.ContentCache,
+	mtimeClock timeutil.Clock,
+	localFile bool,
+	cfg *cfg.Config,
+	globalMaxBlocksSem *semaphore.Weighted,
+	mrdCache *lru.Cache,
+	traceHandle tracing.TraceHandle,
+	metricHandle metrics.MetricHandle) (f *FileInode) {
+	// Set up the basic struct.
+	var minObj gcs.MinObject
+	if m != nil {
+		minObj = *m
+	}
+
+	f = &FileInode{
+		bucket:         bucket,
+		mtimeClock:     mtimeClock,
+		id:             id,
+		name:           name,
+		mtime:          parseMtime(m),
+		localFileCache: localFileCache,
+		contentCache:   contentCache,
+		src:            minObj,
+		local:          localFile,
+		unlinked:       false,
+	}
+
+	if f.bucket.BucketType().IsRapid() {
+		var err error
+		f.mrdInstance = gcsx.NewMrdInstance(&minObj, bucket, mrdCache, id, cfg)
+		f.MRDWrapper, err = gcsx.NewMultiRangeDownloaderWrapper(bucket, &minObj, cfg, mrdCache)
+		if err != nil {
+			logger.Errorf("NewFileInode: Error in creating MRDWrapper %v", err)
+		}
+	} else if cfg.FileSystem.EnableKernelReader {
+		f.kernelRangeReaderInstance = kernel_readers.NewKernelRangeReaderInstance(&minObj)
+	}
+
+	f.lc.Init(id)
+	f.mu = syncutil.NewInvariantMutex(f.checkInvariants)
+
+	return
+}
+
+////////////////////////////////////////////////////////////////////////
+// Helpers
+////////////////////////////////////////////////////////////////////////
+
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) checkInvariants() {
+	if f.destroyed {
+		return
+	}
+
+	// Make sure the name is legal.
+	name := f.Name()
+	if !name.IsFile() {
+		panic("Illegal file name: " + name.String())
+	}
+
+	// INVARIANT: For non-local inodes, src.Name == name
+	if !f.IsLocal() && f.src.Name != name.GcsObjectName() {
+		panic(fmt.Sprintf(
+			"Name mismatch: %q vs. %q",
+			f.src.Name,
+			name.GcsObjectName(),
+		))
+	}
+
+	// INVARIANT: content.CheckInvariants() does not panic
+	if f.content != nil {
+		f.content.CheckInvariants()
+	}
+}
+
+// clobbered checks if the FileInode's corresponding GCS object has been
+// unexpectedly modified or deleted.
+//
+// It compares the GCS object's metadata (generation, size, meta-generation)
+// against the inode's expected f.SourceGeneration().
+//
+// Return Values (object *gcs.Object, isClobbered bool, err error):
+//
+// | Condition                                    | oGen.Compare | GCS Error | Returns (*gcs.Object, bool(isClobbered), bool(notFound), error) |
+// |----------------------------------------------|--------------|-----------|-----------------------------------------------------------------|
+// | Generations Match                            | 0            | nil       | (latestObject, false, false, nil)                               |
+// | GCS Object Size Greater at same generation   | 2            | nil       | (latestObject, true, false, nil)                                |
+// | GCS Object Older/Divergent                   | -1 or 1      | nil       | (nil, true, false, nil)                                         |
+// | Object Not Found                             | N/A          | NotFound  | (nil, true(false if local), true (false is local) nil)          |
+// | Other GCS Stat Error                         | N/A          | Other     | (nil, false, false, <GCS Error>)                                |
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) clobbered(ctx context.Context, forceFetchFromGcs bool, includeExtendedObjectAttributes bool) (o *gcs.Object, isClobbered bool, isNotFound bool, err error) {
+	// Stat the object in GCS. ForceFetchFromGcs ensures object is fetched from
+	// gcs and not cache.
+	req := &gcs.StatObjectRequest{
+		Name:                           f.name.GcsObjectName(),
+		ForceFetchFromGcs:              forceFetchFromGcs,
+		ReturnExtendedObjectAttributes: includeExtendedObjectAttributes,
+	}
+	m, e, err := f.bucket.StatObject(ctx, req)
+	if includeExtendedObjectAttributes {
+		o = storageutil.ConvertMinObjectAndExtendedObjectAttributesToObject(m, e)
+	} else {
+		o = storageutil.ConvertMinObjectToObject(m)
+	}
+	// Special case: "not found" means we have been clobbered.
+	var notFoundErr *gcs.NotFoundError
+	if errors.As(err, &notFoundErr) {
+		err = nil
+		if f.IsLocal() {
+			// For localFile, it is expected that object doesn't exist in GCS.
+			return
+		}
+
+		isClobbered = true
+		isNotFound = true
+		return
+	}
+
+	// Propagate other errors.
+	if err != nil {
+		err = fmt.Errorf("StatObject: %w", err)
+		return
+	}
+
+	// We are clobbered iff the generation doesn't match our source generation.
+	oGen := Generation{o.Generation, o.MetaGeneration, o.Size}
+	cmp := oGen.Compare(f.SourceGeneration())
+	switch cmp {
+	case 0:
+		// Generations and size match: Not clobbered. Return the fetched object.
+		return o, false, false, nil
+	case 2:
+		// The latest GCS object has greater size at the same generation. Return
+		// the fetched object. We also return isClobbered true to indicate the
+		// remote size change.
+		return o, true, false, nil
+	default: // -1 (GCS is older) or 1 (GCS has different gen/metagen)
+		// GCS object is older, or generation/metageneration mismatch: Clobbered.
+		// Return nil for the object as it's not the version we might want to use.
+		return nil, true, false, nil
+	}
+}
+
+// CheckClobbered checks if the file has been clobbered by making a stat call to GCS.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) CheckClobbered(ctx context.Context) (err error) {
+	_, clobbered, isNotFound, err := f.clobbered(ctx, true, false)
+	if err != nil {
+		return err
+	}
+	if isNotFound {
+		return &gcsfuse_errors.FileNotFoundError{
+			Err:        errors.New("object does not exist"),
+			ObjectName: f.name.GcsObjectName(),
+		}
+	}
+	if clobbered {
+		return &gcsfuse_errors.FileClobberedError{
+			Err:        errors.New("file was clobbered due to generation/metageneration mismatch"),
+			ObjectName: f.name.GcsObjectName(),
+		}
+	}
+	return nil
+}
+
+// Open a reader for the generation of object we care about.
+func (f *FileInode) openReader(ctx context.Context) (io.ReadCloser, error) {
+	rc, err := f.bucket.NewReaderWithReadHandle(
+		ctx,
+		&gcs.ReadObjectRequest{
+			Name:           f.src.Name,
+			Generation:     f.src.Generation,
+			ReadCompressed: f.src.HasContentEncodingGzip(),
+		})
+	// If the object with requested generation doesn't exist in GCS, it indicates
+	// a file clobbering scenario. This likely occurred because the file was
+	// modified/deleted leading to different generation number.
+	var notFoundError *gcs.NotFoundError
+	if errors.As(err, &notFoundError) {
+		err = &gcsfuse_errors.FileClobberedError{
+			Err:        fmt.Errorf("NewReader: %w", err),
+			ObjectName: f.src.Name,
+		}
+	}
+	if err != nil {
+		err = fmt.Errorf("NewReader: %w", err)
+	}
+	return rc, err
+}
+
+// Ensure that content exists and is not stale
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) ensureContent(ctx context.Context) (err error) {
+	if f.localFileCache {
+		// Fetch content from the cache after validating generation numbers again
+		// Generation validation first occurs at inode creation/destruction
+		cacheObjectKey := &contentcache.CacheObjectKey{BucketName: f.bucket.Name(), ObjectName: f.name.objectName}
+		if cacheObject, exists := f.contentCache.Get(cacheObjectKey); exists {
+			if cacheObject.ValidateGeneration(f.src.Generation, f.src.MetaGeneration) {
+				f.content = cacheObject.CacheFile
+				return
+			}
+		}
+
+		rc, err := f.openReader(ctx)
+		if err != nil {
+			err = fmt.Errorf("openReader Error: %w", err)
+			return err
+		}
+
+		// Insert object into content cache
+		tf, err := f.contentCache.AddOrReplace(cacheObjectKey, f.src.Generation, f.src.MetaGeneration, rc)
+		if err != nil {
+			err = fmt.Errorf("AddOrReplace cache error: %w", err)
+			return err
+		}
+
+		// Update state.
+		f.content = tf.CacheFile
+	} else {
+		// Local filecache is not enabled
+		if f.content != nil {
+			return
+		}
+
+		rc, err := f.openReader(ctx)
+		if err != nil {
+			err = fmt.Errorf("openReader Error: %w", err)
+			return err
+		}
+
+		tf, err := f.contentCache.NewTempFile(rc)
+		if err != nil {
+			err = fmt.Errorf("NewTempFile: %w", err)
+			return err
+		}
+		// Update state.
+		f.content = tf
+	}
+
+	return
+}
+
+////////////////////////////////////////////////////////////////////////
+// Public interface
+////////////////////////////////////////////////////////////////////////
+
+func (f *FileInode) Lock() {
+	f.mu.Lock()
+}
+
+func (f *FileInode) Unlock() {
+	f.mu.Unlock()
+}
+
+func (f *FileInode) ID() fuseops.InodeID {
+	return f.id
+}
+
+func (f *FileInode) Name() Name {
+	return f.name
+}
+
+func (f *FileInode) IsLocal() bool {
+	return f.local
+}
+
+func (f *FileInode) IsUnlinked() bool {
+	return f.unlinked
+}
+
+func (f *FileInode) Unlink() {
+	f.unlinked = true
+
+	if f.bwh != nil {
+		f.bwh.Unlink()
+	}
+}
+
+// Returns true if the fileInode is using Buffered Write Handler.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) IsUsingBWH() bool {
+	return f.bwh != nil
+}
+
+// Source returns a record for the GCS object from which this inode is branched. The
+// record is guaranteed not to be modified, and users must not modify it.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) Source() *gcs.MinObject {
+	// Make a copy, since we modify f.src.
+	o := f.src
+	return &o
+}
+
+// Returns MrdInstace for this inode.
+func (f *FileInode) GetMRDInstance() *gcsx.MrdInstance {
+	return f.mrdInstance
+}
+
+// Returns KernelRangeReaderInstance for this inode.
+func (f *FileInode) GetKernelRangeReaderInstance() *kernel_readers.KernelRangeReaderInstance {
+	return f.kernelRangeReaderInstance
+}
+
+// If true, it is safe to serve reads directly from the object given by
+// f.Source(), rather than calling f.ReadAt. Doing so may be more efficient,
+// because f.ReadAt may cause the entire object to be faulted in and requires
+// the inode to be locked during the read. SourceGenerationAuthoritative requires
+// SyncPendingBufferedWrites method has been called on f within same inode lock for
+// streaming writes with zonal bucket.
+// TODO(b/406160290): Check if this can be improved.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) SourceGenerationIsAuthoritative() bool {
+	// Source generation is authoritative if:
+	//   1.  No pending writes exists on the inode (both content and bwh are nil).
+	//   2.  The bucket is rapid and there are no pending writes in the temporary file.
+	return (f.content == nil && f.bwh == nil) || (f.bucket.BucketType().RapidWritesEnabled() && f.content == nil)
+}
+
+// Equivalent to the generation returned by f.Source().
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) SourceGeneration() (g Generation) {
+	g.Size = f.src.Size
+	g.Object = f.src.Generation
+	g.Metadata = f.src.MetaGeneration
+	// If bwh is not nil, it's size takes precedence as that is being actively
+	// written to GCS.
+	// Since temporary file does not write to GCS on the go, it's size is not
+	// used as source object's size.
+	if f.bwh != nil {
+		writeFileInfo := f.bwh.WriteFileInfo()
+		g.Size = uint64(writeFileInfo.TotalSize)
+	}
+	return
+}
+
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) IncrementLookupCount() {
+	f.lc.Inc()
+}
+
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) DecrementLookupCount(n uint64) (destroy bool) {
+	destroy = f.lc.Dec(n)
+	return
+}
+
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) RegisterFileHandle(readOnly bool) {
+	if !readOnly {
+		f.writeHandleCount++
+	}
+}
+
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) DeRegisterFileHandle(readOnly bool) {
+	if readOnly {
+		return
+	}
+
+	if f.writeHandleCount <= 0 {
+		logger.Errorf("Mismatch in number of write file handles for inode :%d", f.id)
+	}
+
+	f.writeHandleCount--
+
+	// All write fileHandles associated with bwh are closed. So safe to set bwh to nil.
+	if f.writeHandleCount == 0 && f.bwh != nil {
+		err := f.bwh.Destroy()
+		if err != nil {
+			logger.Warnf("Error while destroying the bufferedWritesHandler: %v", err)
+		}
+		f.bwh = nil
+	}
+}
+
+// LOCKS_REQUIRED(f.mu)
+// UpdateSize updates the size of the backing GCS object. It also calls
+// updateReaders to ensure that the multi-range downloader and kernel range
+// readers are aware of the new size. This prevents the downloader/readers from
+// operating on stale object information.
+func (f *FileInode) UpdateSize(size uint64) {
+	f.src.Size = size
+	f.updateReaders()
+}
+
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) Destroy() (err error) {
+	f.destroyed = true
+	if f.localFileCache {
+		cacheObjectKey := &contentcache.CacheObjectKey{BucketName: f.bucket.Name(), ObjectName: f.name.objectName}
+		f.contentCache.Remove(cacheObjectKey)
+	} else if f.content != nil {
+		f.content.Destroy()
+	}
+	if f.mrdInstance != nil {
+		f.mrdInstance.Destroy()
+	}
+	return
+}
+
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) Attributes(
+	ctx context.Context, clobberedCheck bool) (size uint64, mtime time.Time, nlink uint32, err error) {
+	mtime = f.mtime
+	size = f.src.Size
+
+	// If we've got local content, its size and (maybe) mtime take precedence.
+	if f.content != nil {
+		var sr gcsx.StatResult
+		sr, err = f.content.Stat()
+		if err != nil {
+			err = fmt.Errorf("stat: %w", err)
+			return
+		}
+
+		size = uint64(sr.Size)
+		if sr.Mtime != nil {
+			mtime = *sr.Mtime
+		}
+	}
+
+	if f.bwh != nil {
+		writeFileInfo := f.bwh.WriteFileInfo()
+		mtime = writeFileInfo.Mtime
+		size = uint64(writeFileInfo.TotalSize)
+	}
+
+	if clobberedCheck {
+		// If the object has been clobbered, we reflect that as the inode being
+		// unlinked.
+		var clobbered bool
+		var o *gcs.Object
+		o, clobbered, _, err = f.clobbered(ctx, false, false)
+		if err != nil {
+			err = fmt.Errorf("clobbered: %w", err)
+			return
+		}
+		if clobbered {
+			// If clobbered check is true but the minObject returned is not nil, it means the clobber
+			// was due to update in object size remotely (appends case). In this scenario, we will update
+			// the inode attributes to reflect latest size.
+			if o != nil {
+				f.UpdateSize(o.Size)
+				size = o.Size
+				nlink = 1
+				return
+			}
+			// If the minObj is nil, it means that file has been clobbered genuinely due to generation
+			// or metageneration changes.
+			nlink = 0
+			return
+		}
+	}
+
+	nlink = 1
+
+	// For local files, also checking if file is unlinked locally.
+	if f.IsLocal() && f.IsUnlinked() {
+		nlink = 0
+	}
+
+	return
+}
+
+func (f *FileInode) Bucket() *gcsx.SyncerBucket {
+	return f.bucket
+}
+
+// Serve a read for this file with semantics matching gcsx.Reader.ReadAt.
+//
+// The caller may be better off reading directly from GCS when
+// f.SourceGenerationIsAuthoritative() is true.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) Read(
+	ctx context.Context,
+	req *gcsx.ReadRequest) (res gcsx.ReadResponse, err error) {
+	if f.bwh != nil {
+		err = fmt.Errorf("unexpected read call for %q when streaming write is in progress for it", f.Name().LocalName())
+		return
+	}
+
+	// Make sure f.content != nil.
+	err = f.ensureContent(ctx)
+	if err != nil {
+		err = fmt.Errorf("ensureContent: %w", err)
+		return
+	}
+
+	var n int
+	var data [][]byte
+	var callback func()
+
+	if req.BufferPool != nil {
+		vBuf := buffer.NewVectoredReadBuffer(req.BufferPool, req.Size)
+		var written int64
+		written, err = vBuf.ReadFromAt(f.content, req.Offset)
+		n = int(written)
+		if n > 0 {
+			data = vBuf.Buffers()
+			callback = func() { vBuf.Release() }
+		} else {
+			vBuf.Release()
+		}
+	} else {
+		n, err = f.content.ReadAt(req.Buffer, req.Offset)
+	}
+
+	if err != nil && err != io.EOF {
+		err = fmt.Errorf("content.ReadAt: %w", err)
+	}
+
+	return gcsx.ReadResponse{
+		Size:     n,
+		Data:     data,
+		Callback: callback,
+	}, err
+}
+
+func getMetricOpenMode(openMode util.OpenMode) metrics.OpenMode {
+	isAppend := openMode.IsAppend()
+
+	switch openMode.AccessMode() {
+	case util.ReadWrite:
+		if isAppend {
+			return metrics.OpenModeReadWriteAppendAttr
+		}
+		return metrics.OpenModeReadWriteAttr
+	case util.WriteOnly:
+		if isAppend {
+			return metrics.OpenModeWriteOnlyAppendAttr
+		}
+		return metrics.OpenModeWriteOnlyAttr
+	default:
+		return metrics.OpenModeOtherAttr
+	}
+}
+
+func recordStreamingWriteFallbackMetric(mh metrics.MetricHandle, openMode util.OpenMode, reason metrics.WriteFallbackReason) {
+	if mh == nil {
+		return
+	}
+	metricOpenMode := getMetricOpenMode(openMode)
+	mh.FsStreamingWriteFallbackCount(1, metricOpenMode, reason)
+}
+
+// Serve a write for this file with semantics matching fuseops.WriteFileOp.
+// It returns true if the file is successfully synced during the write operation.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) Write(
+	ctx context.Context,
+	data []byte,
+	offset int64,
+	openMode util.OpenMode,
+	writeCtx *WriteContext) (bool, error) {
+	if f.bwh != nil {
+		return f.writeUsingBufferedWrites(ctx, data, offset, openMode, writeCtx)
+	}
+
+	return false, f.writeUsingTempFile(ctx, data, offset, writeCtx)
+}
+
+// Helper function to serve write for file using temp file.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) writeUsingTempFile(ctx context.Context, data []byte, offset int64, writeCtx *WriteContext) (err error) {
+	bytes := int64(len(data))
+	ctx, finishSpan := writeCtx.TraceHandle.TraceUpload(ctx, tracing.WriteFileStaged, f.src.Name, &bytes, &err)
+	defer finishSpan()
+	// Make sure f.content != nil.
+	err = f.ensureContent(ctx)
+	if err != nil {
+		err = fmt.Errorf("ensureContent: %w", err)
+		return
+	}
+
+	// Write to the mutable content. Note that io.WriterAt guarantees it returns
+	// an error for short writes.
+	_, err = f.content.WriteAt(data, offset)
+
+	return
+}
+
+// Helper function to serve write for file using buffered writes handler.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) writeUsingBufferedWrites(ctx context.Context, data []byte, offset int64, openMode util.OpenMode, writeCtx *WriteContext) (_ bool, err error) {
+	bytes := int64(len(data))
+	ctx, finishSpan := writeCtx.TraceHandle.TraceUpload(ctx, tracing.WriteFileStreaming, f.src.Name, &bytes, &err)
+	defer finishSpan()
+	err = f.bwh.Write(ctx, data, offset)
+	if clobberedErr := f.wrapFileClobberedError(err, "f.bwh.Write()"); clobberedErr != nil {
+		return false, clobberedErr
+	}
+	// Fall back to temp file for Out-Of-Order Writes.
+	if errors.Is(err, bufferedwrites.ErrOutOfOrderWrite) {
+		logger.Tracef("Out of order write detected. File %s will now use legacy staged writes. "+StreamingWritesSemantics, f.name.String())
+		// Finalize the object.
+		err = f.flushUsingBufferedWriteHandler(ctx)
+		if err != nil {
+			return false, fmt.Errorf("could not finalize what has been written so far: %w", err)
+		}
+		recordStreamingWriteFallbackMetric(writeCtx.MetricHandle, openMode, metrics.WriteFallbackReasonOutOfOrderAttr)
+		return true, f.writeUsingTempFile(ctx, data, offset, writeCtx)
+	}
+	if err != nil {
+		return false, fmt.Errorf("write to buffered write handler failed: %w", err)
+	}
+	return false, nil
+}
+
+// Helper function to flush buffered writes handler and update inode state with
+// new object.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) flushUsingBufferedWriteHandler(ctx context.Context) error {
+	obj, err := f.bwh.Flush(ctx)
+	if clobberedErr := f.wrapFileClobberedError(err, "f.bwh.Flush()"); clobberedErr != nil {
+		return clobberedErr
+	}
+	if err != nil {
+		return fmt.Errorf("f.bwh.Flush(): %w", err)
+	}
+	// If we finalized the object, we need to update our state.
+	f.updateInodeStateAfterFlush(obj)
+	return nil
+}
+
+// SyncPendingBufferedWrites flushes any pending writes on the bwh to GCS.
+// It is a no-op when bwh is nil.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) SyncPendingBufferedWrites(ctx context.Context) (gcsSynced bool, err error) {
+	if f.bwh == nil {
+		return
+	}
+	minObj, err := f.bwh.Sync(ctx)
+	if clobberedErr := f.wrapFileClobberedError(err, "f.bwh.Sync(ctx)"); clobberedErr != nil {
+		err = clobberedErr
+		return
+	}
+	if err != nil {
+		err = fmt.Errorf("f.bwh.Sync(ctx): %w", err)
+		return
+	}
+	// We return gcsSynced as true when we get minObject from Sync() for Zonal Buckets.
+	// For Non-Zonal Buckets minObj is always nil.
+	gcsSynced = minObj != nil
+	// If we flushed out object, we need to update our state.
+	f.updateInodeStateAfterSync(minObj)
+	return
+}
+
+// wrapFileClobberedError wraps err as a FileClobberedError if it is a gcs.PreconditionError
+// or a gcs.NotFoundError.
+//
+// Preconditions are checked when the object becomes visible in the namespace. For appendable
+// objects, the object becomes visible when starting the stream, so preconditions are checked at
+// stream start; subsequent block uploads, flushes, or syncs receive gcs.NotFoundError if the
+// backing object was deleted on GCS. For non-appendable objects, the object becomes visible
+// when the stream ends, so preconditions are checked at stream end, returning gcs.PreconditionError.
+func (f *FileInode) wrapFileClobberedError(err error, op string) error {
+	var preconditionErr *gcs.PreconditionError
+	var notFoundErr *gcs.NotFoundError
+	if errors.As(err, &preconditionErr) || errors.As(err, &notFoundErr) {
+		return &gcsfuse_errors.FileClobberedError{
+			Err:        fmt.Errorf("%s: %w", op, err),
+			ObjectName: f.src.Name,
+		}
+	}
+	return nil
+}
+
+// Set the mtime for this file. May involve a round trip to GCS.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) SetMtime(
+	ctx context.Context,
+	mtime time.Time) (err error) {
+	if f.IsUnlinked() {
+		// No need to update mtime on GCS for unlinked file.
+		return
+	}
+
+	// When bufferedWritesHandler instance is not nil, set time on bwh.
+	// It will not be nil in 2 cases when bufferedWrites are enabled:
+	// 1. local files
+	// 2. After first write on empty GCS files.
+	if f.bwh != nil {
+		f.bwh.SetMtime(mtime)
+		return
+	}
+
+	// If we have a local temp file, stat it.
+	var sr gcsx.StatResult
+	if f.content != nil {
+		sr, err = f.content.Stat()
+		if err != nil {
+			err = fmt.Errorf("stat: %w", err)
+			return
+		}
+	}
+
+	// 1. If the local content is dirty, simply update its mtime and return. This
+	// will cause the object in the bucket to be updated once we sync. If we lose
+	// power or something the mtime update will be lost, but so will the file
+	// data modifications so this doesn't seem so bad. It's worth saving the
+	// round trip to GCS for the common case of Linux writeback caching, where we
+	// always receive a setattr request just before a flush of a dirty file.
+	//
+	// 2. If the file is local, that means its not yet synced to GCS. Just update
+	// the mtime locally, it will be synced when the object is created on GCS.
+	if sr.Mtime != nil || f.IsLocal() {
+		f.content.SetMtime(mtime)
+		return
+	}
+
+	// Otherwise, update the backing object's metadata.
+	formatted := mtime.UTC().Format(time.RFC3339Nano)
+	srcGen := f.SourceGeneration()
+
+	req := &gcs.UpdateObjectRequest{
+		Name:                       f.src.Name,
+		Generation:                 srcGen.Object,
+		MetaGenerationPrecondition: &srcGen.Metadata,
+		Metadata: map[string]*string{
+			FileMtimeMetadataKey: &formatted,
+		},
+	}
+
+	o, err := f.bucket.UpdateObject(ctx, req)
+	if err == nil {
+		var minObj gcs.MinObject
+		minObjPtr := storageutil.ConvertObjToMinObject(o)
+		if minObjPtr != nil {
+			minObj = *minObjPtr
+		}
+		f.src = minObj
+		f.mtime = parseMtime(&minObj)
+		f.updateReaders()
+		return
+	}
+
+	var notFoundErr *gcs.NotFoundError
+	if errors.As(err, &notFoundErr) {
+		// Special case: silently ignore not found errors, which mean the file has
+		// been unlinked.
+		err = nil
+		return
+	}
+
+	var preconditionErr *gcs.PreconditionError
+	if errors.As(err, &preconditionErr) {
+		// Special case: silently ignore precondition errors, which we also take to
+		// mean the file has been unlinked.
+		err = nil
+		return
+	}
+
+	err = fmt.Errorf("UpdateObject: %w", err)
+	return
+}
+
+func (f *FileInode) fetchLatestGcsObject(ctx context.Context) (*gcs.Object, error) {
+	// When listObjects call is made, we fetch data with projection set as noAcl
+	// which means acls and owner properties are not returned. So the f.src object
+	// here will not have acl information even though there are acls present on
+	// the gcsObject.
+	// Hence, we are making an explicit gcs stat call to fetch the latest
+	// properties and using that when object is synced below. StatObject by
+	// default sets the projection to full, which fetches all the object
+	// properties.
+	latestGcsObj, isClobbered, _, err := f.clobbered(ctx, true, true)
+	if err != nil {
+		return nil, err
+	}
+	if isClobbered {
+		var err error
+		if latestGcsObj != nil {
+			err = fmt.Errorf("file was clobbered due to increase in size at same generation(remote appends)")
+		} else {
+			err = fmt.Errorf("file was clobbered due to generation/metageneration mismatch")
+		}
+		return nil, &gcsfuse_errors.FileClobberedError{
+			Err:        err,
+			ObjectName: f.src.Name,
+		}
+	}
+	return latestGcsObj, nil
+}
+
+// Sync writes out contents to GCS.  If this fails due to the generation
+// having been clobbered, failure is propagated back to the calling
+// function as an error.
+//
+// For buffered writes, this method only waits for any partial buffers to be
+// uploaded to GCS. It does not guarantee that the entire contents of the file
+// have been persisted.
+//
+// For non-buffered writes, this method writes the entire contents to GCS.
+// If this method succeeds, SourceGeneration will return the new generation by
+// which this inode should be known (which may be the same as before). If it
+// fails, the generation will not change.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) Sync(ctx context.Context, writeCtx *WriteContext) (gcsSynced bool, err error) {
+	// If we have not been dirtied, there is nothing to do.
+	if f.content == nil && f.bwh == nil {
+		return
+	}
+
+	if f.bwh != nil {
+		gcsSynced, err = f.SyncPendingBufferedWrites(ctx)
+		if err != nil {
+			err = fmt.Errorf("could not sync what has been written so far: %w", err)
+		}
+		return
+	}
+	err = f.syncUsingContent(ctx, writeCtx)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// get the temp content size when tracing is enabled to set the BYTES_UPLOADED attribute
+func (f *FileInode) getTempContentSizeForSpan(config *cfg.Config) int64 {
+	if !cfg.IsTracingEnabled(config) {
+		return -1
+	}
+
+	st, err := f.content.Stat()
+	if err != nil {
+		logger.Errorf("failed getting content size for staged sync file span: %v", err)
+		return -1
+	}
+
+	return st.Size
+}
+
+// syncUsingContent syncs the inode content to GCS. It fetches the latest GCS
+// object, syncs the content and updates the inode state.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) syncUsingContent(ctx context.Context, writeCtx *WriteContext) (err error) {
+	bytes := f.getTempContentSizeForSpan(writeCtx.Config)
+	ctx, finishSpan := writeCtx.TraceHandle.TraceUpload(ctx, tracing.SyncFileStaged, f.src.Name, &bytes, &err)
+	defer finishSpan()
+	var latestGcsObj *gcs.Object
+	if !f.local {
+		latestGcsObj, err = f.fetchLatestGcsObject(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Write out the contents if they are dirty.
+	// Object properties are also synced as part of content sync. Hence, passing
+	// the latest object fetched from gcs which has all the properties populated.
+	newObj, err := f.bucket.SyncObject(ctx, f.Name().GcsObjectName(), latestGcsObj, f.content)
+
+	if clobberedErr := f.wrapFileClobberedError(err, "SyncObject"); clobberedErr != nil {
+		return clobberedErr
+	}
+
+	// Propagate other errors.
+	if err != nil {
+		return fmt.Errorf("SyncObject: %w", err)
+	}
+
+	if newObj != nil && f.content != nil {
+		st, statErr := f.content.Stat()
+		if statErr != nil {
+			return fmt.Errorf("SyncObject: stat temp file for size validation: %w", statErr)
+		}
+
+		if newObj.Size != uint64(st.Size) {
+			return fmt.Errorf("SyncObject: could not upload entire data, expected size %d, got %d", st.Size, newObj.Size)
+		}
+	}
+
+	minObj := storageutil.ConvertObjToMinObject(newObj)
+	// If we wrote out a new object, we need to update our state.
+	f.updateInodeStateAfterFlush(minObj)
+	return nil
+}
+
+// Flush writes out contents to GCS. If this fails due to the generation
+// having been clobbered, failure is propagated back to the calling
+// function as an error.
+//
+// After this method succeeds, SourceGeneration will return the new generation
+// by which this inode should be known (which may be the same as before). If it
+// fails, the generation will not change.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) Flush(ctx context.Context, writeCtx *WriteContext) (err error) {
+	// If we have not been dirtied, there is nothing to do.
+	if f.content == nil && f.bwh == nil {
+		return
+	}
+
+	// Flush using the appropriate method based on whether we're using a
+	// buffered write handler.
+	if f.bwh != nil {
+		return f.flushUsingBufferedWriteHandler(ctx)
+	}
+	return f.syncUsingContent(ctx, writeCtx)
+}
+
+func (f *FileInode) updateInodeStateAfterFlush(minObj *gcs.MinObject) {
+	if minObj != nil && !f.localFileCache {
+		// Set BWH to nil as as object has been finalized.
+		if f.bwh != nil {
+			f.bwh = nil
+		}
+		f.updateInodeStateAfterSync(minObj)
+	}
+}
+
+func (f *FileInode) updateInodeStateAfterSync(minObj *gcs.MinObject) {
+	if minObj != nil && !f.localFileCache {
+		f.src = *minObj
+		f.mtime = parseMtime(minObj)
+		// Update MRDWrapper
+		f.updateReaders()
+		// Convert localFile to nonLocalFile after it is synced to GCS.
+		if f.IsLocal() {
+			f.local = false
+		}
+		if f.content != nil {
+			f.content.Destroy()
+			f.content = nil
+		}
+	}
+}
+
+// Updates the min object stored in MRDWrapper & MRDInstance corresponding to the inode.
+// Should be called when minObject associated with inode is updated.
+func (f *FileInode) updateReaders() {
+	minObj := f.Source()
+	if f.kernelRangeReaderInstance != nil {
+		f.kernelRangeReaderInstance.SetMinObject(minObj)
+	}
+
+	// This will be a noop for regional bucket.
+	if !f.bucket.BucketType().IsRapid() {
+		return
+	}
+	if err := f.mrdInstance.SetMinObject(minObj); err != nil {
+		logger.Errorf("FileInode::updateReaders Error in setting minObject for MrdInstance %v", err)
+	}
+	if err := f.MRDWrapper.SetMinObject(minObj); err != nil {
+		logger.Errorf("FileInode::updateReaders Error in setting minObject for MRDWrapper %v", err)
+	}
+}
+
+// truncateUsingBufferedWriteHandler attempts to truncate the file using the buffered
+// write handler. If the requested size is smaller than the file's current size,
+// it finalizes the existing writes, falls back to using a temporary file for
+// the truncation, and returns true to indicate the file has been synced.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) truncateUsingBufferedWriteHandler(ctx context.Context, size int64, writeCtx *WriteContext) (bool, error) {
+	err := f.bwh.Truncate(size)
+	// If truncate size is less than the total file size resulting in OutOfOrder write, finalize and fall back to temp file.
+	if errors.Is(err, bufferedwrites.ErrOutOfOrderWrite) {
+		logger.Tracef("Out of order write detected. File %s will now use legacy staged writes. "+StreamingWritesSemantics, f.name.String())
+		// Finalize the object.
+		err = f.flushUsingBufferedWriteHandler(ctx)
+		if err != nil {
+			return false, fmt.Errorf("could not finalize what has been written so far: %w", err)
+		}
+		recordStreamingWriteFallbackMetric(writeCtx.MetricHandle, util.NewOpenMode(util.WriteOnly, 0), metrics.WriteFallbackReasonOutOfOrderAttr)
+		return true, f.truncateUsingTempFile(ctx, size)
+	}
+	if err != nil {
+		return false, fmt.Errorf("got unexpected error from bwh.Truncate(): %w", err)
+	}
+	return false, nil
+}
+
+// truncateUsingTempFile truncates the file by first ensuring a temporary file
+// is available and then truncating that temporary file to the specified size.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) truncateUsingTempFile(ctx context.Context, size int64) error {
+	// Make sure f.content != nil.
+	err := f.ensureContent(ctx)
+	if err != nil {
+		return fmt.Errorf("ensureContent: %w", err)
+	}
+	// Truncate temp file.
+	return f.content.Truncate(size)
+}
+
+// Truncate the file to the specified size.
+// It returns true if the file has been successfully synced to GCS.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) Truncate(
+	ctx context.Context,
+	size int64,
+	writeCtx *WriteContext) (bool, error) {
+	if f.IsUsingBWH() {
+		return f.truncateUsingBufferedWriteHandler(ctx, size, writeCtx)
+	}
+	return false, f.truncateUsingTempFile(ctx, size)
+}
+
+// Ensures cache content on read if content cache enabled
+func (f *FileInode) CacheEnsureContent(ctx context.Context) (err error) {
+	if f.localFileCache {
+		err = f.ensureContent(ctx)
+	}
+
+	return
+}
+
+// CreateEmptyTempFile creates an empty file with no contents when
+// streaming writes are not in enabled.
+//
+// LOCKS_REQUIRED(f.mu)
+func (f *FileInode) CreateEmptyTempFile(ctx context.Context) (err error) {
+	// Skip creating empty temp file when streaming writes are enabled
+	// or temp file is already created.
+	if f.bwh != nil || f.content != nil {
+		return
+	}
+
+	// Creating a file with no contents. The contents will be updated with
+	// writeFile operations.
+	f.content, err = f.contentCache.NewTempFile(io.NopCloser(strings.NewReader("")))
+	// Setting the initial mtime to creation time.
+	f.content.SetMtime(f.mtimeClock.Now())
+	return
+}
+
+// Initializes Buffered Write Handler if the file inode is eligible and returns
+// initialized as true when the new instance of buffered writer handler is created.
+func (f *FileInode) InitBufferedWriteHandlerIfEligible(ctx context.Context, openMode util.OpenMode, writeCtx *WriteContext) (bool, error) {
+	// bwh already initialized, do nothing.
+	if f.bwh != nil {
+		return false, nil
+	}
+
+	tempFileInUse := f.content != nil
+	if !writeCtx.Config.Write.EnableStreamingWrites || tempFileInUse {
+		// bwh should not be initialized under these conditions.
+		return false, nil
+	}
+
+	var latestGcsObj *gcs.Object
+	var err error
+	if !f.local {
+		if f.bucket.BucketType().RapidWritesEnabled() && openMode.IsAppend() {
+			// In case of rapid appends, we will rely on kernel's latest view of the object
+			// instead of reaching out to the server for latest metadata. This is done to avoid
+			// forceful overwrites of local and latest object metadata with possibly stale server
+			// response. Since appends happen at the same generation, StatObject() call is redundant.
+			latestGcsObj = storageutil.ConvertMinObjectToObject(&f.src)
+		} else {
+			// For regional buckets or overwrites for rapid buckets, call StatObject() to fetch extended
+			// attributes missing from the cached MinObject, which is required by the CreateObject request
+			// to create the new object generation.
+			latestGcsObj, err = f.fetchLatestGcsObject(ctx)
+		}
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if !f.areBufferedWritesSupported(openMode, latestGcsObj, writeCtx) {
+		return false, nil
+	}
+
+	if f.bwh == nil {
+		f.bwh, err = bufferedwrites.NewBWHandler(&bufferedwrites.CreateBWHandlerRequest{
+			Object:                   latestGcsObj,
+			ObjectName:               f.name.GcsObjectName(),
+			Bucket:                   f.bucket,
+			BlockSize:                int64(writeCtx.Config.Write.BlockSizeMb * float64(util.MiB)),
+			MaxBlocksPerFile:         writeCtx.Config.Write.MaxBlocksPerFile,
+			GlobalMaxBlocksSem:       writeCtx.GlobalMaxBlocksSem,
+			ChunkRetryDeadlineSecs:   writeCtx.Config.GcsRetries.ChunkRetryDeadlineSecs,
+			ChunkTransferTimeoutSecs: writeCtx.Config.GcsRetries.ChunkTransferTimeoutSecs,
+			TraceHandle:              writeCtx.TraceHandle,
+		})
+		if errors.Is(err, block.CantAllocateAnyBlockError) {
+			logger.Tracef("File %s will use legacy staged writes because concurrent streaming write "+
+				"limit (set by --write-global-max-blocks) has been reached. To allow more concurrent files "+
+				"to use streaming writes, consider increasing this limit if sufficient memory is available. "+
+				"For more details on memory usage, see: https://github.com/GoogleCloudPlatform/gcsfuse/blob/master/docs/semantics.md#writes", f.name.String())
+			recordStreamingWriteFallbackMetric(writeCtx.MetricHandle, openMode, metrics.WriteFallbackReasonConcurrencyLimitBreachedAttr)
+			return false, nil
+		}
+		if err != nil {
+			recordStreamingWriteFallbackMetric(writeCtx.MetricHandle, openMode, metrics.WriteFallbackReasonOtherAttr)
+			return false, fmt.Errorf("failed to create bufferedWriteHandler: %w", err)
+		}
+		f.bwh.SetMtime(f.mtimeClock.Now())
+		return true, nil
+	}
+	return false, nil
+}
+
+func (f *FileInode) areBufferedWritesSupported(openMode util.OpenMode, obj *gcs.Object, writeCtx *WriteContext) bool {
+	// For new files and existing files of size 0, buffered writes are always supported.
+	if f.local || obj.Size == 0 {
+		return true
+	}
+	if writeCtx.Config.Write.EnableRapidAppends && openMode.IsAppend() && f.bucket.BucketType().RapidWritesEnabled() && obj.Finalized.IsZero() {
+		return true
+	}
+	logger.Tracef("Existing file %s of size %d bytes (non-zero) will use legacy staged writes. "+StreamingWritesSemantics, f.name.String(), obj.Size)
+	recordStreamingWriteFallbackMetric(writeCtx.MetricHandle, openMode, metrics.WriteFallbackReasonExistingFileAttr)
+	return false
+}

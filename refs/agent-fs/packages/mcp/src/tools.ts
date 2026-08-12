@@ -1,0 +1,63 @@
+import { z } from "zod";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { getRegisteredOps, getOpDefinition, dispatchOp } from "@/core";
+import type { OpContext } from "@/core";
+import type { Extra } from "./server.js";
+
+// Register all ops from the core registry as MCP tools
+export function registerTools(
+  server: McpServer,
+  getContext: (extra: Extra) => OpContext
+) {
+  const ops = getRegisteredOps();
+
+  for (const opName of ops) {
+    const def = getOpDefinition(opName);
+    if (!def) continue;
+
+    // Convert Zod schema to a plain object shape for MCP
+    // MCP SDK accepts Zod schemas directly
+    server.tool(
+      opName,
+      def.description,
+      def.schema instanceof z.ZodObject
+        ? (def.schema as z.ZodObject<any>).shape
+        : { params: z.any() },
+      async (params: any, extra: Extra) => {
+        const ctx = getContext(extra);
+        try {
+          const result = await dispatchOp(ctx, opName, params);
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        } catch (err: any) {
+          // Surface op failures (e.g. UnsupportedOperation on a limited
+          // backend, NotFound, RBAC denials) as a clean MCP error result
+          // instead of a raw throw — mirrors the member-management tools.
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  {
+                    error: err?.code ?? "ERROR",
+                    message: err?.message ?? String(err),
+                    ...(err?.suggestion && { suggestion: err.suggestion }),
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+    );
+  }
+}

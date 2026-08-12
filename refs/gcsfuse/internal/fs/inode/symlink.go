@@ -1,0 +1,268 @@
+// Copyright 2015 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package inode
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"sync"
+	"time"
+
+	"context"
+
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/fs/gcsfuse_errors"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/gcsx"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/logger"
+	"github.com/googlecloudplatform/gcsfuse/v3/internal/storage/gcs"
+	"github.com/jacobsa/fuse/fuseops"
+)
+
+// When this custom metadata key is present in an object record, it is to be
+// treated as a symlink. For use in testing only; other users should detect
+// this with IsSymlink.
+// Note: SymlinkMetadataKey is deprecated in favor of StandardSymlinkMetadataKey
+// and retained solely for backward compatibility.
+const SymlinkMetadataKey = "gcsfuse_symlink_target"
+const StandardSymlinkMetadataKey = "goog-reserved-file-is-symlink"
+
+// IsSymlink Does the supplied object represent a symlink inode?
+func IsSymlink(m *gcs.MinObject) bool {
+	if m == nil {
+		return false
+	}
+	// 1. Check legacy/custom key presence
+	if _, ok := m.Metadata[SymlinkMetadataKey]; ok {
+		return true
+	}
+	// 2. Check standard reserved key value
+	if val, ok := m.Metadata[StandardSymlinkMetadataKey]; ok {
+		return val == "true"
+	}
+	return false
+}
+
+type SymlinkInode struct {
+	/////////////////////////
+	// Constant data
+	/////////////////////////
+
+	id               fuseops.InodeID
+	name             Name
+	bucket           *gcsx.SyncerBucket
+	sourceGeneration Generation
+	mtime            time.Time
+	target           string
+	metadata         map[string]string
+
+	/////////////////////////
+	// Mutable state
+	/////////////////////////
+
+	mu sync.Mutex
+
+	// GUARDED_BY(mu)
+	lc lookupCount
+}
+
+var _ Inode = &SymlinkInode{}
+
+// Create a symlink inode for the supplied object record.
+//
+// REQUIRES: IsSymlink(o)
+func NewSymlinkInode(
+	ctx context.Context,
+	id fuseops.InodeID,
+	name Name,
+	bucket *gcsx.SyncerBucket,
+	m *gcs.MinObject) (s *SymlinkInode, err error) {
+	// Create the inode.
+	s = &SymlinkInode{
+		id:     id,
+		name:   name,
+		bucket: bucket,
+		sourceGeneration: Generation{
+			Object:   m.Generation,
+			Metadata: m.MetaGeneration,
+			Size:     m.Size,
+		},
+		mtime:    m.UpdatedTime(),
+		metadata: m.Metadata,
+	}
+
+	// Set up lookup counting.
+	s.lc.Init(id)
+
+	s.target, err = s.resolveSymlinkTarget(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+////////////////////////////////////////////////////////////////////////
+// Helpers
+////////////////////////////////////////////////////////////////////////
+
+// Open a reader for the Symlink GCS object.
+func (s *SymlinkInode) openReader(ctx context.Context) (io.ReadCloser, error) {
+	rc, err := s.bucket.NewReaderWithReadHandle(
+		ctx,
+		&gcs.ReadObjectRequest{
+			Name:       s.name.GcsObjectName(),
+			Generation: s.sourceGeneration.Object,
+		})
+
+	if err != nil {
+		// If the object with requested generation doesn't exist in GCS, it indicates
+		// a file clobbering scenario. This likely occurred because the file was
+		// modified/deleted leading to different generation number.
+		var notFoundError *gcs.NotFoundError
+		if errors.As(err, &notFoundError) {
+			err = &gcsfuse_errors.FileClobberedError{
+				Err:        err,
+				ObjectName: s.name.GcsObjectName(),
+			}
+		}
+		err = fmt.Errorf("NewReader: %w", err)
+	}
+	return rc, err
+}
+
+// resolveSymlinkTarget retrieves the target path of the symlink.
+//
+// It handles two types of symlinks:
+//  1. Standard Symlinks: Identified by the "goog-reserved-file-is-symlink" metadata key.
+//     The target path is stored as the object's content.
+//  2. Legacy Symlinks: Identified by the "gcsfuse_symlink_target" metadata key.
+//     The target path is stored directly in the metadata value.
+func (s *SymlinkInode) resolveSymlinkTarget(ctx context.Context) (string, error) {
+	// Check for standard symlink representation where the target is stored in the object content.
+	if val, ok := s.metadata[StandardSymlinkMetadataKey]; ok && val == "true" {
+		rc, err := s.openReader(ctx)
+		if err != nil {
+			return "", fmt.Errorf("openReader: %w", err)
+		}
+		defer func() {
+			closeErr := rc.Close()
+			if closeErr != nil {
+				logger.Warnf("Error closing reader for symlink object %q: %v", s.name.GcsObjectName(), closeErr)
+			}
+		}()
+
+		content, err := io.ReadAll(rc)
+		if err != nil {
+			return "", fmt.Errorf("ReadAll: %w", err)
+		}
+		return string(content), nil
+	}
+
+	// Check for legacy symlink representation where the target is stored in metadata.
+	if target, ok := s.metadata[SymlinkMetadataKey]; ok {
+		return target, nil
+	}
+
+	// If none of the metadata keys are present, return error since target of symlink
+	// cannot be resolved.
+	return "", fmt.Errorf("symlink target could not be resolved")
+}
+
+////////////////////////////////////////////////////////////////////////
+// Public interface
+////////////////////////////////////////////////////////////////////////
+
+func (s *SymlinkInode) Lock() {
+	s.mu.Lock()
+}
+
+func (s *SymlinkInode) Unlock() {
+	s.mu.Unlock()
+}
+
+func (s *SymlinkInode) ID() fuseops.InodeID {
+	return s.id
+}
+
+func (s *SymlinkInode) Name() Name {
+	return s.name
+}
+
+// SourceGeneration returns the object generation from which this inode was branched.
+//
+// LOCKS_REQUIRED(s)
+func (s *SymlinkInode) SourceGeneration() Generation {
+	return s.sourceGeneration
+}
+
+func (s *SymlinkInode) UpdateSize(size uint64) {
+	// The size of a symlink is its target's length, not the backing object's size.
+	// However, to keep generation info consistent, we update it.
+	s.sourceGeneration.Size = size
+}
+
+// LOCKS_REQUIRED(s.mu)
+func (s *SymlinkInode) IncrementLookupCount() {
+	s.lc.Inc()
+}
+
+// LOCKS_REQUIRED(s.mu)
+func (s *SymlinkInode) DecrementLookupCount(n uint64) (destroy bool) {
+	destroy = s.lc.Dec(n)
+	return
+}
+
+// LOCKS_REQUIRED(s.mu)
+func (s *SymlinkInode) Destroy() (err error) {
+	// Nothing to do.
+	return
+}
+
+func (s *SymlinkInode) Attributes(
+	ctx context.Context, clobberedCheck bool) (size uint64, mtime time.Time, nlink uint32, err error) {
+	// POSIX requires st_size of a symlink to be the length of the target path,
+	// excluding the terminating null byte. It is not the size of the backing GCS
+	// object, which is zero for legacy symlinks that keep the target in metadata.
+	size = uint64(len(s.target))
+	mtime = s.mtime
+	nlink = 1
+	return
+}
+
+// Target returns the target of the symlink.
+func (s *SymlinkInode) Target() (target string) {
+	target = s.target
+	return
+}
+
+func (s *SymlinkInode) Unlink() {
+}
+
+// Bucket returns the bucket that owns this inode.
+func (s *SymlinkInode) Bucket() *gcsx.SyncerBucket {
+	return s.bucket
+}
+
+// Source returns the MinObject from which this inode was created.
+func (s *SymlinkInode) Source() *gcs.MinObject {
+	return &gcs.MinObject{
+		Name:           s.name.GcsObjectName(),
+		Generation:     s.sourceGeneration.Object,
+		MetaGeneration: s.sourceGeneration.Metadata,
+		Size:           s.sourceGeneration.Size,
+		Metadata:       s.metadata,
+		Updated:        gcs.TimeToNS(s.mtime),
+	}
+}

@@ -1,0 +1,26 @@
+version: 2
+enable-beta-ecosystems: true
+updates:
+- package-ecosystem: docker
+  directory: "/"
+  schedule:
+    interval: weekly
+- package-ecosystem: gomod
+  directory: "/"
+  allow:
+  - dependency-type: "direct"
+  schedule:
+    interval: weekly
+  groups:
+    # Group all Go updates together in a single PR.
+    go-dependencies:
+      patterns:
+        - "*"
+- package-ecosystem: pip
+  directory: "/"
+  schedule:
+    interval: weekly
+  groups:
+    python-dependencies:
+      patterns:
+        - "*"

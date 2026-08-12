@@ -1,0 +1,217 @@
+/*
+ * s3fs - FUSE-based file system backed by Amazon S3
+ *
+ * Copyright(C) 2007 Randy Rizun <rrizun@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#include <cstdio>
+#include <cstdlib>
+#include <cerrno>
+#include <memory>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/err.h>
+
+#include "s3fs_auth.h"
+#include "s3fs_logger.h"
+
+//-------------------------------------------------------------------
+// Utility Function for version
+//-------------------------------------------------------------------
+const char* s3fs_crypt_lib_name()
+{
+    static constexpr char version[] = "OpenSSL";
+
+    return version;
+}
+
+//-------------------------------------------------------------------
+// Utility Function for global init
+//-------------------------------------------------------------------
+bool s3fs_init_global_ssl()
+{
+    return true;
+}
+
+bool s3fs_destroy_global_ssl()
+{
+    return true;
+}
+
+//-------------------------------------------------------------------
+// Utility Function for crypt lock
+//-------------------------------------------------------------------
+// OpenSSL >= 1.1.0 manages threading internally, no application-level
+// locking callbacks are needed.
+//
+bool s3fs_init_crypt_mutex()
+{
+    return true;
+}
+
+bool s3fs_destroy_crypt_mutex()
+{
+    return true;
+}
+
+//-------------------------------------------------------------------
+// Utility Function for HMAC
+//-------------------------------------------------------------------
+static std::unique_ptr<unsigned char[]> s3fs_HMAC_RAW(const void* key, size_t keylen, const unsigned char* data, size_t datalen, unsigned int* digestlen, bool is_sha256)
+{
+    if(!key || !data || !digestlen){
+        S3FS_PRN_DBG("null parameter passed");
+        return nullptr;
+    }
+    (*digestlen) = EVP_MAX_MD_SIZE * sizeof(unsigned char);
+    auto digest = std::make_unique<unsigned char[]>(*digestlen);
+
+    const EVP_MD* md = is_sha256 ? EVP_sha256() : EVP_sha1();
+    if(!HMAC(md, key, static_cast<int>(keylen), data, datalen, digest.get(), digestlen)){
+        S3FS_PRN_ERR("HMAC failed: %s", ERR_reason_error_string(ERR_get_error()));
+        return nullptr;
+    }
+
+    return digest;
+}
+
+std::unique_ptr<unsigned char[]> s3fs_HMAC(const void* key, size_t keylen, const unsigned char* data, size_t datalen, unsigned int* digestlen)
+{
+    return s3fs_HMAC_RAW(key, keylen, data, datalen, digestlen, false);
+}
+
+std::unique_ptr<unsigned char[]> s3fs_HMAC256(const void* key, size_t keylen, const unsigned char* data, size_t datalen, unsigned int* digestlen)
+{
+    return s3fs_HMAC_RAW(key, keylen, data, datalen, digestlen, true);
+}
+
+//-------------------------------------------------------------------
+// Compute a message digest over a memory buffer using the EVP API.
+// The algorithm (e.g. EVP_md5(), EVP_sha256()) is selected by the caller.
+//-------------------------------------------------------------------
+static bool s3fs_digest(const EVP_MD* md, const unsigned char* data, size_t datalen, unsigned char* out)
+{
+    std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> mdctx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+    if(!mdctx){
+        S3FS_PRN_ERR("EVP_MD_CTX_new failed: %s", ERR_reason_error_string(ERR_get_error()));
+        return false;
+    }
+    if(EVP_DigestInit_ex(mdctx.get(), md, nullptr) != 1){
+        S3FS_PRN_ERR("EVP_DigestInit_ex failed: %s", ERR_reason_error_string(ERR_get_error()));
+        return false;
+    }
+    if(EVP_DigestUpdate(mdctx.get(), data, datalen) != 1){
+        S3FS_PRN_ERR("EVP_DigestUpdate failed: %s", ERR_reason_error_string(ERR_get_error()));
+        return false;
+    }
+    if(EVP_DigestFinal_ex(mdctx.get(), out, nullptr) != 1){
+        S3FS_PRN_ERR("EVP_DigestFinal_ex failed: %s", ERR_reason_error_string(ERR_get_error()));
+        return false;
+    }
+    return true;
+}
+
+//-------------------------------------------------------------------
+// Compute a message digest over a file descriptor using the EVP API.
+// The algorithm (e.g. EVP_md5(), EVP_sha256()) is selected by the caller.
+//-------------------------------------------------------------------
+static bool s3fs_digest_fd(const EVP_MD* md, int fd, off_t start, off_t size, unsigned char* out)
+{
+    if(-1 == fd){
+        S3FS_PRN_DBG("invalid file descriptor");
+        return false;
+    }
+    if(-1 == size){
+        struct stat st;
+        if(-1 == fstat(fd, &st)){
+            S3FS_PRN_ERR("fstat error(%d)", errno);
+            return false;
+        }
+        size = st.st_size;
+    }
+
+    std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> mdctx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+    if(!mdctx){
+        S3FS_PRN_ERR("EVP_MD_CTX_new failed: %s", ERR_reason_error_string(ERR_get_error()));
+        return false;
+    }
+    if(EVP_DigestInit_ex(mdctx.get(), md, nullptr) != 1){
+        S3FS_PRN_ERR("EVP_DigestInit_ex failed: %s", ERR_reason_error_string(ERR_get_error()));
+        return false;
+    }
+
+    off_t bytes;
+    for(off_t total = 0; total < size; total += bytes){
+        std::array<char, 512> buf;
+        bytes = std::min(static_cast<off_t>(buf.size()), (size - total));
+        bytes = pread(fd, buf.data(), bytes, start + total);
+        if(0 == bytes){
+            break;
+        }else if(-1 == bytes){
+            S3FS_PRN_ERR("file read error(%d)", errno);
+            return false;
+        }
+        if(EVP_DigestUpdate(mdctx.get(), buf.data(), bytes) != 1){
+            S3FS_PRN_ERR("EVP_DigestUpdate failed: %s", ERR_reason_error_string(ERR_get_error()));
+            return false;
+        }
+    }
+
+    if(EVP_DigestFinal_ex(mdctx.get(), out, nullptr) != 1){
+        S3FS_PRN_ERR("EVP_DigestFinal_ex failed: %s", ERR_reason_error_string(ERR_get_error()));
+        return false;
+    }
+
+    return true;
+}
+
+//-------------------------------------------------------------------
+// Utility Function for MD5
+//-------------------------------------------------------------------
+bool s3fs_md5(const unsigned char* data, size_t datalen, md5_t* digest)
+{
+    return s3fs_digest(EVP_md5(), data, datalen, digest->data());
+}
+
+bool s3fs_md5_fd(int fd, off_t start, off_t size, md5_t* result)
+{
+    return s3fs_digest_fd(EVP_md5(), fd, start, size, result->data());
+}
+
+//-------------------------------------------------------------------
+// Utility Function for SHA256
+//-------------------------------------------------------------------
+bool s3fs_sha256(const unsigned char* data, size_t datalen, sha256_t* digest)
+{
+    return s3fs_digest(EVP_sha256(), data, datalen, digest->data());
+}
+
+bool s3fs_sha256_fd(int fd, off_t start, off_t size, sha256_t* result)
+{
+    return s3fs_digest_fd(EVP_sha256(), fd, start, size, result->data());
+}
+
+/*
+* Local variables:
+* tab-width: 4
+* c-basic-offset: 4
+* End:
+* vim600: expandtab sw=4 ts=4 fdm=marker
+* vim<600: expandtab sw=4 ts=4
+*/

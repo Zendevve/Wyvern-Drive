@@ -1,0 +1,73 @@
+/*
+ * s3fs - FUSE-based file system backed by Amazon S3
+ *
+ * Copyright(C) 2007 Randy Rizun <rrizun@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
+#ifndef S3FS_FDCACHE_PSEUDOFD_H_
+#define S3FS_FDCACHE_PSEUDOFD_H_
+
+#include <mutex>
+#include <vector>
+
+#include "common.h"
+
+//------------------------------------------------
+// Typdefs
+//------------------------------------------------
+// List of pseudo fd in use
+//
+using pseudofd_list_t = std::vector<int>;
+
+//------------------------------------------------
+// Class PseudoFdManager
+//------------------------------------------------
+class PseudoFdManager
+{
+    private:
+        pseudofd_list_t pseudofd_list GUARDED_BY(pseudofd_list_lock);
+        std::mutex      pseudofd_list_lock;    // protects pseudofd_list
+
+        static PseudoFdManager& GetManager();
+
+        PseudoFdManager() = default;
+        ~PseudoFdManager() = default;
+
+        int GetUnusedMinPseudoFd() const REQUIRES(pseudofd_list_lock);
+        int CreatePseudoFd();
+        bool ReleasePseudoFd(int fd);
+
+    public:
+        PseudoFdManager(const PseudoFdManager&) = delete;
+        PseudoFdManager(PseudoFdManager&&) = delete;
+        PseudoFdManager& operator=(const PseudoFdManager&) = delete;
+        PseudoFdManager& operator=(PseudoFdManager&&) = delete;
+
+        static int Get();
+        static bool Release(int fd);
+};
+
+#endif // S3FS_FDCACHE_PSEUDOFD_H_
+
+/*
+* Local variables:
+* tab-width: 4
+* c-basic-offset: 4
+* End:
+* vim600: expandtab sw=4 ts=4 fdm=marker
+* vim<600: expandtab sw=4 ts=4
+*/

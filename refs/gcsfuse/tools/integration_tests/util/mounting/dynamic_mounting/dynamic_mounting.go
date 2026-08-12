@@ -1,0 +1,112 @@
+//Copyright 2023 Google LLC
+//
+//Licensed under the Apache License, Version 2.0 (the "License");
+//you may not use this file except in compliance with the License.
+//You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+//Unless required by applicable law or agreed to in writing, software
+//distributed under the License is distributed on an "AS IS" BASIS,
+//WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//See the License for the specific language governing permissions and
+//limitations under the License.
+
+package dynamic_mounting
+
+import (
+	"fmt"
+	"log"
+	"path"
+	"testing"
+
+	"github.com/googlecloudplatform/gcsfuse/v3/tools/integration_tests/util/mounting"
+	"github.com/googlecloudplatform/gcsfuse/v3/tools/integration_tests/util/setup"
+	"github.com/googlecloudplatform/gcsfuse/v3/tools/integration_tests/util/test_suite"
+	"github.com/stretchr/testify/require"
+)
+
+func MountGcsfuseWithDynamicMountingWithConfig(cfg *test_suite.TestConfig, flags []string) (err error) {
+	defaultArg := []string{"--log-severity=trace",
+		"--log-file=" + cfg.LogFile,
+		cfg.GCSFuseMountedDirectory}
+
+	flags = append(flags, defaultArg...)
+
+	err = mounting.MountGcsfuse(setup.BinFile(), flags)
+
+	return err
+}
+
+func runTestsOnGivenMountedTestBucket(cfg *test_suite.TestConfig, flags [][]string, rootMntDir string, m *testing.M) (successCode int) {
+	for i := range flags {
+		if err := MountGcsfuseWithDynamicMountingWithConfig(cfg, flags[i]); err != nil {
+			setup.LogAndExit(fmt.Sprintf("mountGcsfuse: %v\n", err))
+		}
+
+		// Changing mntDir to path of bucket mounted in mntDir for testing.
+		mntDirOfTestBucket := path.Join(cfg.GCSFuseMountedDirectory, cfg.TestBucket)
+		cfg.GCSFuseMountedDirectory = mntDirOfTestBucket
+		// TODO: clean up MntDir.
+		setup.SetMntDir(mntDirOfTestBucket)
+
+		log.Printf("Running dynamic mounting tests with flags: %s", flags[i])
+		// Running tests on flags.
+		successCode = setup.ExecuteTest(m)
+
+		// Currently mntDir is mntDir/bucketName.
+		// Unmounting can happen on rootMntDir. Changing mntDir to rootMntDir for unmounting.
+		// TODO: clean up MntDir.
+		setup.SetMntDir(rootMntDir)
+		cfg.GCSFuseMountedDirectory = rootMntDir
+		setup.UnMountAndThrowErrorInFailure(flags[i], successCode)
+		if successCode != 0 {
+			return
+		}
+	}
+	return
+}
+
+func executeTestsForDynamicMounting(config *test_suite.TestConfig, flagsSet [][]string, m *testing.M) (successCode int) {
+	rootMntDir := config.GCSFuseMountedDirectory
+
+	// In dynamic mounting all the buckets mounted in mntDir which user has permission.
+	// mntDir - bucket1, bucket2, bucket3, ...
+
+	// SetDynamicBucketMounted to the passed test bucket.
+	setup.SetDynamicBucketMounted(config.TestBucket)
+	successCode = runTestsOnGivenMountedTestBucket(config, flagsSet, rootMntDir, m)
+	// Reset SetDynamicBucketMounted to empty after tests are done.
+	setup.SetDynamicBucketMounted("")
+
+	return
+}
+
+func RunTestsWithConfigFile(config *test_suite.TestConfig, flagsSet [][]string, m *testing.M) (successCode int) {
+	log.Println("Running dynamic mounting tests...")
+	log.Printf("GCSFuse Log File for test: %s\n", config.LogFile)
+	successCode = executeTestsForDynamicMounting(config, flagsSet, m)
+	return successCode
+}
+
+func RunSuiteForDynamicMounting(config *test_suite.TestConfig, flags []string, t *testing.T, runSuiteFunc func()) {
+	rootMntDir := config.GCSFuseMountedDirectory
+	setup.SetDynamicBucketMounted(config.TestBucket)
+
+	log.Printf("Running dynamic mounting %s with flags: %s", t.Name(), flags)
+	err := MountGcsfuseWithDynamicMountingWithConfig(config, flags)
+	require.NoError(t, err, "Dynamic mount failed")
+	defer func() {
+		setup.SetMntDir(rootMntDir)
+		config.GCSFuseMountedDirectory = rootMntDir
+		setup.SaveGCSFuseLogFileInCaseOfFailure(t)
+		setup.UnmountGCSFuseWithConfig(config)
+		setup.SetDynamicBucketMounted("")
+	}()
+
+	mntDirOfTestBucket := path.Join(rootMntDir, config.TestBucket)
+	config.GCSFuseMountedDirectory = mntDirOfTestBucket
+	setup.SetMntDir(mntDirOfTestBucket)
+
+	runSuiteFunc()
+}

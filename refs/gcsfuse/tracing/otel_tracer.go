@@ -1,0 +1,120 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package tracing
+
+import (
+	"context"
+	"sync"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+)
+
+type otelTracer struct {
+	tracer    trace.Tracer
+	slicePool *sync.Pool
+}
+
+var (
+	bytesReadKey     = attribute.Key(BYTES_READ)
+	readOffsetKey    = attribute.Key(READ_OFFSET)
+	bytesUploadedKey = attribute.Key(BYTES_UPLOADED)
+	objectNameKey    = attribute.Key(OBJECT_NAME)
+	cacheHit         = attribute.Bool(IS_CACHE_HIT, true)
+	cacheMiss        = attribute.Bool(IS_CACHE_HIT, false)
+)
+
+func (o *otelTracer) StartSpan(ctx context.Context, traceName string) (context.Context, trace.Span) {
+	return o.tracer.Start(ctx, traceName)
+}
+
+func (o *otelTracer) StartServerSpan(ctx context.Context, traceName string) (context.Context, trace.Span) {
+	return o.tracer.Start(ctx, traceName, trace.WithSpanKind(trace.SpanKindServer))
+}
+
+func (o *otelTracer) EndSpan(span trace.Span) {
+	span.End()
+}
+
+func (o *otelTracer) RecordError(span trace.Span, err error) {
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
+}
+
+func (o *otelTracer) SetCacheReadAttributes(span trace.Span, isCacheHit bool, bytesRead int) {
+	attrSetPtr := o.slicePool.Get().(*[]attribute.KeyValue)
+	attrSet := *attrSetPtr
+	defer o.slicePool.Put(attrSetPtr)
+	attrSet[0] = bytesReadKey.Int(bytesRead)
+	if isCacheHit {
+		attrSet[1] = cacheHit
+	} else {
+		attrSet[1] = cacheMiss
+	}
+	span.SetAttributes(attrSet...)
+}
+
+func (o *otelTracer) SetReadFileAttributes(span trace.Span, bytesRead int, offset int64) {
+	attrSetPtr := o.slicePool.Get().(*[]attribute.KeyValue)
+	attrSet := *attrSetPtr
+	defer o.slicePool.Put(attrSetPtr)
+	attrSet[0] = bytesReadKey.Int(bytesRead)
+	attrSet[1] = readOffsetKey.Int64(offset)
+	span.SetAttributes(attrSet...)
+}
+
+func (o *otelTracer) SetUploadAttributes(span trace.Span, bytesUploaded int64, objectName string) {
+	attrSetPtr := o.slicePool.Get().(*[]attribute.KeyValue)
+	attrSet := *attrSetPtr
+	defer o.slicePool.Put(attrSetPtr)
+	attrSet[0] = bytesUploadedKey.Int64(bytesUploaded)
+	attrSet[1] = objectNameKey.String(objectName)
+	span.SetAttributes(attrSet...)
+}
+
+func (o *otelTracer) TraceUpload(ctx context.Context, name string, objName string, bytes *int64, err *error) (context.Context, func()) {
+	ctx, span := o.StartSpan(ctx, name)
+
+	return ctx, func() {
+		if bytes != nil {
+			o.SetUploadAttributes(span, *bytes, objName)
+		}
+		if err != nil && *err != nil {
+			o.RecordError(span, *err)
+		}
+		o.EndSpan(span)
+	}
+}
+
+func (o *otelTracer) PropagateTraceContext(newCtx context.Context, oldCtx context.Context) context.Context {
+	span := trace.SpanFromContext(oldCtx)
+	return trace.ContextWithSpan(newCtx, span)
+}
+
+func NewOTELTracer() TraceHandle {
+	slicePool := sync.Pool{
+		New: func() any {
+			s := make([]attribute.KeyValue, 2)
+			return &s
+		},
+	}
+
+	return &otelTracer{
+		tracer:    otel.Tracer(name),
+		slicePool: &slicePool,
+	}
+}

@@ -1,0 +1,264 @@
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Run tests for --key-file flag and GOOGLE_APPLICATION_CREDENTIALS env variable
+
+package creds_tests
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"cloud.google.com/go/compute/metadata"
+	"cloud.google.com/go/iam"
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
+	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	"cloud.google.com/go/storage"
+	"github.com/googlecloudplatform/gcsfuse/v3/tools/integration_tests/util/mounting/static_mounting"
+	"github.com/googlecloudplatform/gcsfuse/v3/tools/integration_tests/util/setup"
+	"github.com/googlecloudplatform/gcsfuse/v3/tools/integration_tests/util/test_suite"
+	"github.com/stretchr/testify/require"
+)
+
+const NameOfServiceAccount = "creds-integration-tests"
+const CredentialsSecretName = "gcsfuse-integration-tests"
+
+var WhitelistedGcpProjects = []string{"gcs-fuse-test", "gcs-fuse-test-ml"}
+
+func projectID(ctx context.Context) string {
+	// Fetching project-id to get service account id.
+	id, err := metadata.ProjectIDWithContext(ctx)
+	if err != nil {
+		setup.LogAndExit(fmt.Sprintf("Error in fetching project id: %v", err))
+	}
+	if strings.Contains(id, "cloudtop") {
+		// In cloudtop environments, well known path is used for auth. So explicitly set the project as whitelisted.
+		id = WhitelistedGcpProjects[0]
+	}
+
+	// return if active GCP project is not in whitelisted gcp projects
+	if !slices.Contains(WhitelistedGcpProjects, id) {
+		log.Printf("The active GCP project is not one of: %s. So the credentials test will not run.", strings.Join(WhitelistedGcpProjects, ", "))
+	}
+	return id
+}
+
+func CreateCredentials(ctx context.Context) (serviceAccount, localKeyFilePath string) {
+	log.Println("Running credentials tests...")
+	return CreateCredentialsForSA(ctx, NameOfServiceAccount, CredentialsSecretName)
+}
+
+func CreateCredentialsForSA(ctx context.Context, serviceAccountName, saCredentialsSecretName string) (serviceAccountEmail, localKeyFilePath string) {
+	log.Printf("Creating credentials for %s...", serviceAccountName)
+
+	projID := projectID(ctx)
+
+	// Service account id format is name@project-id.iam.gserviceaccount.com
+	serviceAccountEmail = serviceAccountName + "@" + projID + ".iam.gserviceaccount.com"
+
+	// Create secretmanager client to download service account credential file.
+	smClient, err := secretmanager.NewClient(ctx)
+	if err != nil {
+		setup.LogAndExit(fmt.Sprintf("Failed to create secret manager client: %v", err))
+	}
+	defer func() {
+		if err := smClient.Close(); err != nil {
+			log.Printf("Failed to close secret manager client: %v", err)
+		}
+	}()
+	req := &secretmanagerpb.AccessSecretVersionRequest{
+		Name: fmt.Sprintf("projects/%s/secrets/%s/versions/latest", projID, saCredentialsSecretName),
+	}
+	secretVersion, err := smClient.AccessSecretVersion(ctx, req)
+	if err != nil {
+		setup.LogAndExit(fmt.Sprintf("Error while fetching key file %v", err))
+	}
+
+	// Create and write creds to local file.
+	keyFile, err := os.CreateTemp("", "creds-*.json")
+	if err != nil {
+		setup.LogAndExit(fmt.Sprintf("Error while creating temp credentials file %v", err))
+	}
+	localKeyFilePath = keyFile.Name()
+	_, err = keyFile.Write(secretVersion.Payload.Data)
+	if err != nil {
+		setup.LogAndExit(fmt.Sprintf("Error while writing credentials to local file %v", err))
+	}
+	if err := keyFile.Close(); err != nil {
+		log.Printf("Failed to close key file: %v", err)
+	}
+
+	return
+}
+
+func ApplyRoleToServiceAccountOnBucket(ctx context.Context, storageClient *storage.Client, serviceAccount, roleName, bucket string) {
+	// Provide permission to service account for testing.
+	bucketHandle := storageClient.Bucket(bucket)
+	policy, err := bucketHandle.IAM().Policy(ctx)
+	if err != nil {
+		setup.LogAndExit(fmt.Sprintf("Error fetching: Bucket(%q).IAM().Policy: %v", bucket, err))
+	}
+	identity := fmt.Sprintf("serviceAccount:%s", serviceAccount)
+	role := iam.RoleName(roleName)
+
+	policy.Add(identity, role)
+	if err := bucketHandle.IAM().SetPolicy(ctx, policy); err != nil {
+		setup.LogAndExit(fmt.Sprintf("Error applying permission to service account: Bucket(%q).IAM().SetPolicy: %v", bucket, err))
+	}
+	// Waiting for 2 minutes as it usually takes within 2 minutes for policy
+	// changes to propagate: https://cloud.google.com/iam/docs/access-change-propagation
+	time.Sleep(120 * time.Second)
+}
+
+func ApplyPermissionToServiceAccount(ctx context.Context, storageClient *storage.Client, serviceAccount, permission, bucket string) {
+	ApplyRoleToServiceAccountOnBucket(ctx, storageClient, serviceAccount, fmt.Sprintf("roles/storage.%s", permission), bucket)
+}
+
+func ApplyCustomRoleToServiceAccountOnBucket(ctx context.Context, storageClient *storage.Client, serviceAccount, customRoleName, bucket string) {
+	projectID := projectID(ctx)
+	ApplyRoleToServiceAccountOnBucket(ctx, storageClient, serviceAccount, fmt.Sprintf("projects/%s/roles/%s", projectID, customRoleName), bucket)
+}
+
+func RevokeRoleFromServiceAccountOnBucket(ctx context.Context, storageClient *storage.Client, serviceAccount, roleName, bucket string) {
+	// Revoke the permission to service account after testing.
+	bucketHandle := storageClient.Bucket(bucket)
+	policy, err := bucketHandle.IAM().Policy(ctx)
+	if err != nil {
+		setup.LogAndExit(fmt.Sprintf("Error fetching: Bucket(%q).IAM().Policy: %v", bucket, err))
+	}
+	identity := fmt.Sprintf("serviceAccount:%s", serviceAccount)
+	role := iam.RoleName(roleName)
+
+	policy.Remove(identity, role)
+	if err := bucketHandle.IAM().SetPolicy(ctx, policy); err != nil {
+		setup.LogAndExit(fmt.Sprintf("Error applying permission to service account: Bucket(%q).IAM().SetPolicy: %v", bucket, err))
+	}
+}
+
+func RevokePermission(ctx context.Context, storageClient *storage.Client, serviceAccount, permission, bucket string) {
+	RevokeRoleFromServiceAccountOnBucket(ctx, storageClient, serviceAccount, fmt.Sprintf("roles/storage.%s", permission), bucket)
+}
+
+func RevokeCustomRoleFromServiceAccountOnBucket(ctx context.Context, storageClient *storage.Client, serviceAccount, customRoleName, bucket string) {
+	projectID := projectID(ctx)
+	RevokeRoleFromServiceAccountOnBucket(ctx, storageClient, serviceAccount, fmt.Sprintf("projects/%s/roles/%s", projectID, customRoleName), bucket)
+}
+
+func runWithCredentialsSetup(ctx context.Context, cfg *test_suite.TestConfig, storageClient *storage.Client, permission string, testFunc func(localKeyFilePath string)) {
+	serviceAccount, localKeyFilePath := CreateCredentials(ctx)
+	defer func() {
+		if err := os.Remove(localKeyFilePath); err != nil {
+			log.Printf("Failed to delete temp credentials file %s: %v", localKeyFilePath, err)
+		}
+	}()
+	ApplyPermissionToServiceAccount(ctx, storageClient, serviceAccount, permission, cfg.TestBucket)
+	defer RevokePermission(ctx, storageClient, serviceAccount, permission, cfg.TestBucket)
+
+	testFunc(localKeyFilePath)
+}
+
+func RunTestsForDifferentAuthMethods(ctx context.Context, cfg *test_suite.TestConfig, storageClient *storage.Client, testFlagSet [][]string, permission string, m *testing.M) (successCode int) {
+	runWithCredentialsSetup(ctx, cfg, storageClient, permission, func(localKeyFilePath string) {
+		// Without –key-file flag and GOOGLE_APPLICATION_CREDENTIALS
+		// This case will not get covered as gcsfuse internally authenticates from a metadata server on GCE VM.
+		// https://github.com/golang/oauth2/blob/master/google/default.go#L160
+
+		// Testing with GOOGLE_APPLICATION_CREDENTIALS env variable
+		err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", localKeyFilePath)
+		if err != nil {
+			setup.LogAndExit(fmt.Sprintf("Error in setting environment variable: %v", err))
+		}
+		defer func() {
+			_ = os.Unsetenv("GOOGLE_APPLICATION_CREDENTIALS")
+		}()
+
+		successCode = static_mounting.RunTestsWithConfigFile(cfg, testFlagSet, m)
+
+		if successCode != 0 {
+			return
+		}
+
+		// Testing with --key-file and GOOGLE_APPLICATION_CREDENTIALS env variable set
+		keyFileFlag := "--key-file=" + localKeyFilePath
+
+		for i := range testFlagSet {
+			testFlagSet[i] = append(testFlagSet[i], keyFileFlag)
+		}
+
+		successCode = static_mounting.RunTestsWithConfigFile(cfg, testFlagSet, m)
+
+		if successCode != 0 {
+			return
+		}
+
+		err = os.Unsetenv("GOOGLE_APPLICATION_CREDENTIALS")
+		if err != nil {
+			setup.LogAndExit(fmt.Sprintf("Error in unsetting environment variable: %v", err))
+		}
+
+		// Testing with --key-file flag only.
+		successCode = static_mounting.RunTestsWithConfigFile(cfg, testFlagSet, m)
+	})
+
+	return successCode
+}
+
+func RunSuiteForDifferentAuthMethods(ctx context.Context, cfg *test_suite.TestConfig, storageClient *storage.Client, flags []string, permission string, t *testing.T, runSuiteFunc func()) {
+	runWithCredentialsSetup(ctx, cfg, storageClient, permission, func(localKeyFilePath string) {
+		// Without --key-file flag and GOOGLE_APPLICATION_CREDENTIALS
+		// This case will not get covered as gcsfuse internally authenticates from a metadata server on GCE VM.
+		// https://github.com/golang/oauth2/blob/master/google/default.go#L160
+
+		err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", localKeyFilePath)
+		require.NoError(t, err, "Error setting environment variable")
+		defer func() {
+			_ = os.Unsetenv("GOOGLE_APPLICATION_CREDENTIALS")
+		}()
+
+		keyFileFlag := "--key-file=" + localKeyFilePath
+		flagsWithKeyFile := append(slices.Clone(flags), keyFileFlag)
+
+		runTestCase := func(name, description string, testFlags []string) {
+			t.Run(name, func(t *testing.T) {
+				log.Printf("Running creds tests with %s and flags: %s", description, testFlags)
+				err := static_mounting.MountGcsfuseWithStaticMountingWithConfigFile(cfg, testFlags)
+				require.NoError(t, err, fmt.Sprintf("Creds mount with %s failed", description))
+				defer func() {
+					setup.SaveGCSFuseLogFileInCaseOfFailure(t)
+					setup.UnmountGCSFuseWithConfig(cfg)
+				}()
+
+				runSuiteFunc()
+			})
+		}
+
+		// 1. Testing with GOOGLE_APPLICATION_CREDENTIALS env variable
+		runTestCase("EnvVar", "GOOGLE_APPLICATION_CREDENTIALS", flags)
+
+		// 2. Testing with --key-file and GOOGLE_APPLICATION_CREDENTIALS env variable set
+		runTestCase("KeyFileAndEnvVar", "--key-file + GOOGLE_APPLICATION_CREDENTIALS", flagsWithKeyFile)
+
+		// 3. Testing with --key-file flag only.
+		err = os.Unsetenv("GOOGLE_APPLICATION_CREDENTIALS")
+		require.NoError(t, err, "Error unsetting environment variable")
+
+		runTestCase("KeyFileOnly", "--key-file only", flagsWithKeyFile)
+	})
+}

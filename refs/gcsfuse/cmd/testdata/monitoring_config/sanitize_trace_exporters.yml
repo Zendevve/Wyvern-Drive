@@ -1,0 +1,4 @@
+trace:
+  exporters: GcPexPorTer,  STdOut
+  sampling-ratio: 0.5
+  project-id: gcp-sample-test
