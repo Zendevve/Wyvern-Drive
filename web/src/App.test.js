@@ -84,7 +84,7 @@ describe('auth gating', () => {
     client.api.entries.mockResolvedValue({ entries: [] });
     window.history.pushState({}, '', '/login');
     render(<App />);
-    expect(await screen.findByText('This folder is empty')).toBeInTheDocument();
+    expect(await screen.findByText('Your space is ready')).toBeInTheDocument();
   });
 
   it('renders the trash page at /trash for authenticated users', async () => {
@@ -115,7 +115,7 @@ describe('auth gating', () => {
     client.api.entries.mockResolvedValue({ entries: [] });
     window.history.pushState({}, '', '/connect');
     render(<App />);
-    expect(await screen.findByText('This folder is empty')).toBeInTheDocument();
+    expect(await screen.findByText('Your space is ready')).toBeInTheDocument();
   });
 
   it('renders the public share page without a session', async () => {

@@ -57,6 +57,7 @@ The `refs/` directories remain read-only prior art, not runtime behavior.
 - Server-backed search and sort
 - Anonymous read-only share links with optional expiry and revocation
 - Cloud-service-style UI (Google Drive / Dropbox / Mega flow): desktop list + grid views, row/card selection with bulk actions, hover-revealed actions, drag-and-drop upload, floating upload progress manager; responsive (desktop table/grid, mobile cards)
+- Friendly first-run onboarding: a guided `/setup` page (Discord app link, copyable redirect-URI chip, restart-and-recheck, "What's left" diagnostics showing variable names only) and a step-by-step `/connect` page walk users through connecting their own storage in about a minute
 - Rate limiting on OAuth, mutations, and public share downloads
 
 ## Architecture
@@ -97,14 +98,16 @@ npm install
 npm start
 ```
 
-On first run the server loads `.env` (dotenv), validates the configuration,
-and — if anything is missing or invalid — starts in **setup mode**: a
-read-only server that serves `GET /api/setup/status` and the guided `/setup`
-page listing exactly which variables are missing (never their values). Fill in
-the remaining secrets, restart the server, and `/setup` redirects to the
-normal sign-in flow. A file-backed `DB_URL` parent directory is created
-automatically. The OAuth callback URI on your Discord application must match
-`DISCORD_REDIRECT_URI` exactly (`<APP_ORIGIN>/api/auth/discord/callback`).
+On first run the server loads `.env` (dotenv), validates the configuration, and
+— if anything is missing or invalid — starts in **setup mode**: a read-only
+server that serves `GET /api/setup/status` and a friendly guided `/setup` page.
+The page links to the Discord developer portal, shows a copyable chip with your
+redirect URI, and lists exactly which variables are missing or invalid (names
+only, never values); after filling in `server/.env`, restart the server and hit
+Recheck, and `/setup` redirects to the normal sign-in flow. A file-backed
+`DB_URL` parent directory is created automatically. The OAuth callback URI on
+your Discord application must match `DISCORD_REDIRECT_URI` exactly
+(`<APP_ORIGIN>/api/auth/discord/callback`).
 
 Open http://localhost:3000 and sign in with Discord.
 
@@ -154,7 +157,7 @@ server behind your reverse proxy with HTTPS.
 
 ```sh
 cd server && npm test   # 136 tests: in-memory SQLite + fake Discord adapters
-cd web && npm test      # 100 tests: mocked API client
+cd web && npm test      # 110 tests: mocked API client
 ```
 
 Server tests never contact Discord: OAuth fetch is stubbed and the storage

@@ -25,7 +25,6 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowRightArrowLeft,
-  faCopy,
   faDownload,
   faFolderOpen,
   faFolderPlus,
@@ -145,6 +144,15 @@ export default function DrivePage() {
       return 'list';
     }
   });
+  // One-time first-run tip: shown only while the drive root is empty and the
+  // user has not dismissed it. Auto-hides once the drive has entries.
+  const [dragHintDismissed, setDragHintDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('wyvern-drag-hint-dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [dragging, setDragging] = useState(false);
   const [dropCount, setDropCount] = useState(0);
@@ -222,6 +230,15 @@ export default function DrivePage() {
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
+  }, []);
+
+  const dismissDragHint = useCallback(() => {
+    setDragHintDismissed(true);
+    try {
+      localStorage.setItem('wyvern-drag-hint-dismissed', '1');
+    } catch {
+      // Storage may be unavailable; the hint stays dismissed for this session.
+    }
   }, []);
 
   const openFolder = useCallback(
@@ -921,50 +938,83 @@ export default function DrivePage() {
             ))}
           </Paper>
         ) : entries.length === 0 ? (
-          <Box
-            data-testid="empty-state"
-            sx={{
-              background: gradients.violet,
-              borderRadius: '30px',
-              p: 8,
-              mt: 3,
-              textAlign: 'center',
-              maxWidth: 560,
-              mx: 'auto',
-            }}
-          >
-            <FontAwesomeIcon
-              icon={faFolderOpen}
-              size="4x"
-              color="#FFFFFF"
-              aria-hidden="true"
-            />
-            <Typography variant="h2" sx={{ mt: 3, color: '#FFFFFF' }}>
-              This folder is empty
-            </Typography>
-            <Typography
-              variant="caption"
-              component="p"
-              sx={{ mt: 1, mb: 3, color: 'rgba(255,255,255,0.85)' }}
-            >
-              Drag and drop files here, or use the buttons above.
-            </Typography>
-            <Button
-              variant="outlined"
-              onClick={() => fileInputRef.current && fileInputRef.current.click()}
+          <>
+            {trail.length === 0 && !dragHintDismissed && (
+              <Paper
+                elevation={0}
+                variant="outlined"
+                data-testid="drag-drop-hint"
+                sx={{
+                  mt: 3,
+                  mx: 'auto',
+                  maxWidth: 560,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  px: 2,
+                  py: 1.5,
+                  bgcolor: 'surface1',
+                  borderColor: 'hairline',
+                }}
+              >
+                <Typography variant="body2" sx={{ flexGrow: 1, color: 'inkMuted' }}>
+                  Tip: drag files anywhere on the page to upload
+                </Typography>
+                <IconButton
+                  aria-label="Dismiss tip"
+                  size="small"
+                  onClick={dismissDragHint}
+                >
+                  <FontAwesomeIcon icon={faXmark} />
+                </IconButton>
+              </Paper>
+            )}
+            <Box
+              data-testid="empty-state"
               sx={{
-                bgcolor: 'rgba(255,255,255,0.14)',
-                borderColor: 'rgba(255,255,255,0.35)',
-                color: '#FFFFFF',
-                '&:hover': {
-                  bgcolor: 'rgba(255,255,255,0.22)',
-                  borderColor: 'rgba(255,255,255,0.35)',
-                },
+                background: gradients.violet,
+                borderRadius: '30px',
+                p: 8,
+                mt: 3,
+                textAlign: 'center',
+                maxWidth: 560,
+                mx: 'auto',
               }}
             >
-              Upload your first file
-            </Button>
-          </Box>
+              <FontAwesomeIcon
+                icon={faFolderOpen}
+                size="4x"
+                color="#FFFFFF"
+                aria-hidden="true"
+              />
+              <Typography variant="h2" sx={{ mt: 3, color: '#FFFFFF' }}>
+                Your space is ready
+              </Typography>
+              <Typography
+                variant="caption"
+                component="p"
+                sx={{ mt: 1, mb: 3, color: 'rgba(255,255,255,0.85)' }}
+              >
+                Your files are encrypted before they&apos;re stored — only you
+                can see them.
+              </Typography>
+              <Button
+                variant="outlined"
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                sx={{
+                  bgcolor: 'rgba(255,255,255,0.14)',
+                  borderColor: 'rgba(255,255,255,0.35)',
+                  color: '#FFFFFF',
+                  '&:hover': {
+                    bgcolor: 'rgba(255,255,255,0.22)',
+                    borderColor: 'rgba(255,255,255,0.35)',
+                  },
+                }}
+              >
+                Upload your first file
+              </Button>
+            </Box>
+          </>
         ) : isDesktop ? (
           view === 'grid' ? (
             <EntryGrid

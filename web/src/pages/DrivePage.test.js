@@ -98,6 +98,9 @@ const renderDrive = () =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // The one-time drag hint and view mode persist in localStorage; reset it so
+  // tests render a fresh drive (hint visible, list view).
+  localStorage.clear();
   // NOTE: implementations are set here, not in the jest.mock factory — the
   // CRA 5 babel-jest hoist transform drops factory-set implementations.
   client.downloadUrl.mockImplementation((id, opts = {}) =>
@@ -136,10 +139,18 @@ describe('loading and empty states', () => {
     expect(await screen.findByTestId('entries-loading')).toBeInTheDocument();
   });
 
-  it('shows an empty state when the folder has no entries', async () => {
+  it('shows the ready spotlight card when the drive is empty', async () => {
     renderDrive();
-    expect(await screen.findByTestId('empty-state')).toBeInTheDocument();
-    expect(screen.getByText('This folder is empty')).toBeInTheDocument();
+    const empty = await screen.findByTestId('empty-state');
+    expect(within(empty).getByText('Your space is ready')).toBeInTheDocument();
+    expect(
+      within(empty).getByText(
+        /Your files are encrypted before they're stored — only you can see them/
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(empty).getByRole('button', { name: /upload your first file/i })
+    ).toBeInTheDocument();
   });
 
   it('shows an error notice with retry when listing fails', async () => {
@@ -605,5 +616,45 @@ describe('copy and folder upload', () => {
     expect(
       screen.getByRole('button', { name: /upload folder/i })
     ).toBeInTheDocument();
+  });
+});
+
+describe('one-time drag-and-drop hint', () => {
+  it('shows the hint on an empty drive root', async () => {
+    renderDrive();
+    const hint = await screen.findByTestId('drag-drop-hint');
+    expect(
+      hint
+    ).toHaveTextContent('Tip: drag files anywhere on the page to upload');
+  });
+
+  it('hides the hint once entries exist', async () => {
+    client.api.entries.mockResolvedValue({ entries: [fileEntry()] });
+    renderDrive();
+    await screen.findByText('notes.txt');
+    expect(screen.queryByTestId('drag-drop-hint')).not.toBeInTheDocument();
+  });
+
+  it('dismisses the hint, persists the flag, and keeps it hidden after re-render', async () => {
+    const { unmount } = renderDrive();
+    await screen.findByTestId('drag-drop-hint');
+
+    userEvent.click(screen.getByRole('button', { name: /dismiss tip/i }));
+    await waitFor(() =>
+      expect(localStorage.getItem('wyvern-drag-hint-dismissed')).toBe('1')
+    );
+    expect(screen.queryByTestId('drag-drop-hint')).not.toBeInTheDocument();
+
+    unmount();
+    renderDrive();
+    await screen.findByTestId('empty-state');
+    expect(screen.queryByTestId('drag-drop-hint')).not.toBeInTheDocument();
+  });
+
+  it('respects a pre-existing dismissal flag', async () => {
+    localStorage.setItem('wyvern-drag-hint-dismissed', '1');
+    renderDrive();
+    await screen.findByTestId('empty-state');
+    expect(screen.queryByTestId('drag-drop-hint')).not.toBeInTheDocument();
   });
 });

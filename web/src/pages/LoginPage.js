@@ -70,9 +70,8 @@ export default function LoginPage() {
         )}
         {error === 'oauth_failed' && (
           <Alert severity="warning" sx={{ mb: 2 }} data-testid="oauth-failed">
-            Discord rejected the sign-in. Check that the redirect URI registered on
-            your Discord application exactly matches the server&apos;s{' '}
-            <code>DISCORD_REDIRECT_URI</code>, then try again.
+            Sign-in didn&apos;t work. The person running this server may need to
+            check their Discord setup.
           </Alert>
         )}
         <Button

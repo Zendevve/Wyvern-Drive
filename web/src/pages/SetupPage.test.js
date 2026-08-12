@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import SetupPage from './SetupPage';
 
@@ -22,33 +23,74 @@ const renderSetup = (status, onRetry = jest.fn()) =>
   );
 
 describe('SetupPage', () => {
-  it('explains the OAuth2 + per-user webhook architecture', () => {
+  it('introduces the guided sign-in setup', () => {
     renderSetup(STATUS_WITH_DIAGNOSTICS);
-    const intro = screen.getByText(
-      (_, el) =>
-        el.tagName === 'P' &&
-        el.textContent.includes('each user connects their own Discord webhook')
-    );
-    expect(intro).toBeInTheDocument();
-    expect(intro.textContent).toMatch(/no bot is involved/i);
-    expect(intro.textContent).toMatch(/encrypted server-side/i);
-    expect(intro.textContent).toMatch(/OAuth2 application/i);
+    expect(
+      screen.getByText(
+        'Wyvern is ready for users as soon as sign-in is connected. This takes a few minutes.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /connect discord sign-in/i })
+    ).toBeInTheDocument();
   });
 
-  it('renders the required-variable checklist steps', () => {
+  it('renders the stage-1 steps: Discord application link, redirect-URI chip, and env guidance', () => {
     renderSetup(STATUS_WITH_DIAGNOSTICS);
-    expect(screen.getByText('Create a Discord application')).toBeInTheDocument();
+
+    // External link to the Discord developer portal, opened in a new tab.
+    const appLink = screen.getByRole('link', {
+      name: /discord\.com\/developers\/applications/i,
+    });
+    expect(appLink).toHaveAttribute('href', 'https://discord.com/developers/applications');
+    expect(appLink).toHaveAttribute('target', '_blank');
+
+    // The chip shows the concrete same-origin redirect URI, ready to copy.
+    expect(screen.getByText('http://localhost/api/auth/discord/callback')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /copy/i })).toBeInTheDocument();
+
+    // OAuth2 Redirects + Client ID/Secret into server/.env guidance.
     expect(
-      screen.getByText(/<APP_ORIGIN>\/api\/auth\/discord\/callback/)
+      screen.getByText(/add that address to OAuth2 \u2192 Redirects/i)
     ).toBeInTheDocument();
-    expect(screen.getByText('Point the server at a database')).toBeInTheDocument();
-    expect(screen.getByText('Generate the encryption key')).toBeInTheDocument();
-    expect(screen.getByText('Fill in server/.env')).toBeInTheDocument();
-    expect(screen.getByText('Restart the server')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Client ID and Client Secret into your server.s environment \(server\/\.env\)/i)
+    ).toBeInTheDocument();
+  });
+
+  it('renders the restart card with a recheck button that triggers onRetry', () => {
+    const onRetry = jest.fn();
+    renderSetup(STATUS_WITH_DIAGNOSTICS, onRetry);
+
+    expect(screen.getByRole('heading', { name: /restart & check/i })).toBeInTheDocument();
+    expect(
+      screen.getByText('Restart the server, then come back here.')
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('setup-recheck'));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('copies the redirect URI to the clipboard with Copy/Copied states', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    renderSetup(STATUS_WITH_DIAGNOSTICS);
+
+    await userEvent.click(screen.getByRole('button', { name: /copy/i }));
+    expect(writeText).toHaveBeenCalledWith(
+      'http://localhost/api/auth/discord/callback'
+    );
+    expect(
+      await screen.findByRole('button', { name: /copied/i })
+    ).toBeInTheDocument();
   });
 
   it('renders missing and invalid variable names without values', () => {
     renderSetup(STATUS_WITH_DIAGNOSTICS);
+    expect(screen.getByRole('heading', { name: /what.s left/i })).toBeInTheDocument();
     expect(screen.getByTestId('missing-var-DISCORD_CLIENT_SECRET')).toHaveTextContent(
       'DISCORD_CLIENT_SECRET'
     );
@@ -56,10 +98,23 @@ describe('SetupPage', () => {
       'WYVERN_ENCRYPTION_KEY'
     );
     expect(screen.getByTestId('invalid-var-DISCORD_REDIRECT_URI')).toHaveTextContent(
+      'DISCORD_REDIRECT_URI'
+    );
+    expect(screen.getByTestId('invalid-var-DISCORD_REDIRECT_URI')).toHaveTextContent(
       'must be an absolute http(s) URL'
     );
     // The page renders names and messages, never values.
     expect(screen.queryByText(/top-secret|s3cr3t/i)).not.toBeInTheDocument();
+  });
+
+  it('explains what users experience once sign-in works', () => {
+    renderSetup(STATUS_WITH_DIAGNOSTICS);
+    expect(
+      screen.getByRole('heading', { name: /for your users/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/people sign in with Discord and connect their own storage in about a minute/i)
+    ).toBeInTheDocument();
   });
 
   it('redirects to /login when the server reports setup complete', () => {

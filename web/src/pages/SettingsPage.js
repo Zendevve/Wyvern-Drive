@@ -12,7 +12,7 @@ import {
   Typography,
 } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTriangleExclamation, faTrashCan } from '@fortawesome/free-solid-svg-icons';
+import { faCircleCheck, faTriangleExclamation, faTrashCan } from '@fortawesome/free-solid-svg-icons';
 import { useNavigate } from 'react-router-dom';
 import AppShell from '../components/AppShell';
 import ErrorNotice from '../components/ErrorNotice';
@@ -190,7 +190,7 @@ export default function SettingsPage() {
               {[
                 { label: 'Files', value: stats.files },
                 { label: 'Folders', value: stats.folders },
-                { label: 'Logical size', value: formatBytes(stats.sizeBytes) },
+                { label: 'Space used', value: formatBytes(stats.sizeBytes) },
                 {
                   label: 'Stored on Discord',
                   value: formatBytes(stats.storedBytes),
@@ -198,7 +198,7 @@ export default function SettingsPage() {
                 ...(stats.compressionRatio != null
                   ? [
                       {
-                        label: 'Compression ratio',
+                        label: 'Saved space',
                         value: `${stats.compressionRatio.toFixed(2)}×`,
                       },
                     ]
@@ -228,14 +228,36 @@ export default function SettingsPage() {
       </Card>
       <Card variant="outlined" elevation={0} sx={{ maxWidth: 560, borderRadius: '20px', mt: 3 }}>
         <CardContent sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
             Storage
           </Typography>
-          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-            Each webhook is an independent Discord channel the server stores chunks on.
-            Adding more webhooks lets uploads proceed in parallel, which raises
-            throughput.
-          </Typography>
+          {drive && (
+            <Box
+              data-testid="storage-connected"
+              sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}
+            >
+              <FontAwesomeIcon
+                icon={faCircleCheck}
+                aria-hidden="true"
+                sx={{ color: 'success.main', fontSize: 16, flexShrink: 0 }}
+              />
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Storage connected
+              </Typography>
+              <Typography
+                variant="caption"
+                color="textSecondary"
+                sx={{ ml: 'auto' }}
+              >
+                {webhooksLoading ? '' : `${webhooks.length} connection(s)`}
+              </Typography>
+            </Box>
+          )}
+          {drive && (
+            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+              Your files are encrypted before they&apos;re stored.
+            </Typography>
+          )}
           {webhookError && (
             <Box
               role="alert"
@@ -303,7 +325,7 @@ export default function SettingsPage() {
                   </Box>
                   <IconButton
                     aria-label={`Remove webhook ${webhook.id}`}
-                    title="Remove webhook"
+                    title="Remove"
                     color="error"
                     onClick={() => handleRemoveWebhook(webhook)}
                     disabled={removingWebhookId === webhook.id}
@@ -341,7 +363,7 @@ export default function SettingsPage() {
               disabled={addingWebhook || !webhookUrl.trim()}
               data-testid="add-webhook"
             >
-              Add webhook
+              Add another connection
             </Button>
           </Box>
         </CardContent>

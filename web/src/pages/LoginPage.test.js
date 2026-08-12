@@ -57,9 +57,12 @@ describe('LoginPage OAuth errors', () => {
     expect(await screen.findByTestId('oauth-invalid-state')).toBeInTheDocument();
   });
 
-  it('renders the oauth-failed alert', async () => {
+  it('renders the oauth-failed alert with the operator-facing copy', async () => {
     renderLogin('oauth_failed');
-    expect(await screen.findByTestId('oauth-failed')).toBeInTheDocument();
+    const alert = await screen.findByTestId('oauth-failed');
+    expect(alert).toHaveTextContent(
+      "Sign-in didn't work. The person running this server may need to check their Discord setup."
+    );
   });
 
   it('keeps the Discord sign-in button alongside error alerts', async () => {

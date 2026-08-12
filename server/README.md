@@ -41,10 +41,11 @@ before SQLite opens. Once every variable validates, the full composition runs
 (SQLite → migrations → services → HTTP) and `/api/setup/status` reports
 `setupRequired: false`.
 
-After sign-in, each user is redirected to `/connect`, where they paste their
-own Discord webhook URL (Server Settings → Integrations → Create Webhook in a
-private server). The server validates it, seals it, and stores only the
-ciphertext; the URL is never kept in the browser.
+After sign-in, each user is redirected to `/connect`, where four numbered
+steps walk them through creating a webhook in a private Discord server
+(Server Settings → Integrations → Webhooks) and pasting the URL. The server
+validates it, seals it, and stores only the ciphertext; the URL is never kept
+in the browser.
 
 ## Environment variables
 

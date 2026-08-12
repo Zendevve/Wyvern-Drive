@@ -91,7 +91,7 @@ never auto-migrated.
 - `README.md` — features, architecture, security model, config, testing.
 - `server/README.md` — manual smoke path (136 server tests; encrypted
   round-trip fixture verified against SHA-256; setup-mode coverage).
-- `web/` — 100 tests pinning accessible names, testids, quota/share text, trash
+- `web/` — 110 tests pinning accessible names, testids, quota/share text, trash
   and webhook surfaces, and the setup gate/page.
 - `refs/` — vendored prior art (Disbox et al.), read-only.
 

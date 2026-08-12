@@ -104,6 +104,25 @@ it('logs out and returns to the login page', async () => {
 });
 
 describe('webhook management', () => {
+  it('shows the storage-connected line with the connection count when the drive exists', async () => {
+    client.api.webhooks.list.mockResolvedValue({
+      webhooks: [
+        { id: 1, createdAt: '2026-06-01T00:00:00.000Z' },
+        { id: 2, createdAt: '2026-07-01T00:00:00.000Z' },
+      ],
+    });
+    renderSettings();
+
+    const line = await screen.findByTestId('storage-connected');
+    expect(within(line).getByText('Storage connected')).toBeInTheDocument();
+    expect(await screen.findByText('2 connection(s)')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Your files are encrypted before they're stored/i)
+    ).toBeInTheDocument();
+    // The add-webhook CTA remains available alongside the list.
+    expect(screen.getByTestId('add-webhook')).toBeInTheDocument();
+  });
+
   it('lists the configured webhooks', async () => {
     client.api.webhooks.list.mockResolvedValue({
       webhooks: [
@@ -210,11 +229,11 @@ describe('drive stats', () => {
     expect(within(grid).getByText('12')).toBeInTheDocument();
     expect(within(grid).getByText('Folders')).toBeInTheDocument();
     expect(within(grid).getByText('3')).toBeInTheDocument();
-    expect(within(grid).getByText('Logical size')).toBeInTheDocument();
+    expect(within(grid).getByText('Space used')).toBeInTheDocument();
     expect(within(grid).getByText('1.0 MiB')).toBeInTheDocument();
     expect(within(grid).getByText('Stored on Discord')).toBeInTheDocument();
     expect(within(grid).getByText('512 KiB')).toBeInTheDocument();
-    expect(within(grid).getByText('Compression ratio')).toBeInTheDocument();
+    expect(within(grid).getByText('Saved space')).toBeInTheDocument();
     expect(within(grid).getByText('2.00×')).toBeInTheDocument();
     expect(within(grid).getByText('Webhooks')).toBeInTheDocument();
     expect(within(grid).getByText('2')).toBeInTheDocument();
@@ -225,7 +244,7 @@ describe('drive stats', () => {
     renderSettings();
 
     const grid = await screen.findByTestId('drive-stats');
-    expect(within(grid).queryByText('Compression ratio')).not.toBeInTheDocument();
+    expect(within(grid).queryByText('Saved space')).not.toBeInTheDocument();
     expect(within(grid).getByText('Webhooks')).toBeInTheDocument();
   });
 
