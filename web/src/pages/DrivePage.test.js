@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import DrivePage from './DrivePage';
 import { AuthProvider } from '../auth/AuthProvider';
+import UploadProvider from '../upload/UploadProvider';
 import * as client from '../api/client';
 
 jest.mock('../api/client', () => ({
@@ -91,10 +92,30 @@ const renderDrive = () =>
   render(
     <MemoryRouter initialEntries={['/drive']}>
       <AuthProvider>
-        <DrivePage />
+        <UploadProvider>
+          <DrivePage />
+        </UploadProvider>
       </AuthProvider>
     </MemoryRouter>
   );
+
+// Holds the provider above the page so a DrivePage unmount/remount (the
+// /drive -> /trash -> /drive navigation shape) must not lose the queue.
+function NavigationHost() {
+  const [onDrive, setOnDrive] = React.useState(true);
+  return (
+    <MemoryRouter initialEntries={['/drive']}>
+      <AuthProvider>
+        <UploadProvider>
+          {onDrive ? <DrivePage /> : <div data-testid="away-page">Trash</div>}
+          <button type="button" onClick={() => setOnDrive((v) => !v)}>
+            toggle-page
+          </button>
+        </UploadProvider>
+      </AuthProvider>
+    </MemoryRouter>
+  );
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -315,6 +336,40 @@ describe('uploads', () => {
     await waitFor(() =>
       expect(screen.queryByText('hello.txt')).not.toBeInTheDocument()
     );
+  });
+
+  it('keeps the transfer console across page navigation', async () => {
+    let resolveUpload;
+    client.uploadFile.mockImplementation(
+      ({ onProgress }) =>
+        new Promise((resolve) => {
+          resolveUpload = resolve;
+          onProgress(50, 100);
+        })
+    );
+    render(<NavigationHost />);
+    await screen.findByTestId('empty-state');
+
+    const file = new File(['hello world'], 'hello.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByTestId('file-input'), {
+      target: { files: [file] },
+    });
+
+    expect(await screen.findByText('Uploading 50%')).toBeInTheDocument();
+
+    // Navigate away: DrivePage unmounts but the provider-owned queue survives.
+    userEvent.click(screen.getByRole('button', { name: /toggle-page/i }));
+    expect(screen.getByTestId('away-page')).toBeInTheDocument();
+    expect(screen.getByText('Uploading 50%')).toBeInTheDocument();
+
+    // Navigate back: a fresh DrivePage mounts and the same job is still there.
+    userEvent.click(screen.getByRole('button', { name: /toggle-page/i }));
+    expect(await screen.findByTestId('empty-state')).toBeInTheDocument();
+    expect(screen.getByText('Uploading 50%')).toBeInTheDocument();
+
+    resolveUpload(fileEntry({ id: 9, name: 'hello.txt', sizeBytes: 11 }));
+    expect(await screen.findByText('Uploaded')).toBeInTheDocument();
+    expect(screen.getByText('hello.txt')).toBeInTheDocument();
   });
 });
 

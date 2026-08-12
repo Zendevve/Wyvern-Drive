@@ -4,6 +4,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import theme from './theme';
 import { AuthProvider } from './auth/AuthProvider';
+import UploadProvider from './upload/UploadProvider';
 import { api } from './api/client';
 import ScreenLoader from './components/ScreenLoader';
 import LoginPage from './pages/LoginPage';
@@ -65,6 +66,7 @@ export default function App() {
       <BrowserRouter>
         <SetupGate>
           <AuthProvider>
+            <UploadProvider>
             <Routes>
               {/* Reached only when setup is complete; /setup lives at /login. */}
               <Route path="/setup" element={<Navigate to="/login" replace />} />
@@ -76,6 +78,7 @@ export default function App() {
               <Route path="/share/:token" element={<SharePage />} />
               <Route path="*" element={<Navigate to="/drive" replace />} />
             </Routes>
+            </UploadProvider>
           </AuthProvider>
         </SetupGate>
       </BrowserRouter>

@@ -49,29 +49,16 @@ import MoveDialog from '../components/MoveDialog';
 import PreviewDialog from '../components/PreviewDialog';
 import ShareDialog from '../components/ShareDialog';
 import QuotaMeter from '../components/QuotaMeter';
-import UploadQueue from '../components/UploadQueue';
 import {
   api,
   archiveUrl,
   downloadUrl,
-  uploadFile,
-  uploadProgress,
 } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
+import { useUploads } from '../upload/UploadProvider';
 import DialogTransition from '../motion/DialogTransition';
 import ScreenLoader from '../components/ScreenLoader';
 import { gradients } from '../theme';
-
-let nextJobId = 1;
-
-// Client-generated resume token: a UUID when the platform provides one,
-// otherwise a unique-enough timestamp/random fallback. Retrying an upload
-// reuses the token so the server can resume the same entry.
-function newUploadToken() {
-  return typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `u-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
 
 /**
  * Materialize an <input webkitdirectory> selection into upload pairs. The
@@ -124,7 +111,6 @@ export default function DrivePage() {
   const [sort, setSort] = useState('name');
   const [direction, setDirection] = useState('asc');
 
-  const [uploads, setUploads] = useState([]);
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
 
@@ -166,6 +152,11 @@ export default function DrivePage() {
   }, [view]);
 
   const currentParentId = trail.length > 0 ? trail[trail.length - 1].id : null;
+
+  // The upload queue lives in the app-level UploadProvider: enqueue jobs
+  // here and let the provider's global transfer console track them across
+  // navigation. `subscribe` lets this page refresh when a job settles.
+  const { enqueueJobPairs, subscribe } = useUploads();
 
   const loadEntries = useCallback(
     async (parentId, query, sortField, sortDirection) => {
@@ -211,6 +202,20 @@ export default function DrivePage() {
       // Quota refresh is best-effort.
     }
   }, [refresh]);
+
+  // Refresh the manifest when an upload settles. The queue outlives this
+  // page (the provider owns it), so jobs that started before a navigation
+  // complete after DrivePage remounts; mirror the pre-provider flow by
+  // reloading entries and quota after each done job.
+  useEffect(() => {
+    const unsubscribe = subscribe(({ type, status }) => {
+      if (type === 'settled' && status === 'done') {
+        reload();
+        refreshQuota();
+      }
+    });
+    return unsubscribe;
+  }, [subscribe, reload, refreshQuota]);
 
   const toggleSelect = useCallback((id) => {
     setSelectedIds((prev) => {
@@ -277,181 +282,17 @@ export default function DrivePage() {
     });
   }, []);
 
-  // Server-side "storing to Discord" progress polling. Once the browser has
-  // pushed 100% of the bytes the XHR is still pending while the server posts
-  // chunks to Discord; poll the resume token and surface postedBytes so the
-  // queue can show real storage progress. Display-only: failures are ignored
-  // and the poll never blocks the upload promise.
-  const pollTimersRef = useRef(new Map()); // jobId -> interval id
-  const pollsInFlightRef = useRef(new Set()); // jobIds with a request in flight
-  useEffect(() => {
-    const timers = pollTimersRef.current;
-    return () => {
-      timers.forEach((timer) => clearInterval(timer));
-      timers.clear();
-    };
-  }, []);
-
-  const stopServerPoll = useCallback((jobId) => {
-    const timer = pollTimersRef.current.get(jobId);
-    if (timer) {
-      clearInterval(timer);
-      pollTimersRef.current.delete(jobId);
-    }
-    pollsInFlightRef.current.delete(jobId);
-  }, []);
-
-  const pollServerProgress = useCallback(async (jobId, uploadToken) => {
-    if (pollsInFlightRef.current.has(jobId)) {
-      return;
-    }
-    pollsInFlightRef.current.add(jobId);
-    try {
-      const data = await uploadProgress(uploadToken);
-      const expected = data && data.expectedBytes;
-      const posted = data && data.postedBytes;
-      let pct = null;
-      if (expected && expected > 0 && typeof posted === 'number') {
-        pct = Math.max(0, Math.min(100, Math.round((posted / expected) * 100)));
-      }
-      setUploads((prev) =>
-        prev.map((job) =>
-          job.id === jobId
-            ? { ...job, serverPhase: 'storing', serverProgress: pct }
-            : job
-        )
-      );
-    } catch {
-      // Server progress is display-only; ignore poll failures.
-    } finally {
-      pollsInFlightRef.current.delete(jobId);
-    }
-  }, []);
-
-  const startServerPoll = useCallback(
-    (jobId, uploadToken) => {
-      if (!uploadToken || pollTimersRef.current.has(jobId)) {
-        return;
-      }
-      const timer = setInterval(
-        () => pollServerProgress(jobId, uploadToken),
-        1000
-      );
-      pollTimersRef.current.set(jobId, timer);
-      pollServerProgress(jobId, uploadToken);
-    },
-    [pollServerProgress]
-  );
-
-  const runUpload = useCallback(
-    async (job) => {
-      const jobId = job.id;
-      const uploadToken = job.uploadToken;
-      // Folder-upload jobs carry an explicit parentId; plain uploads target
-      // the folder the user is currently viewing.
-      const parentId = job.parentId == null ? currentParentId : job.parentId;
-      try {
-        const upload = uploadFile({
-          parentId,
-          file: job.file,
-          uploadToken,
-          fileSize: job.file.size,
-          onProgress: (loaded, total) => {
-            const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
-            setUploads((prev) =>
-              prev.map((j) =>
-                j.id === jobId ? { ...j, progress: percent } : j
-              )
-            );
-            if (total > 0 && loaded >= total) {
-              startServerPoll(jobId, uploadToken);
-            }
-          },
-        });
-        // Expose the XHR abort handle on the queued job so the queue's
-        // Cancel control can stop the request in flight.
-        setUploads((prev) =>
-          prev.map((j) =>
-            j.id === jobId ? { ...j, abort: upload.abort } : j
-          )
-        );
-        const entry = await upload;
-        stopServerPoll(jobId);
-        setUploads((prev) =>
-          prev.map((j) =>
-            j.id === jobId ? { ...j, status: 'done', progress: 100, entry } : j
-          )
-        );
-        await reload();
-        await refreshQuota();
-      } catch (err) {
-        stopServerPoll(jobId);
-        setUploads((prev) =>
-          prev.map((j) =>
-            j.id === jobId
-              ? err && err.code === 'ABORTED'
-                ? j // cancelled from the queue; the removal flow cleans up
-                : { ...j, status: 'failed', error: err }
-              : j
-          )
-        );
-      }
-    },
-    [
-      currentParentId,
-      reload,
-      refreshQuota,
-      startServerPoll,
-      stopServerPoll,
-    ]
-  );
-
-  // `pairs` are { file, parentId } uploads; a null/undefined parentId means
-  // "the folder the user is currently viewing" at upload time.
-  const enqueueJobPairs = useCallback(
-    (pairs) => {
-      if (!pairs || pairs.length === 0) {
-        return;
-      }
-      const jobs = pairs.map(({ file, parentId }) => ({
-        id: nextJobId++,
-        file,
-        parentId: parentId == null ? undefined : parentId,
-        uploadToken: newUploadToken(),
-        abort: null, // attached by runUpload once the XHR exists
-        status: 'uploading',
-        progress: 0,
-        error: null,
-        entry: null,
-        serverPhase: null,
-        serverProgress: null,
-      }));
-      setUploads((prev) => [...prev, ...jobs]);
-      jobs.forEach((job) => {
-        runUpload(job);
-      });
-    },
-    [runUpload]
-  );
-
-  const enqueueFiles = useCallback(
-    (files) => {
-      if (!files || files.length === 0) {
-        return;
-      }
-      enqueueJobPairs(
-        Array.from(files).map((file) => ({ file, parentId: undefined }))
-      );
-    },
-    [enqueueJobPairs]
-  );
-
   const handleFilesSelected = useCallback(
     (event) => {
-      enqueueFiles(Array.from(event.target.files || []));
+      const files = Array.from(event.target.files || []);
       event.target.value = '';
+      // Resolve the target folder at enqueue time (the provider is
+      // page-agnostic) so uploads land where the user started them.
+      enqueueJobPairs(
+        files.map((file) => ({ file, parentId: currentParentId }))
+      );
     },
-    [enqueueFiles]
+    [enqueueJobPairs, currentParentId]
   );
 
   const handleFolderSelected = useCallback(
@@ -469,36 +310,6 @@ export default function DrivePage() {
       }
     },
     [currentParentId, enqueueJobPairs]
-  );
-
-  const retryUpload = useCallback(
-    (job) => {
-      setUploads((prev) =>
-        prev.map((j) =>
-          j.id === job.id
-            ? {
-                ...j,
-                status: 'uploading',
-                progress: 0,
-                error: null,
-                serverPhase: null,
-                serverProgress: null,
-              }
-            : j
-        )
-      );
-      // Reuse the job's original token so the server resumes the same entry.
-      runUpload(job);
-    },
-    [runUpload]
-  );
-
-  const removeUpload = useCallback(
-    (jobId) => {
-      stopServerPoll(jobId);
-      setUploads((prev) => prev.filter((job) => job.id !== jobId));
-    },
-    [stopServerPoll]
   );
 
   const runMutation = useCallback(async (fn) => {
@@ -1047,8 +858,6 @@ export default function DrivePage() {
 
         <DropOverlay active={dragging} dropCount={dropCount} />
       </Box>
-
-      <UploadQueue jobs={uploads} onRetry={retryUpload} onRemove={removeUpload} />
 
       <FolderDialog
         open={folderDialogOpen}
