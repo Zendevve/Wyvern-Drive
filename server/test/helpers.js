@@ -98,6 +98,8 @@ function createFakeDiscordStorage() {
   const stores = new Map(); // webhookId -> Map(messageId -> [{ filename, buffer }])
   const deletedMessages = [];
   const storage = {
+    /** Adapter feature flags, mirroring the real webhook adapter. */
+    capabilities: { versioning: false, presignedUrls: false },
     failNextWebhookValidations: 0,
     webhookValidationCalls: 0,
     failNextPutChunks: 0,

@@ -19,7 +19,7 @@ test('migrate creates all tables, indexes, and the migrations ledger', async () 
   await migrate(db, MIGRATIONS_DIR);
 
   const tables = (await all(db, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")).map((r) => r.name);
-  for (const expected of ['users', 'drives', 'entries', 'file_chunks', 'content_blocks', 'webhooks', 'shares', 'sessions', 'schema_migrations']) {
+  for (const expected of ['users', 'drives', 'entries', 'file_chunks', 'content_blocks', 'webhooks', 'shares', 'sessions', 'pending_posts', 'schema_migrations']) {
     assert.ok(tables.includes(expected), `missing table ${expected}`);
   }
 
@@ -39,7 +39,7 @@ test('migrate creates all tables, indexes, and the migrations ledger', async () 
   }
 
   const versions = await all(db, 'SELECT version FROM schema_migrations');
-  assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3, 4]);
+  assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3, 4, 5]);
 
   const driveColumns = (await all(db, 'PRAGMA table_info(drives)')).map((c) => c.name);
   for (const expected of ['id', 'owner_id', 'legacy_discord_channel_id', 'webhook_ciphertext', 'webhook_nonce', 'webhook_auth_tag', 'quota_bytes', 'created_at']) {
@@ -59,8 +59,29 @@ test('migrate is idempotent', async () => {
   await migrate(db, MIGRATIONS_DIR);
   await migrate(db, MIGRATIONS_DIR);
   const versions = await all(db, 'SELECT version FROM schema_migrations');
-  assert.strictEqual(versions.length, 4);
+  assert.strictEqual(versions.length, 5);
   await closeDatabase(db);
+});
+
+test('file-backed databases open in WAL journal mode (crash-window durability)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wyvern-wal-'));
+  const dbUrl = path.join(dir, 'wal.db');
+  try {
+    const db = await openDatabase(dbUrl);
+    const mode = await get(db, 'PRAGMA journal_mode');
+    assert.strictEqual(mode.journal_mode, 'wal', 'journal_mode must be WAL for file-backed databases');
+    // A table written under WAL is durable and readable after reopen.
+    await run(db, 'CREATE TABLE probe (id INTEGER PRIMARY KEY, v TEXT)');
+    await run(db, 'INSERT INTO probe (v) VALUES (?)', ['wal-durable']);
+    await closeDatabase(db);
+
+    const reopened = await openDatabase(dbUrl);
+    const row = await get(reopened, 'SELECT v FROM probe WHERE id = 1');
+    assert.strictEqual(row.v, 'wal-durable');
+    await closeDatabase(reopened);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('foreign keys are enabled and enforced', async () => {
@@ -138,7 +159,7 @@ test('a failed migration aborts and rolls back cleanly', async () => {
 
 test('migrations directory contains only the numbered migrations', () => {
   const files = fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
-  assert.deepStrictEqual(files, ['001_initial.sql', '002_webhook_storage.sql', '003_add_upload_resume.sql', '004_block_store_trash.sql']);
+  assert.deepStrictEqual(files, ['001_initial.sql', '002_webhook_storage.sql', '003_add_upload_resume.sql', '004_block_store_trash.sql', '005_pending_posts.sql']);
 });
 
 test('migration 002 rebuilds drives: legacy channel preserved, webhook columns added, foreign keys intact', async () => {
@@ -157,7 +178,7 @@ test('migration 002 rebuilds drives: legacy channel preserved, webhook columns a
     await migrate(db, MIGRATIONS_DIR);
 
     const versions = await all(db, 'SELECT version FROM schema_migrations');
-    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3, 4]);
+    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3, 4, 5]);
 
     const drive = await get(db, 'SELECT * FROM drives WHERE id = ?', [driveRes.lastID]);
     assert.strictEqual(drive.legacy_discord_channel_id, 'ch-legacy-1', 'old channel value must be preserved');
@@ -207,7 +228,7 @@ test('migration 003 adds upload-resume columns and the partial index without dat
     await migrate(db, MIGRATIONS_DIR);
 
     const versions = await all(db, 'SELECT version FROM schema_migrations');
-    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3, 4]);
+    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3, 4, 5]);
 
     // New columns exist and existing rows keep their data.
     const entry = await get(db, 'SELECT * FROM entries WHERE id = ?', [entryRes.lastID]);
@@ -272,7 +293,7 @@ test('migration 004 backfills webhooks, dedups blocks, and rebuilds chunk rows',
     await migrate(db, MIGRATIONS_DIR);
 
     const versions = await all(db, 'SELECT version FROM schema_migrations');
-    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3, 4]);
+    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3, 4, 5]);
 
     // Webhook row backfilled 1:1 from the drive credential columns.
     const webhooks = await all(db, 'SELECT * FROM webhooks');

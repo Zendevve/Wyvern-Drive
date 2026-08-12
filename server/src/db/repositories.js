@@ -388,10 +388,90 @@ function createRepositories(db) {
       return run(db, 'DELETE FROM content_blocks WHERE id = ?', [id]);
     },
 
+    /**
+     * Permanently drop soft-deleted chunk rows for a block the orphan sweep
+     * is reclaiming. Soft-deleted rows (a failed purge's leftovers) still FK
+     * the block, so the block row cannot be deleted until they go; live rows
+     * are never touched here (a block with live rows is not dead).
+     */
+    deleteDeadChunkRows(blockId) {
+      return run(db, 'DELETE FROM file_chunks WHERE block_id = ? AND deleted_at IS NOT NULL', [blockId]);
+    },
+
     /** Blocks referencing a webhook — nonzero blocks webhook removal. */
     async countBlocksForWebhook(webhookId) {
       const row = await get(db, 'SELECT COUNT(*) AS c FROM content_blocks WHERE webhook_id = ?', [webhookId]);
       return row.c;
+    },
+
+    /**
+     * Blocks with zero live file_chunks references. Refcount-zero blocks are
+     * orphaned (a rolled-back upload batch, or a purge whose chunk rows are
+     * gone) and safe to reclaim — except while a live upload is between its
+     * block insert and chunk insert, which the sweep guards via pending_posts.
+     */
+    listDeadBlocks() {
+      return all(
+        db,
+        `SELECT b.* FROM content_blocks b
+         WHERE NOT EXISTS (
+           SELECT 1 FROM file_chunks fc WHERE fc.block_id = b.id AND fc.deleted_at IS NULL
+         )
+         ORDER BY b.id ASC`
+      );
+    },
+
+    /** Block rows matching a (webhook, message) — nonzero means a POST committed. */
+    async countBlocksByWebhookMessage(webhookId, messageId) {
+      const row = await get(
+        db,
+        'SELECT COUNT(*) AS c FROM content_blocks WHERE webhook_id = ? AND message_id = ?',
+        [webhookId, messageId]
+      );
+      return row.c;
+    },
+
+    /**
+     * Liveness of every block in one Discord message: `total` is the block-row
+     * count for the message and `live` the subset still referenced by a live
+     * chunk. A message may be deleted only when live is 0 (dedup shares blocks
+     * across entries, so a message holding any live block is never touched).
+     */
+    async countBlocksLiveInMessage(webhookId, messageId) {
+      const row = await get(
+        db,
+        `SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN EXISTS (
+                  SELECT 1 FROM file_chunks fc WHERE fc.block_id = b.id AND fc.deleted_at IS NULL
+                ) THEN 1 ELSE 0 END), 0) AS live
+         FROM content_blocks b
+         WHERE webhook_id = ? AND message_id = ?`,
+        [webhookId, messageId]
+      );
+      return { total: row.total, live: row.live };
+    },
+
+    // ---- pending_posts (upload outbox) ----
+    async insertPendingPost({ driveId, webhookId, entryId, batchOrdinal }) {
+      const res = await run(
+        db,
+        'INSERT INTO pending_posts (drive_id, webhook_id, entry_id, message_id, batch_ordinal, created_at) VALUES (?, ?, ?, NULL, ?, ?)',
+        [driveId, webhookId, entryId, batchOrdinal, nowIso()]
+      );
+      return get(db, 'SELECT * FROM pending_posts WHERE id = ?', [res.lastID]);
+    },
+
+    updatePendingPostMessage(id, messageId) {
+      return run(db, 'UPDATE pending_posts SET message_id = ? WHERE id = ?', [messageId, id]);
+    },
+
+    deletePendingPost(id) {
+      return run(db, 'DELETE FROM pending_posts WHERE id = ?', [id]);
+    },
+
+    /** Every outbox row; the boot/6h sweep reconciles them in id order. */
+    listPendingPosts() {
+      return all(db, 'SELECT * FROM pending_posts ORDER BY id ASC');
     },
 
     // ---- file_chunks ----

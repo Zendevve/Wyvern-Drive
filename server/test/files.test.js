@@ -58,13 +58,14 @@ test('24-byte upload splits into exactly 3 x 8-byte encrypted chunks packed in o
   // Discord storage holds one packed message with three attachments per the
   // drive's webhook; the stored bytes are ciphertext, never plaintext.
   const webhookId = (await ctx.repositories.listWebhooks(1))[0].id;
+  const driveId = (await ctx.repositories.getEntryById(entry.id)).drive_id;
   const stored = ctx.discordStorage.messagesForWebhook(webhookId);
   assert.ok(stored, 'messages stored per webhook');
   assert.strictEqual(stored.size, 1, '3 chunks -> 1 packed message');
   const attachments = [...stored.values()][0];
   assert.strictEqual(attachments.length, 3, 'one attachment per chunk');
   attachments.forEach((attachment, i) => {
-    assert.strictEqual(attachment.filename, `chunk-${i}.bin`);
+    assert.strictEqual(attachment.filename, `wyv-${driveId}-${chunks[i].checksum.slice(0, 12)}-${i}.bin`);
     assert.notDeepStrictEqual(attachment.buffer, fixture.subarray(i * 8, i * 8 + 8), 'chunk must be encrypted at rest');
   });
   assert.strictEqual(ctx.discordStorage.countAttachments(), 3);

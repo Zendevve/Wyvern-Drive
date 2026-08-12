@@ -6,8 +6,25 @@ const sqlite3 = require('sqlite3');
 function openDatabase(dbUrl) {
   return new Promise((resolve, reject) => {
     const db = new sqlite3.Database(dbUrl, (err) => {
-      if (err) reject(err);
-      else resolve(db);
+      if (err) {
+        reject(err);
+        return;
+      }
+      // Durability hardening (crash-window outbox): WAL keeps readers from
+      // blocking writers and makes committed rows survive abrupt exits;
+      // busy_timeout turns the short block-commit transactions into waits
+      // instead of SQLITE_BUSY failures when another request holds the write
+      // lock. Both are idempotent; `:memory:` databases report 'memory'.
+      db.run('PRAGMA journal_mode = WAL', (walErr) => {
+        if (walErr) {
+          reject(walErr);
+          return;
+        }
+        db.run('PRAGMA busy_timeout = 5000', (busyErr) => {
+          if (busyErr) reject(busyErr);
+          else resolve(db);
+        });
+      });
     });
   });
 }

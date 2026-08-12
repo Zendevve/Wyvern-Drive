@@ -132,12 +132,41 @@ async function main() {
       console.error(`Orphan upload sweep failed: ${err && err.message}`);
     }
   };
-  setInterval(() => void runOrphanUploadSweep(), 6 * 60 * 60 * 1000).unref();
+  // Fire-and-forget outbox replay: reconcile pending_posts intent rows left
+  // by a crash between a batch POST and its block commit (delete orphaned
+  // Discord messages, drop stale rows). Runs at boot and every 6 hours,
+  // guarded like the other sweeps; skips rows whose upload is still live.
+  const runPendingPostSweep = async () => {
+    try {
+      await fileService.reconcilePendingPosts();
+    } catch (err) {
+      console.error(`Pending-post sweep failed: ${err && err.message}`);
+    }
+  };
+
+  // Fire-and-forget orphan-block sweep: reclaim content_blocks with zero live
+  // chunk references (deleting a Discord message only when every block it
+  // holds is dead), so orphaned storage stops pinning webhook removal. Same
+  // cadence and guard style as the pending-post sweep.
+  const runOrphanBlockSweep = async () => {
+    try {
+      await fileService.reconcileOrphanBlocks();
+    } catch (err) {
+      console.error(`Orphan-block sweep failed: ${err && err.message}`);
+    }
+  };
+  setInterval(() => {
+    void runOrphanUploadSweep();
+    void runPendingPostSweep();
+    void runOrphanBlockSweep();
+  }, 6 * 60 * 60 * 1000).unref();
 
   const server = app.listen(config.port, () => {
     console.log(`Wyvern server listening on ${config.appOrigin}`);
     void runBootRetentionSweep();
     void runOrphanUploadSweep();
+    void runPendingPostSweep();
+    void runOrphanBlockSweep();
   });
   server.on('error', async (err) => {
     console.error(`Wyvern server failed to start: ${err.message}`);

@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const zlib = require('node:zlib');
 const { WyvernError, httpError } = require('../errors');
+const { exec } = require('../db/connection');
 
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 
@@ -118,6 +119,18 @@ function createFileService({ db, repositories, discordStorage, config }) {
   // Round-robin position per drive across its webhooks (persists across
   // uploads so traffic keeps spreading evenly).
   const webhookCursors = new Map();
+  // Serialize the short block+chunk commit transactions across concurrent
+  // upload batches: sqlite3 runs one transaction at a time per connection, so
+  // a second BEGIN queued while another flush's transaction is open would
+  // fail ("cannot start a transaction within a transaction"). The chain keeps
+  // every flush's commit region atomic without serializing the Discord POSTs
+  // themselves (they still run up to uploadConcurrency wide).
+  let commitChain = Promise.resolve();
+  function withCommitSerialization(fn) {
+    const run = commitChain.then(fn);
+    commitChain = run.catch(() => {});
+    return run;
+  }
   // Serialize upload-vs-cancel per upload token (and purge per entry): the
   // cancel endpoint must never interleave with an upload's flush so partial
   // chunks/blocks can't be orphaned or a committed entry wiped.
@@ -173,9 +186,11 @@ function createFileService({ db, repositories, discordStorage, config }) {
    * Parallel bounded-prefetch chunk stream: up to `downloadConcurrency` chunks
    * are fetched ahead of the yield cursor (never more than concurrency x chunk
    * size held in memory), yielded in ordinal order, each decrypted and
-   * sha256-verified before it is yielded. With `range` { start, end } (inclusive
-   * byte offsets) only the covering ordinals are fetched and the first/last
-   * buffers are sliced.
+   * sha256-verified before it is yielded. Full downloads schedule chunk 0 and
+   * the final chunk first (fast preview, fast tail), then the remaining
+   * ordinals in order; Range downloads fetch strictly in order. With `range`
+   * { start, end } (inclusive byte offsets) only the covering ordinals are
+   * fetched and the first/last buffers are sliced.
    */
   function streamChunks(entry, drive, range) {
     return async function* stream() {
@@ -214,13 +229,43 @@ function createFileService({ db, repositories, discordStorage, config }) {
         for (const row of chunks) plan.push({ row, from: 0, to: row.plain_size_bytes - 1 });
       }
 
+      // Fetch preference, independent of the ordinal yield order: full
+      // downloads schedule chunk 0 and the final chunk first, then the middle
+      // ordinals in order; Range downloads fetch strictly in order. Yields
+      // below always stay ordinal.
+      const fetchOrder = [];
+      if (range || plan.length <= 1) {
+        for (let i = 0; i < plan.length; i += 1) fetchOrder.push(i);
+      } else {
+        fetchOrder.push(0, plan.length - 1);
+        for (let i = 1; i < plan.length - 1; i += 1) fetchOrder.push(i);
+      }
+
       const pending = new Map(); // plan index -> promise of the decrypted/sliced buffer
       let fetchIndex = 0;
       let yieldIndex = 0;
       try {
         while (yieldIndex < plan.length) {
-          while (fetchIndex < plan.length && pending.size < downloadConcurrency) {
-            const item = plan[fetchIndex];
+          while (fetchIndex < fetchOrder.length && pending.size < downloadConcurrency) {
+            let itemIndex = fetchOrder[fetchIndex];
+            if (itemIndex < yieldIndex || pending.has(itemIndex)) {
+              // Already yielded or already in flight (a promoted index may
+              // displace an earlier preference); skip without fetching.
+              fetchIndex += 1;
+              continue;
+            }
+            if (itemIndex !== yieldIndex && !pending.has(yieldIndex)) {
+              // The bounded window must never stall ordinal progress: when the
+              // chunk the yield cursor needs is not in flight, promote it ahead
+              // of the jump-ahead preference.
+              const pos = fetchOrder.indexOf(yieldIndex, fetchIndex);
+              if (pos !== -1) {
+                fetchOrder[fetchIndex] = yieldIndex;
+                fetchOrder[pos] = itemIndex;
+                itemIndex = yieldIndex;
+              }
+            }
+            const item = plan[itemIndex];
             const promise = fetchDecryptSlice(
               item.row,
               item.from,
@@ -232,7 +277,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
             // surfaces as an unhandled rejection; the error still reaches the
             // consumer through await/allSettled below.
             promise.catch(() => {});
-            pending.set(fetchIndex, promise);
+            pending.set(itemIndex, promise);
             fetchIndex += 1;
           }
           const buffer = await pending.get(yieldIndex);
@@ -373,38 +418,91 @@ function createFileService({ db, repositories, discordStorage, config }) {
 
         /**
          * Post one webhook's pending batch to Discord and insert its block +
-         * chunk rows only after the post succeeds. Apply upload backpressure:
+         * chunk rows only after the post succeeds. Crash-window durability:
+         * a pending_posts intent row is committed BEFORE the POST, the
+         * returned message id is committed right after, and the block+chunk
+         * inserts plus the intent-row deletion commit atomically. A crash
+         * between the POST and the commit therefore leaves a durable record
+         * (message id set, no block rows) that the boot/6h sweep reconciles
+         * by deleting the orphaned Discord message. Apply upload backpressure:
          * once `uploadConcurrency` batches are in flight, wait for the oldest
          * before reading more stream.
          */
+        const uncommittedPosted = []; // { webhook, messageId } posted but not committed as blocks
+        let batchSeq = 0;
         const flushWebhook = (webhookId) => {
           const holder = pendingByWebhook.get(webhookId);
           if (!holder || holder.chunks.length === 0) return Promise.resolve();
           const toPost = holder.chunks;
           holder.chunks = [];
           const promise = (async () => {
-            const results = await discordStorage.putChunks(
-              holder.webhook,
-              toPost.map((chunk) => ({
-                filename: `chunk-${chunk.ordinal}.bin`,
-                encryptedBuffer: chunk.cipher,
-                ordinal: chunk.ordinal,
-              }))
-            );
-            const messageIdByOrdinal = new Map(results.map((r) => [r.ordinal, r.messageId]));
-            for (const chunk of toPost) {
-              const block = await repositories.insertBlock({
-                driveId: drive.id,
-                contentHash: chunk.checksum,
-                messageId: messageIdByOrdinal.get(chunk.ordinal),
-                webhookId: holder.webhook.id,
-                plainSizeBytes: chunk.plain.length,
-                cipherSizeBytes: chunk.cipher.length,
-                nonce: chunk.nonce,
-                authTag: chunk.authTag,
-                compression: compressEnabled ? 'deflate' : 'none',
+            const intent = await repositories.insertPendingPost({
+              driveId: drive.id,
+              webhookId: holder.webhook.id,
+              entryId: entry.id,
+              batchOrdinal: batchSeq,
+            });
+            batchSeq += 1;
+            let results;
+            try {
+              results = await discordStorage.putChunks(
+                holder.webhook,
+                toPost.map((chunk) => ({
+                  // Wyvern breadcrumb filename: drive + content-hash prefix
+                  // + ordinal, so a Discord message is self-describing and
+                  // forensic (which drive/block it holds) without any lookup.
+                  filename: `wyv-${drive.id}-${chunk.checksum.slice(0, 12)}-${chunk.ordinal}.bin`,
+                  encryptedBuffer: chunk.cipher,
+                  ordinal: chunk.ordinal,
+                }))
+              );
+            } catch (err) {
+              // The POST never resolved with a message id; the intent row
+              // (message_id NULL) is left for the sweep to drop.
+              throw err;
+            }
+            const messageId = results[0].messageId;
+            try {
+              await repositories.updatePendingPostMessage(intent.id, messageId);
+              // Block+chunk rows and the intent-row deletion are one short
+              // local transaction: a crash mid-commit rolls back to the
+              // message_id-set/no-blocks state the sweep reconciles. The
+              // transaction itself runs under the commit serialization chain
+              // so concurrent flushes never nest BEGIN on the connection.
+              await withCommitSerialization(async () => {
+                await exec(db, 'BEGIN');
+                try {
+                  for (const chunk of toPost) {
+                    const block = await repositories.insertBlock({
+                      driveId: drive.id,
+                      contentHash: chunk.checksum,
+                      messageId,
+                      webhookId: holder.webhook.id,
+                      plainSizeBytes: chunk.plain.length,
+                      cipherSizeBytes: chunk.cipher.length,
+                      nonce: chunk.nonce,
+                      authTag: chunk.authTag,
+                      compression: compressEnabled ? 'deflate' : 'none',
+                    });
+                    await repositories.insertChunk({ entryId: entry.id, ordinal: chunk.ordinal, blockId: block.id });
+                  }
+                  await repositories.deletePendingPost(intent.id);
+                } catch (txErr) {
+                  try {
+                    await exec(db, 'ROLLBACK');
+                  } catch (rollbackErr) {
+                    // Nothing left to roll back; the upload fails either way.
+                  }
+                  throw txErr;
+                }
+                await exec(db, 'COMMIT');
               });
-              await repositories.insertChunk({ entryId: entry.id, ordinal: chunk.ordinal, blockId: block.id });
+            } catch (err) {
+              // The message exists on Discord but its block rows never
+              // committed: record it so the upload failure path deletes it
+              // (best-effort); the intent row is the durable fallback.
+              uncommittedPosted.push({ webhook: holder.webhook, messageId });
+              throw err;
             }
           })();
           // Mark handled immediately: a batch that rejects while other batches
@@ -482,6 +580,17 @@ function createFileService({ db, repositories, discordStorage, config }) {
           // just mark the entry failed. Drain in-flight batches so no promise
           // is left unobserved.
           await Promise.allSettled(inFlight);
+          // Best-effort reclaim: delete Discord messages that were POSTed but
+          // whose block rows never committed (see flushWebhook). Idempotent —
+          // the outbox sweep re-checks rows whose message_id was set, so a
+          // failed delete here is retried later, never lost.
+          for (const { webhook, messageId } of uncommittedPosted) {
+            try {
+              await discordStorage.deleteChunk(webhook, messageId);
+            } catch (deleteErr) {
+              // Best-effort only; the sweep owns the durable retry.
+            }
+          }
           try {
             await repositories.updateEntry(entry.id, { status: 'failed' });
           } catch (updateErr) {
@@ -787,6 +896,115 @@ function createFileService({ db, repositories, discordStorage, config }) {
           // One failing entry must not abort the sweep for the rest of the
           // drive: log and move on (mirrors purgeExpiredTrash).
           console.error(`purgeStaleUploads: failed to purge entry ${row.id}: ${err && err.message}`);
+          continue;
+        }
+      }
+    },
+
+    /**
+     * Outbox replay sweep: reconcile pending_posts intent rows left by a
+     * crash between a batch POST and its block commit (see flushWebhook).
+     *   - message_id NULL   the POST never resolved; drop the row.
+     *   - message_id set    with no committed content_blocks row, the message
+     *                       is a crash orphan: delete it (idempotent) then
+     *                       drop the row. Rows whose blocks committed are
+     *                       never touched.
+     * Rows whose entry is still 'uploading' are skipped — a live upload may
+     * be mid-commit. A failing row is logged and kept for the next pass.
+     */
+    async reconcilePendingPosts() {
+      const rows = await repositories.listPendingPosts();
+      for (const row of rows) {
+        try {
+          // Rows whose entry is still 'uploading' are skipped — a live upload
+          // may be mid-flush: a message_id-set row may be between the POST and
+          // its block commit, and a NULL-id row may be between the POST and
+          // the message_id write (dropping it would lose the crash record).
+          const entry = await repositories.getEntryById(row.entry_id);
+          if (entry && entry.status === 'uploading') continue;
+          if (row.message_id == null) {
+            // The POST never resolved with a message id (or its entry is no
+            // longer live); nothing was posted, so the row is pure ledger.
+            await repositories.deletePendingPost(row.id);
+            continue;
+          }
+          const blockCount = await repositories.countBlocksByWebhookMessage(row.webhook_id, row.message_id);
+          if (blockCount > 0) continue;
+          const webhook = await repositories.getWebhookById(row.webhook_id);
+          if (webhook) {
+            await discordStorage.deleteChunk(
+              {
+                id: webhook.id,
+                webhook_ciphertext: webhook.webhook_ciphertext,
+                webhook_nonce: webhook.webhook_nonce,
+                webhook_auth_tag: webhook.webhook_auth_tag,
+              },
+              row.message_id
+            );
+          }
+          await repositories.deletePendingPost(row.id);
+        } catch (err) {
+          // Keep the row; the next pass retries. (Deleting it would lose the
+          // only record of the possibly-orphaned message.)
+          console.error(`reconcilePendingPosts: failed to reconcile row ${row.id}: ${err && err.message}`);
+          continue;
+        }
+      }
+    },
+
+    /**
+     * Orphan block reconciliation: content_blocks rows with zero live
+     * file_chunks references are reclaimed in conservative batches. A Discord
+     * message is deleted only when EVERY block it holds is dead (dedup shares
+     * blocks across entries, so a message holding any live block is never
+     * touched), then the dead block rows drop. Messages with an in-flight
+     * upload intent row are skipped — a live upload may be between its block
+     * insert and chunk insert. Reclaiming these unblocks removeWebhook for
+     * drives whose orphan count previously pinned it forever.
+     */
+    async reconcileOrphanBlocks() {
+      const dead = await repositories.listDeadBlocks();
+      const pending = await repositories.listPendingPosts();
+      const pendingMessages = new Set(
+        pending.filter((r) => r.message_id != null).map((r) => `${r.webhook_id}:${r.message_id}`)
+      );
+      const byMessage = new Map();
+      for (const block of dead) {
+        const key = `${block.webhook_id}:${block.message_id}`;
+        if (pendingMessages.has(key)) continue;
+        let group = byMessage.get(key);
+        if (!group) {
+          group = { webhookId: block.webhook_id, messageId: block.message_id, blocks: [] };
+          byMessage.set(key, group);
+        }
+        group.blocks.push(block);
+      }
+      for (const group of byMessage.values()) {
+        try {
+          const { live } = await repositories.countBlocksLiveInMessage(group.webhookId, group.messageId);
+          if (live > 0) continue;
+          const webhook = await repositories.getWebhookById(group.webhookId);
+          if (webhook) {
+            await discordStorage.deleteChunk(
+              {
+                id: webhook.id,
+                webhook_ciphertext: webhook.webhook_ciphertext,
+                webhook_nonce: webhook.webhook_nonce,
+                webhook_auth_tag: webhook.webhook_auth_tag,
+              },
+              group.messageId
+            );
+          }
+          for (const block of group.blocks) {
+            // Soft-deleted chunk rows still FK the block (failed-purge
+            // leftovers); drop them first so the block row can go. Live
+            // chunk rows are never here — they would make the block live.
+            await repositories.deleteDeadChunkRows(block.id);
+            await repositories.deleteBlock(block.id);
+          }
+        } catch (err) {
+          // One failing message must not abort the sweep for the rest.
+          console.error(`reconcileOrphanBlocks: failed to reclaim message ${group.messageId}: ${err && err.message}`);
           continue;
         }
       }

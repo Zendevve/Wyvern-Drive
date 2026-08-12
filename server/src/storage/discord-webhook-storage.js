@@ -5,8 +5,46 @@ const { WyvernError } = require('../errors');
 
 const WEBHOOK_PATH_RE = /^\/api\/webhooks\/(\d+)\/([A-Za-z0-9_-]+)$/;
 const ALLOWED_WEBHOOK_HOSTS = new Set(['discord.com', 'discordapp.com']);
-const MAX_RETRIES = 3;
+// Retry budgets, per failure class: 429 retries and 5xx retries each get
+// their own budget so rate-limit waits never consume the server-error
+// backoff budget (or vice versa). MAX_TOTAL_ATTEMPTS is a defensive ceiling
+// that should never bind in practice (3 + 3 retries = 7 attempts).
+const MAX_RETRIES_5XX = 3;
+const MAX_RETRIES_429 = 3;
+const MAX_TOTAL_ATTEMPTS = 10;
 const MAX_CHUNKS_PER_MESSAGE = 10;
+
+// Module-scoped Discord GLOBAL rate-limit gate: when Discord reports a global
+// rate limit (x-ratelimit-global header or body.global), every webhook in the
+// process shares ONE wait so parallel uploads across webhooks do not hammer
+// the window from every bucket at once. A longer retry_after extends the
+// gate; a shorter one shares the current window.
+/** Sleep with ±20% jitter around the requested duration (ms). */
+function jitteredSleep(ms) {
+  const jitter = ms * 0.2;
+  const delay = Math.max(0, ms + (Math.random() * 2 - 1) * jitter);
+  return new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+let globalRateLimitGate = null; // { until, promise } | null
+
+function waitGlobalRateLimit(retryAfterSec) {
+  const waitMs = retryAfterSec * 1100;
+  const now = Date.now();
+  const active = globalRateLimitGate && globalRateLimitGate.until > now ? globalRateLimitGate : null;
+  if (active && active.until >= now + waitMs) {
+    return active.promise;
+  }
+  const entry = { until: now + waitMs, promise: null };
+  const chain = active ? active.promise : Promise.resolve();
+  entry.promise = chain
+    .then(() => jitteredSleep(waitMs))
+    .then(() => {
+      if (globalRateLimitGate === entry) globalRateLimitGate = null;
+    });
+  globalRateLimitGate = entry;
+  return entry.promise;
+}
 
 /**
  * Discord chunk storage adapter around per-drive Discord webhooks. Each
@@ -19,12 +57,33 @@ const MAX_CHUNKS_PER_MESSAGE = 10;
  * `webhooks` table) instead of a drive:
  *   webhook = { id, webhook_ciphertext, webhook_nonce, webhook_auth_tag }
  *
- * Interface:
+ * Adapter contract — shared with the in-memory test fake
+ * (server/test/helpers.js `createFakeDiscordStorage`), which must stay
+ * interchangeable with this adapter:
  *  - validateAndSealWebhook(webhookUrl) -> { webhook_ciphertext, webhook_nonce, webhook_auth_tag }
- *  - putChunks(webhook, chunks) -> [{ ordinal, messageId }]  (1..10 chunks per message)
+ *    Validates an HTTPS Discord webhook URL against Discord and returns its
+ *    sealed credential fields. Invalid/unauthorized URLs map to
+ *    INVALID_WEBHOOK (400); transport or Discord availability failures map to
+ *    STORAGE_UNAVAILABLE (502). Never logs the URL or any response body.
+ *  - putChunks(webhook, chunks) -> [{ ordinal, messageId }]
+ *    Posts 1..10 encrypted chunks as ONE webhook message, one attachment per
+ *    chunk, preserving each chunk's filename and ordinal. Batch atomicity: a
+ *    failed batch stores nothing, and on success every chunk resolves to its
+ *    message id. More than 10 chunks is BAD_REQUEST before any Discord call.
  *  - putChunk(webhook, filename, encryptedBuffer) -> messageId
+ *    Single-chunk convenience form of putChunks (ordinal 0).
  *  - getChunk(webhook, messageId, attachmentIndex?) -> Buffer
- *  - deleteChunk(webhook, messageId) -> Promise<void> (404 counts as success)
+ *    Returns a message's attachment bytes; `attachmentIndex` selects the
+ *    chunk inside a packed message (default 0). Missing messages or
+ *    attachments and CDN failures map to STORAGE_UNAVAILABLE.
+ *  - deleteChunk(webhook, messageId) -> Promise<void>
+ *    Deletes one message through the webhook API. Idempotent: a Discord 404
+ *    (unknown message or webhook) counts as success.
+ *
+ * The returned adapter also carries `capabilities` (agent-fs style feature
+ * flags: { versioning, presignedUrls } — both false for webhook storage) and
+ * `chunkSizeBytes` metadata; the test fake returns the identical
+ * capabilities so the contract is test-visible.
  */
 function createDiscordWebhookStorage(config, { chunkSizeBytes, fetchImpl = globalThis.fetch }) {
   const encryptionKey = config.encryptionKey;
@@ -33,13 +92,6 @@ function createDiscordWebhookStorage(config, { chunkSizeBytes, fetchImpl = globa
   // webhook.id (fallback 'anon' for credential-less unit-test objects),
   // populated from X-RateLimit-* response headers after each POST.
   const rateLimitState = new Map();
-
-  /** Sleep with ±20% jitter around the requested duration (ms). */
-  function jitteredSleep(ms) {
-    const jitter = ms * 0.2;
-    const delay = Math.max(0, ms + (Math.random() * 2 - 1) * jitter);
-    return new Promise((resolve) => setTimeout(resolve, delay));
-  }
 
   /** Read a response header, tolerating Headers instances and plain objects. */
   function headerValue(res, name) {
@@ -104,30 +156,42 @@ function createDiscordWebhookStorage(config, { chunkSizeBytes, fetchImpl = globa
   }
 
   /**
-   * Retry fn under the adapter's bounded retry budget: HTTP 429 sleeps the
-   * provider's retry_after, HTTP 5xx backs off exponentially (500ms * 2^attempt);
+   * Retry fn under the adapter's bounded retry budgets, tracked per failure
+   * class so 429 retries never consume the 5xx budget or vice versa: HTTP 429
+   * sleeps retry_after * 1.1 (shared process-wide for global rate limits,
+   * per-webhook otherwise), HTTP 5xx backs off exponentially (500ms * 2^n);
    * every sleep carries ±20% jitter. 4xx other than 429 and transport errors
-   * fail fast. After retries are exhausted a 5xx response is handed back so
-   * callers map it; otherwise the last error becomes STORAGE_UNAVAILABLE.
+   * fail fast. After a class's retries are exhausted a 5xx response is handed
+   * back so callers map it; otherwise the last error becomes
+   * STORAGE_UNAVAILABLE. MAX_TOTAL_ATTEMPTS is a defensive ceiling.
    */
   async function withRetry(fn) {
     let lastRes = null;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    let retries429 = 0;
+    let retries5xx = 0;
+    for (let attempt = 1; attempt <= MAX_TOTAL_ATTEMPTS; attempt += 1) {
       try {
         const res = await fn();
         if (res && res.status >= 500) {
           lastRes = res;
-          if (attempt < MAX_RETRIES) {
-            await jitteredSleep(500 * Math.pow(2, attempt));
+          if (retries5xx < MAX_RETRIES_5XX) {
+            retries5xx += 1;
+            await jitteredSleep(500 * Math.pow(2, retries5xx - 1));
             continue;
           }
           return res;
         }
         return res;
       } catch (err) {
-        if (attempt >= MAX_RETRIES) break;
-        if (err && err.status === 429 && err.retryAfter != null) {
-          await jitteredSleep(err.retryAfter * 1000);
+        if (err && err.status === 429) {
+          if (retries429 >= MAX_RETRIES_429) break;
+          retries429 += 1;
+          const retryAfterSec = err.retryAfter != null && err.retryAfter >= 0 ? err.retryAfter : 1;
+          if (err.global) {
+            await waitGlobalRateLimit(retryAfterSec);
+          } else {
+            await jitteredSleep(retryAfterSec * 1100);
+          }
           continue;
         }
         break;
@@ -137,7 +201,12 @@ function createDiscordWebhookStorage(config, { chunkSizeBytes, fetchImpl = globa
     throw new WyvernError('STORAGE_UNAVAILABLE', 'Discord storage request failed');
   }
 
-  /** One Discord REST call, unwrapping JSON 429 bodies into { status, retryAfter }. */
+  /**
+   * One Discord REST call, unwrapping JSON 429 bodies into
+   * { status, retryAfter, global }. `global` is true when Discord flags the
+   * rate limit as global (x-ratelimit-global header or body.global), which
+   * makes the retry wait on the process-wide gate so every webhook pauses.
+   */
   async function discordFetch(url, init = {}) {
     let res;
     try {
@@ -147,15 +216,20 @@ function createDiscordWebhookStorage(config, { chunkSizeBytes, fetchImpl = globa
     }
     if (res.status === 429) {
       let retryAfter = null;
+      let global = false;
+      const globalHeader = headerValue(res, 'x-ratelimit-global');
+      if (globalHeader !== null && globalHeader.toLowerCase() === 'true') global = true;
       try {
         const body = await res.json();
-        retryAfter = body && typeof body.retry_after === 'number' ? body.retry_after : null;
+        if (body && typeof body.retry_after === 'number') retryAfter = body.retry_after;
+        if (body && body.global === true) global = true;
       } catch {
         retryAfter = null;
       }
       const err = new Error(`rate limited (${res.status})`);
       err.status = res.status;
       err.retryAfter = retryAfter;
+      err.global = global;
       throw err;
     }
     return res;
@@ -233,6 +307,9 @@ function createDiscordWebhookStorage(config, { chunkSizeBytes, fetchImpl = globa
 
   return {
     chunkSizeBytes,
+
+    /** Adapter feature flags (agent-fs style): no blob versioning, no presigned URLs. */
+    capabilities: { versioning: false, presignedUrls: false },
 
     /**
      * Validate a candidate webhook URL and return its sealed credential

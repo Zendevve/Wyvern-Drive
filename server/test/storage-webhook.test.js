@@ -56,6 +56,8 @@ function createFakeDiscordFetch() {
     getWebhookCalls: 0,
     putAttempts: 0,
     putFailures: 0, // respond 429 this many times before succeeding
+    putRetryAfter: 0.01, // retry_after value for injected 429s
+    putServerErrors: 0, // respond 500 this many times before succeeding
     messageGetCalls: 0,
     getMessageFailures: 0, // message GET returns 500 this many times
     cdnFailures: 0, // attachment fetch returns 500 this many times
@@ -100,7 +102,11 @@ function createFakeDiscordFetch() {
       state.putAttempts += 1;
       if (state.putFailures > 0) {
         state.putFailures -= 1;
-        return jsonResponse({ retry_after: 0.01, message: 'You are being rate limited.', code: 20028 }, 429);
+        return jsonResponse({ retry_after: state.putRetryAfter, message: 'You are being rate limited.', code: 20028 }, 429);
+      }
+      if (state.putServerErrors > 0) {
+        state.putServerErrors -= 1;
+        return rawResponse(Buffer.from('boom'), 500);
       }
       const attachments = [];
       for (const [, part] of init.body) {
@@ -231,12 +237,14 @@ test('upload/download round trip through the real adapter keeps ciphertext-only 
   assert.strictEqual(up.json.sizeBytes, 24);
 
   // Three encrypted chunks were posted as ONE packed message (three
-  // attachments) with the Disbox protocol shape.
+  // attachments) with the Wyvern breadcrumb filename shape.
   assert.strictEqual(discordFetch.state.putAttempts, 1, '3 chunks -> 1 packed webhook post');
   const posted = discordFetch.state.attachments;
   assert.strictEqual(posted.length, 3);
+  const driveId = (await ctx.repositories.getEntryById(up.json.id)).drive_id;
+  const chunkRows = await ctx.repositories.getChunksByEntry(up.json.id);
   posted.forEach((part, i) => {
-    assert.strictEqual(part.filename, `chunk-${i}.bin`);
+    assert.strictEqual(part.filename, `wyv-${driveId}-${chunkRows[i].checksum.slice(0, 12)}-${i}.bin`);
     assert.notDeepStrictEqual(part.buffer, fixture.subarray(i * 8, i * 8 + 8), 'chunk must be encrypted at rest');
   });
   const messageIds = new Set(posted.map((part) => part.messageId));
@@ -285,10 +293,11 @@ test('packing: 25 chunks at 8-byte chunks -> 3 posts with 10/10/5 attachments', 
   const sizes = [...byMessage.values()].map((list) => list.length).sort((a, b) => b - a);
   assert.deepStrictEqual(sizes, [10, 10, 5]);
 
-  // Every attachment uses the Disbox chunk-<ordinal>.bin naming, covering
-  // ordinals 0..24 exactly once.
+  // Every attachment uses the Wyvern breadcrumb naming
+  // wyv-<driveId>-<block hash prefix>-<ordinal>.bin, covering ordinals 0..24
+  // exactly once.
   const ordinals = posted.map((att) => {
-    const m = /^chunk-(\d+)\.bin$/.exec(att.filename);
+    const m = /^wyv-\d+-[0-9a-f]{12}-(\d+)\.bin$/.exec(att.filename);
     assert.ok(m, `unexpected filename ${att.filename}`);
     return Number(m[1]);
   });
@@ -417,6 +426,107 @@ test('adapter unit: 429 retry policy (bounded) and failure mapping', async () =>
   await assert.rejects(storage.putChunk(bareWebhook, 'x', Buffer.alloc(1)), (err) => err.code === 'STORAGE_UNAVAILABLE');
   await assert.rejects(storage.getChunk(bareWebhook, 'm1'), (err) => err.code === 'STORAGE_UNAVAILABLE');
   await assert.rejects(storage.deleteChunk(bareWebhook, 'm1'), (err) => err.code === 'STORAGE_UNAVAILABLE');
+});
+
+test('adapter unit: 429 retry sleeps retry_after * 1.1 (jittered)', async () => {
+  const env = { ...process.env };
+  const config = loadConfig(env);
+  const fetch4 = createFakeDiscordFetch();
+  const storage = createDiscordWebhookStorage(config, { chunkSizeBytes: 8, fetchImpl: fetch4 });
+  const sealed = await storage.validateAndSealWebhook(VALID_URL);
+  const webhook = {
+    id: 96,
+    webhook_ciphertext: sealed.webhook_ciphertext,
+    webhook_nonce: sealed.webhook_nonce,
+    webhook_auth_tag: sealed.webhook_auth_tag,
+  };
+
+  // One 429 with retry_after 0.2, then success: the retry waits at least
+  // 0.2s * 1.1 * 0.8 (jitter floor) ~= 176ms. A 1:1 retry would finish at
+  // ~160ms with the same jitter, so the >=150ms bound proves the 1.1x
+  // multiplier is applied.
+  fetch4.state.putFailures = 1;
+  fetch4.state.putRetryAfter = 0.2;
+  const started = Date.now();
+  const mid = await storage.putChunk(webhook, 'timed.bin', Buffer.from('timed-payload'));
+  const elapsed = Date.now() - started;
+  assert.strictEqual(mid, 'm-1');
+  assert.strictEqual(fetch4.state.putAttempts, 2, 'one 429 then one success');
+  assert.ok(elapsed >= 150, `expected >=150ms wait for retry_after 0.2, got ${elapsed}ms`);
+});
+
+test('adapter unit: 429 retries do not consume the 5xx retry budget', async () => {
+  const env = { ...process.env };
+  const config = loadConfig(env);
+  const fetch5 = createFakeDiscordFetch();
+  const storage = createDiscordWebhookStorage(config, { chunkSizeBytes: 8, fetchImpl: fetch5 });
+  const sealed = await storage.validateAndSealWebhook(VALID_URL);
+  const webhook = {
+    id: 95,
+    webhook_ciphertext: sealed.webhook_ciphertext,
+    webhook_nonce: sealed.webhook_nonce,
+    webhook_auth_tag: sealed.webhook_auth_tag,
+  };
+
+  // Exhaust the 429 budget (3 retries), then a 5xx still gets its own retry:
+  // with a shared budget the post would fail after the 429s without ever
+  // retrying the 500. Sequence: 429, 429, 429, 500, success.
+  fetch5.state.putFailures = 3;
+  fetch5.state.putServerErrors = 1;
+  const mid = await storage.putChunk(webhook, 'budget.bin', Buffer.from('budget-payload'));
+  assert.strictEqual(mid, 'm-1');
+  assert.strictEqual(fetch5.state.putAttempts, 5, '3x 429 + 1x 500 (own budget) + success');
+});
+
+test('adapter unit: global 429s share one process-wide wait across webhooks', async () => {
+  const env = { ...process.env };
+  const config = loadConfig(env);
+  const attempts = new Map(); // webhook id -> attempt count
+  const messages = new Map();
+  const fetchG = async (url, init = {}) => {
+    const u = new URL(url);
+    const match = u.pathname.match(/^\/api\/webhooks\/(\d+)\/([^/]+)(\/messages\/([^/]+))?$/);
+    if (!match) throw new Error(`unexpected discord url: ${url}`);
+    const id = match[1];
+    const method = (init && init.method) || 'GET';
+    if (method === 'GET' && !match[4]) {
+      return jsonResponse({ id: Number(id), type: 1, token: match[2], name: 'wyvern' });
+    }
+    if (method === 'DELETE') {
+      messages.delete(match[4]);
+      return rawResponse(Buffer.alloc(0), 204);
+    }
+    if (method !== 'POST') throw new Error(`unexpected request: ${method} ${url}`);
+    const n = attempts.get(id) || 0;
+    attempts.set(id, n + 1);
+    if (n === 0) {
+      // Global 429 on the first attempt of EACH webhook: the module-level
+      // gate must serialize the retries so the second webhook waits on the
+      // first's longer window instead of retrying in parallel.
+      return jsonResponse({ retry_after: id === '123' ? 0.3 : 0.1, global: true, message: 'global', code: 20029 }, 429);
+    }
+    const mid = `g-${id}-${n}`;
+    messages.set(mid, []);
+    return jsonResponse({ id: mid, attachments: [] });
+  };
+  const storage = createDiscordWebhookStorage(config, { chunkSizeBytes: 8, fetchImpl: fetchG });
+  const sealA = await storage.validateAndSealWebhook(VALID_URL);
+  const sealB = await storage.validateAndSealWebhook('https://discord.com/api/webhooks/456/other-token');
+  const webhookA = { id: 94, webhook_ciphertext: sealA.webhook_ciphertext, webhook_nonce: sealA.webhook_nonce, webhook_auth_tag: sealA.webhook_auth_tag };
+  const webhookB = { id: 93, webhook_ciphertext: sealB.webhook_ciphertext, webhook_nonce: sealB.webhook_nonce, webhook_auth_tag: sealB.webhook_auth_tag };
+
+  // A's POST resolves first (invoked first, synchronous fake), opening the
+  // 0.3s * 1.1 global gate; B's 0.1s global 429 must join that gate rather
+  // than wait on its own (which would finish in ~110ms).
+  const pA = storage.putChunk(webhookA, 'a.bin', Buffer.from('aaa'));
+  const bStarted = Date.now();
+  const pB = storage.putChunk(webhookB, 'b.bin', Buffer.from('bbb')).then((mid) => ({ mid, elapsed: Date.now() - bStarted }));
+  const [rA, rB] = await Promise.all([pA, pB]);
+
+  assert.strictEqual(rA, 'g-123-1');
+  assert.strictEqual(rB.mid, 'g-456-1');
+  assert.deepStrictEqual([...attempts.values()].sort(), [2, 2], 'each webhook retried exactly once');
+  assert.ok(rB.elapsed >= 200, `webhook B should wait on A's shared global gate, got ${rB.elapsed}ms`);
 });
 
 test('adapter unit: putChunks packs up to 10 chunks into one message', async () => {
