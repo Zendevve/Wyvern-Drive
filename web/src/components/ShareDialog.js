@@ -108,7 +108,9 @@ export default function ShareDialog({ open, entry, onClose }) {
       fullWidth
       TransitionComponent={DialogTransition}
     >
-      <DialogTitle>Share {entry ? entry.name : ''}</DialogTitle>
+      <DialogTitle sx={{ borderBottom: '1px solid', borderColor: 'hairline' }}>
+        Share {entry ? entry.name : ''}
+      </DialogTitle>
       <DialogContent dividers>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -117,12 +119,25 @@ export default function ShareDialog({ open, entry, onClose }) {
         )}
         {createdShare && (
           <Alert severity="success" sx={{ mb: 2 }} data-testid="share-created">
-            <Box sx={{ bgcolor: 'surface1', borderRadius: '10px', px: 2, py: 1.5, mb: 1 }}>
+            <Box
+              sx={{
+                bgcolor: 'surface1',
+                border: '1px solid',
+                borderColor: 'hairlineSoft',
+                borderRadius: '8px',
+                px: 2,
+                py: 1.5,
+                mb: 1,
+              }}
+            >
               <Typography
                 variant="body2"
                 color="inkMuted"
                 component="p"
-                sx={{ fontFamily: "'Consolas', monospace", wordBreak: 'break-all' }}
+                sx={{
+                  fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+                  wordBreak: 'break-all',
+                }}
               >
                 {createdShare.url}
               </Typography>
@@ -174,12 +189,22 @@ export default function ShareDialog({ open, entry, onClose }) {
               <ListItem key={share.id} divider disableGutters>
                 <ListItemText
                   primary={
-                    <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+                        wordBreak: 'break-all',
+                      }}
+                    >
                       {share.url}
                     </Typography>
                   }
                   secondary={
-                    <Typography variant="caption" color="inkMuted">
+                    <Typography
+                      variant="caption"
+                      color="inkMuted"
+                      sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace' }}
+                    >
                       {share.revokedAt
                         ? 'Revoked'
                         : share.expiresAt

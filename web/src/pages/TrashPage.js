@@ -2,8 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -21,18 +19,22 @@ import {
 import { Navigate } from 'react-router-dom';
 import AppShell from '../components/AppShell';
 import ErrorNotice from '../components/ErrorNotice';
+import ScreenLoader from '../components/ScreenLoader';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
 import { formatBytes } from '../components/QuotaMeter';
 import { entryIcon, fileTypeLabel } from '../components/entryIcons';
 import DialogTransition from '../motion/DialogTransition';
+import { tokens } from '../theme';
+
+const mono = 'ui-monospace, SFMono-Regular, Consolas, monospace';
 
 function formatDate(value) {
   return new Date(value).toLocaleString();
 }
 
 /**
- * Recycle bin: softly deleted entries, newest first (the server lazily
+ * Recovery ledger: softly deleted entries, newest first (the server lazily
  * sweeps expired trash on every list). Restore puts an entry and its
  * subtree back; Delete forever hard-purges it; Empty trash purges the
  * root entries only, so children of a trashed folder go with their root.
@@ -120,18 +122,7 @@ export default function TrashPage() {
   }, [rootEntries, loadTrash]);
 
   if (loading) {
-    return (
-      <Box
-        sx={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <CircularProgress aria-label="Loading" />
-      </Box>
-    );
+    return <ScreenLoader />;
   }
 
   if (!user) {
@@ -145,15 +136,10 @@ export default function TrashPage() {
           sx={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 1,
+            justifyContent: 'flex-end',
             mb: 2,
-            flexWrap: 'wrap',
           }}
         >
-          <Typography variant="h5" sx={{ fontWeight: 600 }}>
-            Trash
-          </Typography>
           <Button
             variant="outlined"
             color="error"
@@ -177,80 +163,103 @@ export default function TrashPage() {
             <CircularProgress />
           </Box>
         ) : entries.length === 0 ? (
-          <Card
-            variant="outlined"
-            elevation={0}
+          <Box
             data-testid="trash-empty"
-            sx={{ borderRadius: '20px', bgcolor: 'surface1' }}
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              py: 8,
+              px: 3,
+              bgcolor: 'surface1',
+              border: '1px solid',
+              borderColor: 'hairline',
+              borderRadius: '12px',
+            }}
           >
-            <CardContent sx={{ p: 4, textAlign: 'center' }}>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Trash is empty
-              </Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-                Deleted files and folders appear here and can be restored.
-              </Typography>
-            </CardContent>
-          </Card>
+            <Typography variant="h6" sx={{ fontWeight: 600, color: 'ink' }}>
+              Trash is empty
+            </Typography>
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+              Deleted files and folders appear here and can be restored.
+            </Typography>
+          </Box>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {entries.map((entry) => {
+          <Box
+            sx={{
+              bgcolor: 'surface1',
+              border: '1px solid',
+              borderColor: 'hairline',
+              borderRadius: '12px',
+            }}
+          >
+            {entries.map((entry, index) => {
               const isFolder = entry.kind === 'folder';
-              const { icon, color } = entryIcon(entry);
+              const { icon } = entryIcon(entry);
               const meta = isFolder
                 ? `${fileTypeLabel(entry)} · deleted ${formatDate(entry.deletedAt)}`
                 : `${formatBytes(entry.sizeBytes)} · deleted ${formatDate(entry.deletedAt)}`;
+              const isLast = index === entries.length - 1;
               return (
-                <Card
+                <Box
                   key={entry.id}
-                  variant="outlined"
-                  elevation={0}
-                  sx={{ borderRadius: '15px', bgcolor: 'surface1' }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    px: 2,
+                    py: 1.5,
+                    borderBottom: isLast ? 'none' : '1px solid',
+                    borderColor: 'hairlineSoft',
+                  }}
                 >
-                  <CardContent
+                  <FontAwesomeIcon
+                    icon={icon}
+                    color={isFolder ? tokens.ink : tokens.inkMuted}
+                    aria-hidden="true"
+                  />
+                  <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      sx={{ fontWeight: 500, color: 'ink' }}
+                    >
+                      {entry.name}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      component="p"
+                      sx={{ color: 'inkMuted', fontFamily: mono, mt: 0.5 }}
+                    >
+                      {meta}
+                    </Typography>
+                  </Box>
+                  <IconButton
+                    aria-label={`Restore ${entry.name}`}
+                    title="Restore"
+                    onClick={() => handleRestore(entry)}
+                    disabled={busy}
+                  >
+                    <FontAwesomeIcon icon={faRotateLeft} />
+                  </IconButton>
+                  <IconButton
+                    aria-label={`Delete forever ${entry.name}`}
+                    title="Delete forever"
+                    color="error"
+                    onClick={() => setPurgeEntry(entry)}
+                    disabled={busy}
                     sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.5,
-                      py: 1.5,
-                      '&:last-child': { pb: 1.5 },
+                      color: 'error.main',
+                      '&:hover': {
+                        color: '#EE8378',
+                        backgroundColor: 'dangerSoft',
+                      },
                     }}
                   >
-                    <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" />
-                    <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                      <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
-                        {entry.name}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary" component="p">
-                        {meta}
-                      </Typography>
-                    </Box>
-                    <IconButton
-                      aria-label={`Restore ${entry.name}`}
-                      title="Restore"
-                      onClick={() => handleRestore(entry)}
-                      disabled={busy}
-                    >
-                      <FontAwesomeIcon icon={faRotateLeft} />
-                    </IconButton>
-                    <IconButton
-                      aria-label={`Delete forever ${entry.name}`}
-                      title="Delete forever"
-                      color="error"
-                      onClick={() => setPurgeEntry(entry)}
-                      disabled={busy}
-                      sx={{
-                        color: 'error.main',
-                        '&:hover': {
-                          color: '#FF7575',
-                          backgroundColor: 'rgba(255,92,92,0.08)',
-                        },
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faTrashCan} />
-                    </IconButton>
-                  </CardContent>
-                </Card>
+                    <FontAwesomeIcon icon={faTrashCan} />
+                  </IconButton>
+                </Box>
               );
             })}
           </Box>

@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown, faChevronRight, faFolder } from '@fortawesome/free-solid-svg-icons';
+import { useTheme } from '@mui/material/styles';
 import { api } from '../api/client';
 import DialogTransition from '../motion/DialogTransition';
 
@@ -44,6 +45,7 @@ export default function MoveDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const theme = useTheme();
   const keyOf = (id) => (id == null ? ROOT_KEY : id);
 
   useEffect(() => {
@@ -178,7 +180,7 @@ export default function MoveDialog({
           }}
           sx={{
             pl: 2 + depth * 3,
-            borderRadius: '10px',
+            borderRadius: '8px',
             opacity: isForbidden ? 0.4 : undefined,
             '&:hover:not(.Mui-selected)': { bgcolor: 'surface1' },
           }}
@@ -199,7 +201,7 @@ export default function MoveDialog({
             <FontAwesomeIcon icon={isExpanded ? faChevronDown : faChevronRight} />
           </IconButton>
           <ListItemIcon sx={{ minWidth: 32 }}>
-            <FontAwesomeIcon icon={faFolder} color="#FFFFFF" />
+            <FontAwesomeIcon icon={faFolder} color={theme.palette.inkMuted} />
           </ListItemIcon>
           <ListItemText primary={node.name} />
           {isForbidden && (
@@ -222,7 +224,7 @@ export default function MoveDialog({
       fullWidth
       TransitionComponent={DialogTransition}
     >
-      <DialogTitle>
+      <DialogTitle sx={{ borderBottom: '1px solid', borderColor: 'hairline' }}>
         {mode === 'copy' ? 'Copy' : 'Move'} {entry ? entry.name : ''}
       </DialogTitle>
       <DialogContent dividers>

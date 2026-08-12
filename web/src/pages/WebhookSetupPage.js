@@ -20,6 +20,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
 import ErrorNotice from '../components/ErrorNotice';
+import BrandLockup from '../components/BrandLockup';
 
 const STEPS = [
   {
@@ -54,6 +55,8 @@ function friendlyMessage(error) {
   }
   return 'Something went wrong connecting your storage. Try again in a moment.';
 }
+
+const MONO = 'ui-monospace, SFMono-Regular, Consolas, monospace';
 
 /**
  * Per-user storage connection page. The webhook URL is a full-access
@@ -98,20 +101,9 @@ export default function WebhookSetupPage() {
       }}
     >
       <Box sx={{ width: '100%', maxWidth: 560 }}>
-        <Typography
-          component="div"
-          sx={{
-            fontFamily: "'Mona Sans Variable', sans-serif",
-            fontWeight: 500,
-            fontSize: 15,
-            letterSpacing: '-0.5px',
-            color: 'ink',
-            mb: 2,
-            textAlign: 'center',
-          }}
-        >
-          Wyvern Drive
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+          <BrandLockup align="center" />
+        </Box>
         <Typography variant="h1" component="h1" sx={{ mb: 1.5, textAlign: 'center' }}>
           Connect your storage
         </Typography>
@@ -120,46 +112,97 @@ export default function WebhookSetupPage() {
           own. It takes about a minute.
         </Typography>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
-          {STEPS.map((step, i) => (
-            <Paper
-              key={step.text}
-              variant="outlined"
-              sx={{
-                p: 2,
-                bgcolor: 'surface1',
-                borderColor: 'hairline',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2,
-              }}
-            >
-              <Box
-                sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: '50%',
-                  bgcolor: 'surface2',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <FontAwesomeIcon
-                  icon={step.icon}
-                  aria-hidden="true"
-                  sx={{ color: 'inkMuted', fontSize: 16 }}
-                />
-              </Box>
-              <Typography variant="body1" component="div" sx={{ color: 'inkMuted' }}>
-                <Box component="span" sx={{ color: 'ink', fontWeight: 600, mr: 1 }}>
-                  {i + 1}.
+        {/* Ruled setup timeline: mono step cell + signal tick on a connected spine */}
+        <Box sx={{ mb: 2.5 }}>
+          {STEPS.map((step, i) => {
+            const isLast = i === STEPS.length - 1;
+            return (
+              <Box key={step.text} sx={{ display: 'flex', gap: 1.5 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '6px',
+                      border: '1px solid',
+                      borderColor: 'hairline',
+                      bgcolor: 'surface2',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontFamily: MONO,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'signal',
+                    }}
+                  >
+                    {i + 1}
+                  </Box>
+                  {!isLast && (
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        flexGrow: 1,
+                        py: 0.5,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          bgcolor: 'signal',
+                          mb: 0.5,
+                        }}
+                      />
+                      <Box sx={{ flexGrow: 1, width: 2, bgcolor: 'hairlineSoft' }} />
+                    </Box>
+                  )}
                 </Box>
-                {step.text}
-              </Typography>
-            </Paper>
-          ))}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 1.5,
+                    pt: 0.5,
+                    pb: isLast ? 0 : 1.5,
+                    minWidth: 0,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 36,
+                      height: 36,
+                      flexShrink: 0,
+                      borderRadius: '8px',
+                      border: '1px solid',
+                      borderColor: 'hairlineSoft',
+                      bgcolor: 'surface2',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'inkMuted',
+                      fontSize: 15,
+                    }}
+                  >
+                    <FontAwesomeIcon icon={step.icon} aria-hidden="true" />
+                  </Box>
+                  <Typography variant="body1" component="div" sx={{ color: 'inkMuted', pt: 0.5 }}>
+                    {step.text}
+                  </Typography>
+                </Box>
+              </Box>
+            );
+          })}
         </Box>
 
         <ErrorNotice error={error} />
@@ -199,21 +242,39 @@ export default function WebhookSetupPage() {
               Connect
             </Button>
           </Box>
+        </Paper>
+
+        <Paper
+          variant="outlined"
+          data-testid="webhook-warning"
+          sx={{
+            mt: 2.5,
+            p: 2,
+            bgcolor: 'surface2',
+            borderColor: 'hairline',
+            borderLeft: '3px solid',
+            borderLeftColor: 'warning.main',
+            display: 'flex',
+            gap: 1.5,
+            alignItems: 'flex-start',
+          }}
+        >
           <Box
-            data-testid="webhook-warning"
-            sx={{ display: 'flex', gap: 1.5, mt: 2, alignItems: 'flex-start' }}
+            sx={{
+              color: 'warning.main',
+              fontSize: 15,
+              mt: 0.25,
+              flexShrink: 0,
+              display: 'flex',
+            }}
           >
-            <FontAwesomeIcon
-              icon={faKey}
-              aria-hidden="true"
-              sx={{ color: 'inkMuted', fontSize: 14, mt: 0.25, flexShrink: 0 }}
-            />
-            <Typography variant="body2" sx={{ color: 'inkMuted' }}>
-              Your files are encrypted before they&apos;re stored, and only you
-              can access them. This URL is the key to your storage — don&apos;t
-              share it.
-            </Typography>
+            <FontAwesomeIcon icon={faKey} aria-hidden="true" />
           </Box>
+          <Typography variant="body2" sx={{ color: 'ink' }}>
+            Your files are encrypted before they&apos;re stored, and only you
+            can access them. This URL is the key to your storage — don&apos;t
+            share it.
+          </Typography>
         </Paper>
 
         <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: 'inkMuted', textAlign: 'center' }}>

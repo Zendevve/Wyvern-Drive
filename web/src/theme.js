@@ -1,162 +1,168 @@
 import { createTheme } from '@mui/material/styles';
 
-// Framer dark-canvas world — token anchors (see DESIGN.md).
-// Near-black with a faint warmth; binary ink/ink-muted hierarchy; accent blue
-// is a signal color (links, focus, selection) and never a fill.
+// Signal Deck world — token anchors (see DESIGN.md).
+// A fixed-grid instrument grammar for a private file system whose encrypted
+// payloads move through Discord attachments. Matte graphite canvas, warm
+// white ink, one amber signal for primary actions/selection, and a local
+// monospace face for measurement and data roles. No gradients, no glass,
+// no pill-button system.
 export const tokens = {
-  canvas: '#0E0E10',
-  surface1: '#1A1A1D',
-  surface2: '#242428',
-  ink: '#FFFFFF',
-  inkMuted: '#999999',
-  hairline: 'rgba(255,255,255,0.08)',
-  hairlineSoft: 'rgba(255,255,255,0.06)',
-  accentBlue: '#0099FF',
-  focusRing: 'rgba(0,153,255,0.15)',
-  success: '#3AC36F',
-  danger: '#FF5C5C',
-  warning: '#F5A524',
-};
-
-// Gradient spotlight cards — the brand's scarce atmosphere device. Exact
-// production stops are unknown (derived from screenshots); these are base
-// anchors for the violet/magenta/orange/coral family.
-export const gradients = {
-  violet:
-    'linear-gradient(140deg, #5B21B6 0%, #7C3AED 48%, #A78BFA 100%)',
-  magenta:
-    'linear-gradient(140deg, #A21CAF 0%, #DB2777 55%, #F472B6 100%)',
-  orange:
-    'linear-gradient(140deg, #C2410C 0%, #F97316 55%, #FDBA74 100%)',
-  coral:
-    'linear-gradient(140deg, #BE123C 0%, #FB7185 60%, #FDA4AF 100%)',
+  canvas: '#0A0E10',
+  surface1: '#11181B',
+  surface2: '#1A2428',
+  surface3: '#233036',
+  ink: '#F4F1E8',
+  inkMuted: '#9BA7A7',
+  hairline: 'rgba(193,211,205,0.18)',
+  hairlineSoft: 'rgba(193,211,205,0.10)',
+  signal: '#D9A441', // the single primary signal: amber
+  focusRing: 'rgba(217,164,65,0.18)',
+  success: '#79C49A',
+  danger: '#E57569',
+  warning: '#D9A441',
+  info: '#84B7C4',
+  steel: '#8A9795', // restrained steel edges and secondary control text
 };
 
 const display = "'Mona Sans Variable', 'Inter Variable', sans-serif";
 const body = "'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+// Measurement/data role only — never body copy.
+const mono = "ui-monospace, SFMono-Regular, Consolas, monospace";
 
-const lightEdge = (alphaTop = 0.10, drop = '0 10px 30px rgba(0,0,0,0.25)') =>
-  `inset 0 1px 0 rgba(255,255,255,${alphaTop}), ${drop}`;
+const signalText = '#1B1408'; // dark ink that sits on the amber signal
+const dangerText = '#2A0F0C';
+
+const panelEdge = (alpha = 0.10, drop = '0 10px 30px rgba(0,0,0,0.35)') =>
+  `inset 0 1px 0 rgba(193,211,205,${alpha}), ${drop}`;
 
 const theme = createTheme({
   palette: {
     mode: 'dark',
-    primary: { main: tokens.accentBlue }, // links, focus, selection — not fills
+    primary: { main: tokens.signal }, // the single signal: amber
     background: { default: tokens.canvas, paper: tokens.canvas },
     divider: tokens.hairline,
     text: {
       primary: tokens.ink,
       secondary: tokens.inkMuted,
-      disabled: 'rgba(255,255,255,0.35)',
+      disabled: 'rgba(244,241,232,0.35)',
     },
     success: { main: tokens.success },
     error: { main: tokens.danger },
     warning: { main: tokens.warning },
-    info: { main: tokens.accentBlue },
+    info: { main: tokens.info },
     // World tokens, addressable from sx via theme.palette.*
     canvas: tokens.canvas,
     surface1: tokens.surface1,
     surface2: tokens.surface2,
+    surface3: tokens.surface3,
     ink: tokens.ink,
     inkMuted: tokens.inkMuted,
     hairline: tokens.hairline,
     hairlineSoft: tokens.hairlineSoft,
     focusRing: tokens.focusRing,
+    signal: tokens.signal,
+    signalSoft: 'rgba(217,164,65,0.18)',
+    dangerSoft: 'rgba(229,117,105,0.14)',
+    successSoft: 'rgba(121,196,154,0.14)',
+    steel: tokens.steel,
   },
-  shape: { borderRadius: 10 }, // Framer `rounded.md` as the utility default
+  shape: { borderRadius: 8 }, // control shape; panels/cells vary by role
   spacing: 5, // Framer base unit: 5/10/15/20/30 instead of 4/8/16/24
   typography: {
     fontFamily: body,
-    // Letter-spacing scales with size, hard: posters up top, comfortable body.
+    // Fixed instrument hierarchy: display/brand on Mona Sans, body on Inter,
+    // measurement roles on the local mono stack. Labels and buttons never
+    // use the display face.
     h1: {
-      // display-lg — poster headline (login)
+      // boot-screen headline (login / setup)
       fontFamily: display,
       fontWeight: 500,
-      fontSize: 62,
-      lineHeight: 1.0,
-      letterSpacing: '-3.1px',
+      fontSize: 40,
+      lineHeight: 1.05,
+      letterSpacing: '-1.2px',
     },
     h2: {
-      // display-md — page titles
+      // page/panel titles
       fontFamily: display,
       fontWeight: 500,
-      fontSize: 32,
-      lineHeight: 1.13,
-      letterSpacing: '-1.0px',
+      fontSize: 28,
+      lineHeight: 1.15,
+      letterSpacing: '-0.6px',
     },
     h3: {
-      // headline — dialog titles (Inter tier per the brief)
-      fontWeight: 700,
-      fontSize: 22,
-      lineHeight: 1.2,
-      letterSpacing: '-0.8px',
+      // panel titles
+      fontWeight: 600,
+      fontSize: 20,
+      lineHeight: 1.25,
+      letterSpacing: '-0.3px',
     },
     h4: {
       // subhead
-      fontWeight: 400,
-      fontSize: 24,
-      lineHeight: 1.3,
-      letterSpacing: '-0.01px',
-    },
-    h5: {
-      // body-lg
-      fontWeight: 400,
+      fontWeight: 500,
       fontSize: 18,
       lineHeight: 1.3,
-      letterSpacing: '-0.18px',
+      letterSpacing: '-0.2px',
+    },
+    h5: {
+      // section lead
+      fontWeight: 500,
+      fontSize: 16,
+      lineHeight: 1.3,
+      letterSpacing: '-0.15px',
     },
     h6: {
+      // wordmark-scale titles
       fontWeight: 600,
       fontSize: 16,
       lineHeight: 1.25,
       letterSpacing: '-0.16px',
     },
     body1: {
-      // body
       fontWeight: 400,
       fontSize: 15,
-      lineHeight: 1.3,
-      letterSpacing: '-0.15px',
+      lineHeight: 1.45,
+      letterSpacing: '-0.1px',
     },
     body2: {
-      // body-sm
-      fontWeight: 500,
+      fontWeight: 400,
       fontSize: 14,
       lineHeight: 1.4,
-      letterSpacing: '-0.14px',
+      letterSpacing: '-0.1px',
     },
     caption: {
       fontWeight: 500,
-      fontSize: 13,
-      lineHeight: 1.2,
-      letterSpacing: '-0.13px',
+      fontSize: 12,
+      lineHeight: 1.3,
+      letterSpacing: '0.02em',
     },
     overline: {
-      // micro
-      fontWeight: 400,
-      fontSize: 12,
+      // micro labels — ruled manifest headers
+      fontWeight: 600,
+      fontSize: 11,
       lineHeight: 1.2,
-      letterSpacing: '-0.12px',
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
     },
     subtitle1: {
       fontWeight: 500,
       fontSize: 15,
       lineHeight: 1.3,
-      letterSpacing: '-0.15px',
+      letterSpacing: '-0.1px',
     },
     subtitle2: {
       fontWeight: 600,
-      fontSize: 14,
+      fontSize: 13,
       lineHeight: 1.4,
-      letterSpacing: '-0.14px',
+      letterSpacing: '-0.1px',
     },
     button: {
-      fontWeight: 500,
-      fontSize: 14,
-      lineHeight: 1.0,
-      letterSpacing: '-0.14px',
+      fontWeight: 600,
+      fontSize: 13,
+      lineHeight: 1.2,
+      letterSpacing: '0.02em',
       textTransform: 'none',
     },
+    fontFamilyMonospace: mono,
   },
   components: {
     MuiCssBaseline: {
@@ -166,14 +172,14 @@ const theme = createTheme({
           color: tokens.ink,
         },
         '::selection': {
-          backgroundColor: 'rgba(0,153,255,0.30)', // blue selection halos
+          backgroundColor: 'rgba(217,164,65,0.30)', // amber selection halos
         },
         ':focus-visible': {
-          outline: '2px solid rgba(0,153,255,0.55)',
+          outline: '2px solid rgba(217,164,65,0.55)',
           outlineOffset: 2,
         },
         'input:focus-visible, textarea:focus-visible': {
-          outline: 'none', // MUI containers carry the blue ring instead
+          outline: 'none', // MUI containers carry the amber ring instead
         },
       },
     },
@@ -181,91 +187,107 @@ const theme = createTheme({
       defaultProps: { disableElevation: true },
       styleOverrides: {
         root: {
-          borderRadius: 100, // pill — the brand's only CTA shape
-          padding: '10px 15px',
+          borderRadius: 8, // control shape — never a pill
+          padding: '8px 14px',
           transition:
-            'transform 120ms ease, background-color 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease',
-          '&:active': { transform: 'scale(0.97)' }, // pressed = shrink, not darken
+            'transform 140ms ease, background-color 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
+          '&:active': { transform: 'scale(0.98)' },
         },
-        sizeSmall: { padding: '6px 12px', fontSize: 13, letterSpacing: '-0.13px' },
-        // button-primary: white pill on canvas
+        sizeSmall: { padding: '5px 10px', fontSize: 12, letterSpacing: '0.02em' },
+        sizeLarge: { padding: '10px 18px', fontSize: 14 },
+        // primary action: amber signal, dark text
         contained: {
-          backgroundColor: tokens.ink,
-          color: tokens.canvas,
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.88)' },
+          backgroundColor: tokens.signal,
+          color: signalText,
+          '&:hover': { backgroundColor: '#E0AE52' },
           '&:disabled': {
-            backgroundColor: 'rgba(255,255,255,0.25)',
-            color: 'rgba(255,255,255,0.4)',
+            backgroundColor: 'rgba(217,164,65,0.35)',
+            color: 'rgba(27,20,8,0.5)',
           },
         },
         containedPrimary: {
-          backgroundColor: tokens.ink,
-          color: tokens.canvas,
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.88)' },
+          backgroundColor: tokens.signal,
+          color: signalText,
+          '&:hover': { backgroundColor: '#E0AE52' },
           '&:disabled': {
-            backgroundColor: 'rgba(255,255,255,0.25)',
-            color: 'rgba(255,255,255,0.4)',
+            backgroundColor: 'rgba(217,164,65,0.35)',
+            color: 'rgba(27,20,8,0.5)',
           },
         },
         containedError: {
           backgroundColor: tokens.danger,
-          color: '#1A0A0A',
-          '&:hover': { backgroundColor: '#FF7575' },
+          color: dangerText,
+          '&:hover': { backgroundColor: '#EE8378' },
         },
-        // button-secondary: charcoal pill — never a bordered ghost
+        // secondary action: graphite with hairline border
         outlined: {
-          backgroundColor: tokens.surface1,
+          backgroundColor: tokens.surface2,
           color: tokens.ink,
           border: `1px solid ${tokens.hairline}`,
           '&:hover': {
-            backgroundColor: tokens.surface2,
-            borderColor: 'rgba(255,255,255,0.14)',
+            backgroundColor: tokens.surface3,
+            borderColor: 'rgba(193,211,205,0.28)',
           },
-          '&:disabled': { color: 'rgba(255,255,255,0.4)' },
+          '&:disabled': { color: 'rgba(244,241,232,0.4)' },
         },
         outlinedPrimary: {
-          backgroundColor: tokens.surface1,
+          backgroundColor: tokens.surface2,
           color: tokens.ink,
           border: `1px solid ${tokens.hairline}`,
           '&:hover': {
-            backgroundColor: tokens.surface2,
-            borderColor: 'rgba(255,255,255,0.14)',
+            backgroundColor: tokens.surface3,
+            borderColor: 'rgba(193,211,205,0.28)',
           },
         },
         outlinedError: {
           color: tokens.danger,
-          borderColor: 'rgba(255,92,92,0.35)',
+          borderColor: 'rgba(229,117,105,0.4)',
           '&:hover': {
-            backgroundColor: 'rgba(255,92,92,0.08)',
-            borderColor: 'rgba(255,92,92,0.5)',
-            color: '#FF7575',
+            backgroundColor: tokens.dangerSoft,
+            borderColor: 'rgba(229,117,105,0.6)',
+            color: '#EE8378',
           },
         },
         text: {
           color: tokens.inkMuted,
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.04)', color: tokens.ink },
+          '&:hover': { backgroundColor: 'rgba(193,211,205,0.06)', color: tokens.ink },
         },
         textPrimary: {
           color: tokens.inkMuted,
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.04)', color: tokens.ink },
+          '&:hover': { backgroundColor: 'rgba(193,211,205,0.06)', color: tokens.ink },
         },
         textError: {
           color: tokens.danger,
-          '&:hover': { backgroundColor: 'rgba(255,92,92,0.08)', color: '#FF7575' },
+          '&:hover': { backgroundColor: tokens.dangerSoft, color: '#EE8378' },
+        },
+      },
+    },
+    // ButtonBase underpins every button/icon-button/menu/list control. Its
+    // reset sets `outline: 0` on the root, which masks the global
+    // `:focus-visible` ring from CssBaseline (same specificity, later order
+    // wins). Re-assert the amber ring on the keyboard-focus class so focus
+    // is always visible; it also gives programmatic-focus states a marker.
+    MuiButtonBase: {
+      styleOverrides: {
+        root: {
+          '&.Mui-focusVisible': {
+            outline: '2px solid rgba(217,164,65,0.55)',
+            outlineOffset: 2,
+          },
         },
       },
     },
     MuiIconButton: {
       styleOverrides: {
         root: {
-          borderRadius: '50%', // circular icon buttons
+          borderRadius: 8, // icon actions are 8px corners, not circles
           color: tokens.inkMuted,
-          transition: 'transform 120ms ease, background-color 150ms ease, color 150ms ease',
-          '&:active': { transform: 'scale(0.92)' }, // pressed = shrink, not darken
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.06)', color: tokens.ink },
-          '&.Mui-disabled': { color: 'rgba(255,255,255,0.3)' },
+          transition: 'transform 140ms ease, background-color 160ms ease, color 160ms ease',
+          '&:active': { transform: 'scale(0.94)' },
+          '&:hover': { backgroundColor: 'rgba(193,211,205,0.08)', color: tokens.ink },
+          '&.Mui-disabled': { color: 'rgba(244,241,232,0.3)' },
         },
-        sizeSmall: { padding: 8 },
+        sizeSmall: { padding: 6 },
       },
     },
     MuiPaper: {
@@ -273,17 +295,17 @@ const theme = createTheme({
         root: {
           backgroundColor: tokens.surface1,
           backgroundImage: 'none',
-          borderRadius: 20, // `rounded.xl` — pricing/mockup tiles
+          borderRadius: 12, // panels
         },
         outlined: { borderColor: tokens.hairline },
-        elevation1: { boxShadow: lightEdge() },
-        elevation2: { boxShadow: lightEdge() },
-        elevation3: { boxShadow: lightEdge(0.12, '0 16px 40px rgba(0,0,0,0.35)') },
-        elevation4: { boxShadow: lightEdge(0.12, '0 16px 48px rgba(0,0,0,0.45)') },
-        elevation8: { boxShadow: lightEdge(0.12, '0 24px 64px rgba(0,0,0,0.5)') },
-        elevation12: { boxShadow: lightEdge(0.12, '0 24px 64px rgba(0,0,0,0.5)') },
-        elevation16: { boxShadow: lightEdge(0.12, '0 24px 64px rgba(0,0,0,0.5)') },
-        elevation24: { boxShadow: lightEdge(0.12, '0 24px 64px rgba(0,0,0,0.5)') },
+        elevation1: { boxShadow: panelEdge() },
+        elevation2: { boxShadow: panelEdge() },
+        elevation3: { boxShadow: panelEdge(0.12, '0 16px 40px rgba(0,0,0,0.4)') },
+        elevation4: { boxShadow: panelEdge(0.12, '0 16px 48px rgba(0,0,0,0.5)') },
+        elevation8: { boxShadow: panelEdge(0.12, '0 24px 64px rgba(0,0,0,0.55)') },
+        elevation12: { boxShadow: panelEdge(0.12, '0 24px 64px rgba(0,0,0,0.55)') },
+        elevation16: { boxShadow: panelEdge(0.12, '0 24px 64px rgba(0,0,0,0.55)') },
+        elevation24: { boxShadow: panelEdge(0.12, '0 24px 64px rgba(0,0,0,0.55)') },
       },
     },
     MuiDialog: {
@@ -291,77 +313,89 @@ const theme = createTheme({
         paper: {
           backgroundColor: tokens.surface2,
           backgroundImage: 'none',
-          borderRadius: 20,
-          boxShadow: lightEdge(0.12, '0 24px 64px rgba(0,0,0,0.5)'),
+          borderRadius: 12,
+          boxShadow: panelEdge(0.12, '0 24px 64px rgba(0,0,0,0.55)'),
         },
       },
     },
     MuiBackdrop: {
-      styleOverrides: { root: { backgroundColor: 'rgba(0,0,0,0.72)' } },
+      styleOverrides: { root: { backgroundColor: 'rgba(4,6,8,0.72)' } },
     },
     MuiDialogTitle: {
       styleOverrides: {
-        root: { padding: '24px 24px 0', fontWeight: 700, fontSize: 22, letterSpacing: '-0.8px' },
+        root: {
+          padding: '20px 24px 12px',
+          fontWeight: 600,
+          fontSize: 20,
+          letterSpacing: '-0.3px',
+        },
       },
     },
     MuiDialogContent: {
-      styleOverrides: { root: { padding: '16px 24px' } },
+      styleOverrides: { root: { padding: '12px 24px' } },
     },
     MuiDialogActions: {
-      styleOverrides: { root: { padding: '16px 24px 24px' } },
+      styleOverrides: { root: { padding: '12px 24px 20px' } },
     },
     MuiTextField: { defaultProps: { variant: 'outlined' } },
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
           backgroundColor: tokens.surface1,
-          borderRadius: 10, // `rounded.md`
+          borderRadius: 8,
           color: tokens.ink,
           '& .MuiOutlinedInput-notchedOutline': {
             borderColor: tokens.hairline,
-            transition: 'border-color 150ms ease, box-shadow 150ms ease',
+            transition: 'border-color 160ms ease, box-shadow 160ms ease',
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'rgba(255,255,255,0.14)',
+            borderColor: 'rgba(193,211,205,0.28)',
           },
           '&.Mui-focused': {
-            boxShadow: `0 0 0 1px ${tokens.focusRing}`, // blue ring, same surface
+            boxShadow: `0 0 0 1px ${tokens.focusRing}`, // amber ring, same surface
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'transparent',
+            borderColor: 'rgba(217,164,65,0.45)',
           },
-          '&.Mui-disabled': { backgroundColor: 'rgba(255,255,255,0.03)' },
+          '&.Mui-disabled': { backgroundColor: 'rgba(193,211,205,0.03)' },
         },
-        input: { padding: '10px 14px' },
-        inputAdornedStart: { paddingLeft: 14 },
+        input: { padding: '9px 12px' },
+        inputAdornedStart: { paddingLeft: 12 },
       },
     },
     MuiInputLabel: {
       styleOverrides: {
         root: {
           color: tokens.inkMuted,
-          '&.Mui-focused': { color: tokens.inkMuted },
+          '&.Mui-focused': { color: tokens.signal },
         },
       },
     },
     MuiCheckbox: {
       styleOverrides: {
         root: {
-          '&.Mui-checked': { color: tokens.accentBlue },
-          '&.MuiCheckbox-indeterminate': { color: tokens.accentBlue },
+          '&.Mui-checked': { color: tokens.signal },
+          '&.MuiCheckbox-indeterminate': { color: tokens.signal },
         },
       },
     },
     MuiLinearProgress: {
       styleOverrides: {
-        root: { backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 100, height: 6 },
-        bar: { backgroundColor: tokens.ink, borderRadius: 100 },
+        root: {
+          backgroundColor: 'rgba(193,211,205,0.10)',
+          // segmented/ruled track: measurement grammar, not a soft bar
+          backgroundImage:
+            'repeating-linear-gradient(90deg, transparent 0 14px, rgba(10,14,16,0.55) 14px 15px)',
+          borderRadius: 3,
+          height: 6,
+        },
+        bar: { backgroundColor: tokens.signal, borderRadius: 3 },
       },
     },
     MuiLink: {
       styleOverrides: {
         root: {
-          color: tokens.accentBlue,
+          color: tokens.signal,
           textDecoration: 'none',
           '&:hover': { textDecoration: 'underline' },
         },
@@ -369,19 +403,31 @@ const theme = createTheme({
     },
     MuiChip: {
       styleOverrides: {
-        root: { borderRadius: 6, backgroundColor: tokens.surface1, color: tokens.ink },
+        root: { borderRadius: 6, backgroundColor: tokens.surface2, color: tokens.ink },
       },
     },
     MuiListItemButton: {
       styleOverrides: {
         root: {
-          borderRadius: 10,
+          position: 'relative',
+          borderRadius: 8,
           color: tokens.inkMuted,
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.04)', color: tokens.ink },
+          '&:hover': { backgroundColor: 'rgba(193,211,205,0.05)', color: tokens.ink },
           '&.Mui-selected': {
-            backgroundColor: tokens.surface2, // selected = lift, not color
+            backgroundColor: 'rgba(217,164,65,0.18)', // signalSoft
             color: tokens.ink,
-            '&:hover': { backgroundColor: tokens.surface2 },
+            // Non-color state marker: a ruled signal edge on the active item.
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              left: 0,
+              top: 8,
+              bottom: 8,
+              width: 3,
+              borderRadius: 2,
+              backgroundColor: tokens.signal,
+            },
+            '&:hover': { backgroundColor: 'rgba(217,164,65,0.22)' },
           },
         },
       },
@@ -391,20 +437,21 @@ const theme = createTheme({
         root: { borderColor: tokens.hairlineSoft, color: tokens.ink },
         head: {
           color: tokens.inkMuted,
-          fontWeight: 500,
-          fontSize: 13,
-          letterSpacing: '-0.13px',
+          fontWeight: 600,
+          fontSize: 11,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
         },
       },
     },
     MuiTooltip: {
       styleOverrides: {
         tooltip: {
-          backgroundColor: tokens.surface2,
+          backgroundColor: tokens.surface3,
           color: tokens.ink,
-          borderRadius: 8,
+          borderRadius: 6,
           fontSize: 12,
-          boxShadow: lightEdge(),
+          boxShadow: panelEdge(),
         },
       },
     },
@@ -413,8 +460,8 @@ const theme = createTheme({
         paper: {
           backgroundColor: tokens.surface2,
           backgroundImage: 'none',
-          borderRadius: 15,
-          boxShadow: lightEdge(0.10, '0 16px 40px rgba(0,0,0,0.45)'),
+          borderRadius: 8,
+          boxShadow: panelEdge(0.10, '0 16px 40px rgba(0,0,0,0.5)'),
         },
       },
     },
@@ -422,8 +469,8 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           color: tokens.ink,
-          '&.Mui-selected': { backgroundColor: 'rgba(0,153,255,0.12)' },
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' },
+          '&.Mui-selected': { backgroundColor: 'rgba(217,164,65,0.18)' },
+          '&:hover': { backgroundColor: 'rgba(193,211,205,0.06)' },
         },
       },
     },
@@ -443,39 +490,55 @@ const theme = createTheme({
     MuiAlert: {
       styleOverrides: {
         root: {
-          borderRadius: 10,
+          borderRadius: 8,
           backgroundColor: tokens.surface1,
           backgroundImage: 'none',
+          border: `1px solid ${tokens.hairlineSoft}`,
           color: tokens.ink,
         },
         standardError: {
-          backgroundColor: 'rgba(255,92,92,0.10)',
+          backgroundColor: 'rgba(229,117,105,0.14)',
+          borderColor: 'rgba(229,117,105,0.35)',
           color: tokens.ink,
           '& .MuiAlert-icon': { color: tokens.danger },
         },
         standardWarning: {
-          backgroundColor: 'rgba(245,165,36,0.10)',
+          backgroundColor: 'rgba(217,164,65,0.14)',
+          borderColor: 'rgba(217,164,65,0.35)',
           color: tokens.ink,
           '& .MuiAlert-icon': { color: tokens.warning },
         },
         standardSuccess: {
-          backgroundColor: 'rgba(58,195,111,0.10)',
+          backgroundColor: 'rgba(121,196,154,0.14)',
+          borderColor: 'rgba(121,196,154,0.35)',
           color: tokens.ink,
           '& .MuiAlert-icon': { color: tokens.success },
         },
         standardInfo: {
-          backgroundColor: 'rgba(0,153,255,0.10)',
+          backgroundColor: 'rgba(132,183,196,0.14)',
+          borderColor: 'rgba(132,183,196,0.35)',
           color: tokens.ink,
-          '& .MuiAlert-icon': { color: tokens.accentBlue },
+          '& .MuiAlert-icon': { color: tokens.info },
         },
       },
     },
     MuiSkeleton: {
-      styleOverrides: { root: { backgroundColor: 'rgba(255,255,255,0.06)' } },
+      styleOverrides: { root: { backgroundColor: 'rgba(193,211,205,0.08)' } },
     },
     MuiDivider: { styleOverrides: { root: { borderColor: tokens.hairlineSoft } } },
     MuiAvatar: {
       styleOverrides: { root: { backgroundColor: tokens.surface2, color: tokens.ink } },
+    },
+    MuiSnackbarContent: {
+      styleOverrides: {
+        root: {
+          backgroundColor: tokens.surface2,
+          backgroundImage: 'none',
+          color: tokens.ink,
+          borderRadius: 8,
+          boxShadow: panelEdge(0.12, '0 16px 48px rgba(0,0,0,0.5)'),
+        },
+      },
     },
   },
 });

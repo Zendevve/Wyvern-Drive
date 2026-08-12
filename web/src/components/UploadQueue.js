@@ -10,6 +10,7 @@ import {
   ListItemText,
   Paper,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -22,10 +23,15 @@ import {
 import { api } from '../api/client';
 import { reducedMotion, useSpring } from '../motion/springs';
 
+// Measurement/data roles (progress readouts, status labels, counts) use the
+// mono stack; body copy never does.
+const MONO = "'ui-monospace', SFMono-Regular, Consolas, monospace";
+
 /**
- * Floating transfer manager (Mega-style). One job per upload request; jobs
+ * Fixed transfer console (Signal Deck). One job per upload request; jobs
  * show progress while uploading, the server-returned name when done, and a
- * retry action on failure. Pinned to the bottom-right of the viewport.
+ * retry action on failure. Pinned to the bottom-right of the viewport,
+ * safe-area aware, and clamped inside the viewport edge below 412px.
  *
  * Motion: the panel fades/slides in when the first job appears; each row
  * springs in, smooths its progress bar, pulses its check icon on completion,
@@ -38,6 +44,9 @@ export default function UploadQueue({ jobs, onRetry, onRemove }) {
   // first appears, not invisibly on mount with an empty queue.
   const panelEnter = useSpring(hasJobs ? 1 : 0, { initial: 0, response: 0.4 });
   const [removing, setRemoving] = useState(new Set());
+  // Below 412px the console must never touch the viewport edge: shrink the
+  // max width and pin from the left so a right gutter stays visible.
+  const narrow = useMediaQuery('(max-width: 411px)');
 
   if (!jobs || jobs.length === 0) {
     return null;
@@ -48,16 +57,23 @@ export default function UploadQueue({ jobs, onRetry, onRemove }) {
       sx={{
         position: 'fixed',
         right: 16,
-        bottom: 16,
+        bottom: 'max(16px, env(safe-area-inset-bottom))',
         zIndex: 1300,
         width: 380,
-        maxWidth: 'calc(100vw - 32px)',
+        maxWidth: narrow ? 'calc(100vw - 16px)' : 'calc(100vw - 32px)',
+        ...(narrow ? { left: 8 } : {}),
       }}
       data-testid="upload-queue"
     >
       <Paper
-        elevation={4}
-        sx={{ borderRadius: '20px', overflow: 'hidden' }}
+        elevation={2}
+        sx={{
+          borderRadius: '12px',
+          overflow: 'hidden',
+          backgroundColor: 'surface2',
+          border: '1px solid',
+          borderColor: 'hairline',
+        }}
         style={{
           opacity: panelEnter,
           ...(reducedMotion()
@@ -72,8 +88,8 @@ export default function UploadQueue({ jobs, onRetry, onRemove }) {
           sx={{
             px: 2,
             py: 1.5,
-            borderBottom: 1,
-            borderColor: 'divider',
+            borderBottom: '1px solid',
+            borderColor: 'hairline',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -82,7 +98,7 @@ export default function UploadQueue({ jobs, onRetry, onRemove }) {
           <Typography variant="subtitle1" fontWeight={600}>
             Uploads
           </Typography>
-          <Typography variant="caption" color="inkMuted">
+          <Typography variant="caption" color="inkMuted" sx={{ fontFamily: MONO }}>
             {activeCount} active
           </Typography>
         </Box>
@@ -160,6 +176,13 @@ function QueueJobItem({ job, removing, onRequestRemove, onRetry, onRemove }) {
     return undefined;
   }, [job.status]);
 
+  const statusColor =
+    job.status === 'done'
+      ? 'success.main'
+      : job.status === 'failed'
+        ? 'error.main'
+        : 'inkMuted';
+
   return (
     <ListItem
       divider
@@ -175,7 +198,7 @@ function QueueJobItem({ job, removing, onRequestRemove, onRetry, onRemove }) {
             }),
       }}
     >
-      <ListItemIcon sx={{ transform: `scale(${pulse})` }}>
+      <ListItemIcon sx={{ transform: `scale(${pulse})`, color: statusColor }}>
         <FontAwesomeIcon
           icon={
             job.status === 'done'
@@ -183,13 +206,6 @@ function QueueJobItem({ job, removing, onRequestRemove, onRetry, onRemove }) {
               : job.status === 'failed'
                 ? faCircleXmark
                 : faUpload
-          }
-          color={
-            job.status === 'done'
-              ? '#3AC36F'
-              : job.status === 'failed'
-                ? '#FF5C5C'
-                : '#999999'
           }
         />
       </ListItemIcon>
@@ -207,7 +223,11 @@ function QueueJobItem({ job, removing, onRequestRemove, onRetry, onRemove }) {
               ? (job.error && job.error.message) || 'Upload failed'
               : 'Uploaded'
         }
-        secondaryTypographyProps={{ variant: 'caption', color: 'inkMuted' }}
+        secondaryTypographyProps={{
+          variant: 'caption',
+          color: 'inkMuted',
+          sx: { fontFamily: MONO },
+        }}
       />
       {job.status === 'uploading' && (
         <Box sx={{ width: 110, mr: 1 }}>
@@ -229,7 +249,7 @@ function QueueJobItem({ job, removing, onRequestRemove, onRetry, onRemove }) {
         </IconButton>
       )}
       {job.status === 'failed' && (
-        <Button size="small" onClick={() => onRetry(job)}>
+        <Button size="small" variant="outlined" onClick={() => onRetry(job)}>
           Retry
         </Button>
       )}

@@ -22,6 +22,10 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { useSpring, springStyle } from '../motion/springs';
 import { api } from '../api/client';
+import BrandLockup from '../components/BrandLockup';
+
+/** Measurement/data face — redirect URIs, variable names, IDs. Never body copy. */
+const MONO = "'ui-monospace, SFMono-Regular, Consolas, monospace'";
 
 /** The exact OAuth2 redirect address the operator registers in Discord. */
 function redirectUri() {
@@ -73,7 +77,9 @@ function RedirectUriChip() {
         alignItems: 'center',
         gap: 1,
         bgcolor: 'surface2',
-        borderRadius: '10px',
+        borderRadius: '8px',
+        border: '1px solid',
+        borderColor: 'hairline',
         px: 1.5,
         py: 1,
       }}
@@ -82,7 +88,7 @@ function RedirectUriChip() {
         variant="body2"
         component="code"
         sx={{
-          fontFamily: 'monospace',
+          fontFamily: MONO,
           fontSize: 13,
           color: 'ink',
           overflow: 'hidden',
@@ -109,6 +115,25 @@ function RedirectUriChip() {
         {copied ? 'Copied' : 'Copy'}
       </Button>
     </Box>
+  );
+}
+
+/** Ruled panel header — hairline rule under the title, Signal Deck grammar. */
+function RuledTitle({ children, sx }) {
+  return (
+    <Typography
+      variant="h3"
+      component="h2"
+      sx={{
+        mb: 2,
+        pb: 1.5,
+        borderBottom: '1px solid',
+        borderColor: 'hairlineSoft',
+        ...sx,
+      }}
+    >
+      {children}
+    </Typography>
   );
 }
 
@@ -189,6 +214,11 @@ function friendlyMessage(error) {
  * route. Secrets live only in React state: they are never written to
  * localStorage, the clipboard, the URL, or analytics, and are cleared after
  * a successful save.
+ *
+ * Two-column check-in at desktop: the left spine holds the sign-in steps and
+ * the "For your users" note; the right task panel holds the credential form,
+ * the restart next-action, and the diagnostics ledger. Below 768px the columns
+ * stack into one ordered spine.
  */
 export default function SetupPage({ status, onRetry }) {
   // Critically damped arrival; reduced motion falls back to a static fade.
@@ -302,23 +332,13 @@ export default function SetupPage({ status, onRetry }) {
       sx={{
         minHeight: '100vh',
         p: { xs: 2, sm: 5 },
-        maxWidth: 780,
+        maxWidth: 1024,
         mx: 'auto',
       }}
     >
-      <Typography
-        component="div"
-        sx={{
-          fontFamily: "'Mona Sans Variable', sans-serif",
-          fontWeight: 500,
-          fontSize: 15,
-          letterSpacing: '-0.5px',
-          color: 'ink',
-          mb: 3,
-        }}
-      >
-        Wyvern Drive
-      </Typography>
+      <Box sx={{ mb: 3 }}>
+        <BrandLockup />
+      </Box>
       <Typography variant="h1" component="h1" sx={{ mb: 3 }}>
         Set up Wyvern Drive
       </Typography>
@@ -343,330 +363,344 @@ export default function SetupPage({ status, onRetry }) {
           </Button>
         </Box>
       ) : (
-        <>
-          <Paper
-            variant="outlined"
-            data-testid="setup-checklist"
-            sx={{ p: 3, mb: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
-          >
-            <Typography variant="h3" component="h2" sx={{ mb: 2 }}>
-              Connect Discord sign-in
-            </Typography>
-            {STAGE_1_STEPS.map((step, i) => (
-              <Box key={i} sx={{ display: 'flex', gap: 2, mb: 2 }}>
-                <Box
-                  sx={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '50%',
-                    bgcolor: 'surface2',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    mt: 0.25,
-                  }}
-                >
-                  <FontAwesomeIcon
-                    icon={step.icon}
-                    aria-hidden="true"
-                    sx={{ color: 'inkMuted', fontSize: 14 }}
-                  />
-                </Box>
-                <Box sx={{ flexGrow: 1 }}>
-                  <Typography
-                    variant="body2"
-                    component="div"
-                    sx={{ color: 'inkMuted', mb: 0.5 }}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'minmax(0,340px) 1fr' },
+            gap: 3,
+            alignItems: 'start',
+          }}
+        >
+          {/* LEFT SPINE: sign-in steps + what users experience */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+            <Paper
+              variant="outlined"
+              data-testid="setup-checklist"
+              sx={{ p: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
+            >
+              <RuledTitle>Connect Discord sign-in</RuledTitle>
+              {STAGE_1_STEPS.map((step, i) => (
+                <Box key={i} sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                  <Box
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '8px',
+                      border: '1px solid',
+                      borderColor: 'hairlineSoft',
+                      bgcolor: 'surface2',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      mt: 0.25,
+                    }}
                   >
-                    Step {i + 1}
-                  </Typography>
-                  <Typography variant="body1" component="div">
-                    {step.body}
-                  </Typography>
+                    <FontAwesomeIcon
+                      icon={step.icon}
+                      style={{ color: 'inkMuted', fontSize: 14 }}
+                    />
+                  </Box>
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Typography
+                      variant="body2"
+                      component="div"
+                      sx={{ color: 'inkMuted', mb: 0.5 }}
+                    >
+                      Step {i + 1}
+                    </Typography>
+                    <Typography variant="body1" component="div">
+                      {step.body}
+                    </Typography>
+                  </Box>
                 </Box>
-              </Box>
-            ))}
-          </Paper>
+              ))}
+            </Paper>
 
-          {showForm && (
             <Paper
               variant="outlined"
-              data-testid="setup-meta"
-              sx={{ p: 3, mb: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
+              sx={{ p: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
             >
-              <Typography variant="h3" component="h2" sx={{ mb: 1.5 }}>
-                Add your Discord application
+              <RuledTitle>For your users</RuledTitle>
+              <Typography variant="body1" sx={{ color: 'inkMuted' }}>
+                Once sign-in works, people sign in with Discord and connect their
+                own storage in about a minute — no technical knowledge needed.
               </Typography>
-              <Typography variant="body1" sx={{ color: 'inkMuted', mb: 2 }}>
-                Paste the Client ID and Client Secret from your Discord
-                application below. They are saved in server/.env on this server
-                and are never shown here again after saving.
-              </Typography>
+            </Paper>
+          </Box>
 
-              {keyInvalid && (
-                <Alert
-                  severity="warning"
-                  sx={{ mb: 2 }}
-                  data-testid="setup-key-invalid"
-                >
-                  The server&apos;s existing encryption key is invalid. Restore
-                  or fix the server&apos;s existing configuration — replacing it
-                  would make stored files unreadable.
-                </Alert>
-              )}
-
-              {!meta && (
-                <Typography variant="body2" sx={{ color: 'inkMuted', mb: 2 }}>
-                  Setup details could not be loaded from the server; the one-time
-                  setup code field may not be shown.
-                </Typography>
-              )}
-
-              <Box
-                component="form"
-                noValidate
-                data-testid="setup-credentials-form"
-                onSubmit={handleSave}
-                sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+          {/* RIGHT TASK PANEL: credentials form + restart + diagnostics */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+            {showForm && (
+              <Paper
+                variant="outlined"
+                data-testid="setup-meta"
+                sx={{ p: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
               >
-                {needsClientId && (
-                  <TextField
-                    data-testid="setup-client-id"
-                    label="Discord Client ID"
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    disabled={saving}
-                    fullWidth
-                    autoComplete="off"
-                    helperText="The application ID from the Discord Developer Portal (17–20 digits)."
-                  />
-                )}
-                {needsClientSecret && (
-                  <TextField
-                    data-testid="setup-client-secret"
-                    label="Discord Client Secret"
-                    type="password"
-                    autoComplete="new-password"
-                    value={clientSecret}
-                    onChange={(e) => setClientSecret(e.target.value)}
-                    disabled={saving}
-                    fullWidth
-                    helperText="Kept only in this page while you save; the browser never stores it."
-                  />
-                )}
-                {needsOrigin && (
-                  <TextField
-                    data-testid="setup-app-origin"
-                    label="Website address"
-                    value={appOrigin}
-                    onChange={(e) => setAppOrigin(e.target.value)}
-                    disabled={saving}
-                    fullWidth
-                    helperText="The public address people use to reach this server. It controls the Discord callback address."
-                  />
-                )}
-                {tokenRequired && (
-                  <TextField
-                    data-testid="setup-token"
-                    label="One-time setup code"
-                    type="password"
-                    autoComplete="off"
-                    value={setupToken}
-                    onChange={(e) => setSetupToken(e.target.value)}
-                    disabled={saving}
-                    fullWidth
-                    helperText="The one-time code printed by the server"
-                  />
-                )}
+                <RuledTitle>Add your Discord application</RuledTitle>
+                <Typography variant="body1" sx={{ color: 'inkMuted', mb: 2 }}>
+                  Paste the Client ID and Client Secret from your Discord
+                  application below. They are saved in server/.env on this server
+                  and are never shown here again after saving.
+                </Typography>
 
-                {error && (
-                  <Alert severity="error" data-testid="setup-save-error">
-                    {error}
+                {keyInvalid && (
+                  <Alert
+                    severity="warning"
+                    sx={{ mb: 2 }}
+                    data-testid="setup-key-invalid"
+                  >
+                    The server&apos;s existing encryption key is invalid. Restore
+                    or fix the server&apos;s existing configuration — replacing it
+                    would make stored files unreadable.
                   </Alert>
                 )}
 
-                {saved && (
-                  <Alert severity="success" data-testid="setup-saved">
-                    Saved on this server. Restart Wyvern, then choose Recheck.
-                    {saved.saved && saved.saved.length > 0 && (
-                      <Box component="div" sx={{ mt: 1 }}>
-                        Saved on the server: {saved.saved.join(', ')}.
-                      </Box>
-                    )}
-                    {saved.generated && saved.generated.length > 0 && (
-                      <Box component="div" sx={{ mt: 1 }}>
-                        Generated on the server: {saved.generated.join(', ')}.
-                      </Box>
-                    )}
-                    {saved.generated &&
-                      saved.generated.includes('WYVERN_ENCRYPTION_KEY') && (
-                        <Box
-                          component="div"
-                          data-testid="setup-backup-warning"
-                          sx={{ mt: 1 }}
-                        >
-                          The server generated an encryption key and saved it in
-                          server/.env on this host. Back that file up before
-                          moving or reinstalling Wyvern — without it, stored
-                          files cannot be decrypted.
-                        </Box>
-                      )}
-                    {saved.remainingMissing &&
-                      saved.remainingMissing.length > 0 && (
-                        <Box component="div" sx={{ mt: 1 }}>
-                          Still missing on the server:{' '}
-                          {saved.remainingMissing.join(', ')}.
-                        </Box>
-                      )}
-                    {saved.remainingInvalid &&
-                      saved.remainingInvalid.length > 0 && (
-                        <Box component="div" sx={{ mt: 1 }}>
-                          Still invalid on the server:{' '}
-                          {saved.remainingInvalid
-                            .map(
-                              (item) =>
-                                `${item.key}${
-                                  item.message ? ` — ${item.message}` : ''
-                                }`
-                            )
-                            .join(', ')}
-                          .
-                        </Box>
-                      )}
-                  </Alert>
+                {!meta && (
+                  <Typography variant="body2" sx={{ color: 'inkMuted', mb: 2 }}>
+                    Setup details could not be loaded from the server; the one-time
+                    setup code field may not be shown.
+                  </Typography>
                 )}
 
-                <Button
-                  variant="contained"
-                  size="large"
-                  type="submit"
-                  data-testid="setup-save"
-                  disabled={saving || keyInvalid}
-                  startIcon={
-                    saving ? (
-                      <CircularProgress size={18} color="inherit" />
-                    ) : (
-                      <FontAwesomeIcon icon={faFloppyDisk} aria-hidden="true" />
-                    )
-                  }
-                  sx={{ alignSelf: 'flex-start' }}
+                <Box
+                  component="form"
+                  noValidate
+                  data-testid="setup-credentials-form"
+                  onSubmit={handleSave}
+                  sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
                 >
-                  Save on this server
-                </Button>
-              </Box>
-            </Paper>
-          )}
+                  {needsClientId && (
+                    <TextField
+                      data-testid="setup-client-id"
+                      label="Discord Client ID"
+                      value={clientId}
+                      onChange={(e) => setClientId(e.target.value)}
+                      disabled={saving}
+                      fullWidth
+                      autoComplete="off"
+                      helperText="The application ID from the Discord Developer Portal (17–20 digits)."
+                    />
+                  )}
+                  {needsClientSecret && (
+                    <TextField
+                      data-testid="setup-client-secret"
+                      label="Discord Client Secret"
+                      type="password"
+                      autoComplete="new-password"
+                      value={clientSecret}
+                      onChange={(e) => setClientSecret(e.target.value)}
+                      disabled={saving}
+                      fullWidth
+                      helperText="Kept only in this page while you save; the browser never stores it."
+                    />
+                  )}
+                  {needsOrigin && (
+                    <TextField
+                      data-testid="setup-app-origin"
+                      label="Website address"
+                      value={appOrigin}
+                      onChange={(e) => setAppOrigin(e.target.value)}
+                      disabled={saving}
+                      fullWidth
+                      helperText="The public address people use to reach this server. It controls the Discord callback address."
+                    />
+                  )}
+                  {tokenRequired && (
+                    <TextField
+                      data-testid="setup-token"
+                      label="One-time setup code"
+                      type="password"
+                      autoComplete="off"
+                      value={setupToken}
+                      onChange={(e) => setSetupToken(e.target.value)}
+                      disabled={saving}
+                      fullWidth
+                      helperText="The one-time code printed by the server"
+                    />
+                  )}
 
-          <Paper
-            variant="outlined"
-            sx={{ p: 3, mb: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
-          >
-            <Typography variant="h3" component="h2" sx={{ mb: 1.5 }}>
-              Restart &amp; check
-            </Typography>
-            <Typography variant="body1" sx={{ color: 'inkMuted', mb: 2 }}>
-              Restart the server, then come back here.
-            </Typography>
-            <Button
-              variant="contained"
-              size="large"
-              onClick={onRetry}
-              startIcon={<FontAwesomeIcon icon={faRotateRight} aria-hidden="true" />}
-              data-testid="setup-recheck"
-            >
-              Recheck
-            </Button>
-          </Paper>
+                  {error && (
+                    <Alert severity="error" data-testid="setup-save-error">
+                      {error}
+                    </Alert>
+                  )}
 
-          {hasDiagnostics && (
+                  {saved && (
+                    <Alert severity="success" data-testid="setup-saved">
+                      Saved on this server. Restart Wyvern, then choose Recheck.
+                      {saved.saved && saved.saved.length > 0 && (
+                        <Box component="div" sx={{ mt: 1 }}>
+                          Saved on the server: {saved.saved.join(', ')}.
+                        </Box>
+                      )}
+                      {saved.generated && saved.generated.length > 0 && (
+                        <Box component="div" sx={{ mt: 1 }}>
+                          Generated on the server: {saved.generated.join(', ')}.
+                        </Box>
+                      )}
+                      {saved.generated &&
+                        saved.generated.includes('WYVERN_ENCRYPTION_KEY') && (
+                          <Box
+                            component="div"
+                            data-testid="setup-backup-warning"
+                            sx={{ mt: 1 }}
+                          >
+                            The server generated an encryption key and saved it in
+                            server/.env on this host. Back that file up before
+                            moving or reinstalling Wyvern — without it, stored
+                            files cannot be decrypted.
+                          </Box>
+                        )}
+                      {saved.remainingMissing &&
+                        saved.remainingMissing.length > 0 && (
+                          <Box component="div" sx={{ mt: 1 }}>
+                            Still missing on the server:{' '}
+                            {saved.remainingMissing.join(', ')}.
+                          </Box>
+                        )}
+                      {saved.remainingInvalid &&
+                        saved.remainingInvalid.length > 0 && (
+                          <Box component="div" sx={{ mt: 1 }}>
+                            Still invalid on the server:{' '}
+                            {saved.remainingInvalid
+                              .map(
+                                (item) =>
+                                  `${item.key}${
+                                    item.message ? ` — ${item.message}` : ''
+                                  }`
+                              )
+                              .join(', ')}
+                            .
+                          </Box>
+                        )}
+                    </Alert>
+                  )}
+
+                  <Button
+                    variant="contained"
+                    size="large"
+                    type="submit"
+                    data-testid="setup-save"
+                    disabled={saving || keyInvalid}
+                    startIcon={
+                      saving ? (
+                        <CircularProgress size={18} color="inherit" />
+                      ) : (
+                        <FontAwesomeIcon icon={faFloppyDisk} aria-hidden="true" />
+                      )
+                    }
+                    sx={{ alignSelf: 'flex-start' }}
+                  >
+                    Save on this server
+                  </Button>
+                </Box>
+              </Paper>
+            )}
+
             <Paper
               variant="outlined"
-              data-testid="setup-diagnostics"
-              sx={{ p: 3, mb: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
+              sx={{ p: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
             >
-              <Typography variant="h3" component="h2" sx={{ mb: 1.5 }}>
-                What&apos;s left
+              <RuledTitle>Restart &amp; check</RuledTitle>
+              <Typography variant="body1" sx={{ color: 'inkMuted', mb: 2 }}>
+                Restart the server, then come back here.
               </Typography>
-              {missing.length > 0 && (
-                <Box sx={{ mb: invalid.length > 0 ? 2 : 0 }}>
-                  {missing.map((key) => (
-                    <Box
-                      key={key}
-                      data-testid={`missing-var-${key}`}
-                      sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}
-                    >
-                      <FontAwesomeIcon
-                        icon={faTriangleExclamation}
-                        aria-hidden="true"
-                        sx={{ color: 'inkMuted', fontSize: 14, flexShrink: 0 }}
-                      />
-                      <Typography
-                        variant="body2"
-                        sx={{ color: 'inkMuted', minWidth: 64, flexShrink: 0 }}
-                      >
-                        Missing
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        component="code"
-                        sx={{ fontFamily: 'monospace' }}
-                      >
-                        {key}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Box>
-              )}
-              {invalid.length > 0 && (
-                <Box>
-                  {invalid.map((item) => (
-                    <Box
-                      key={item.key}
-                      data-testid={`invalid-var-${item.key}`}
-                      sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}
-                    >
-                      <FontAwesomeIcon
-                        icon={faTriangleExclamation}
-                        aria-hidden="true"
-                        sx={{ color: 'inkMuted', fontSize: 14, flexShrink: 0 }}
-                      />
-                      <Typography
-                        variant="body2"
-                        sx={{ color: 'inkMuted', minWidth: 64, flexShrink: 0 }}
-                      >
-                        Invalid
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        component="code"
-                        sx={{ fontFamily: 'monospace' }}
-                      >
-                        {item.key}
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: 'inkMuted' }}>
-                        &mdash; {item.message}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Box>
-              )}
+              <Button
+                variant="contained"
+                size="large"
+                onClick={onRetry}
+                startIcon={
+                  <FontAwesomeIcon icon={faRotateRight} aria-hidden="true" />
+                }
+                data-testid="setup-recheck"
+              >
+                Recheck
+              </Button>
             </Paper>
-          )}
 
-          <Paper
-            variant="outlined"
-            sx={{ p: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
-          >
-            <Typography variant="h3" component="h2" sx={{ mb: 1 }}>
-              For your users
-            </Typography>
-            <Typography variant="body1" sx={{ color: 'inkMuted' }}>
-              Once sign-in works, people sign in with Discord and connect their
-              own storage in about a minute — no technical knowledge needed.
-            </Typography>
-          </Paper>
-        </>
+            {hasDiagnostics && (
+              <Paper
+                variant="outlined"
+                data-testid="setup-diagnostics"
+                sx={{ p: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
+              >
+                <RuledTitle>What&apos;s left</RuledTitle>
+                {missing.length > 0 && (
+                  <Box sx={{ mb: invalid.length > 0 ? 2 : 0 }}>
+                    {missing.map((key) => (
+                      <Box
+                        key={key}
+                        data-testid={`missing-var-${key}`}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.5,
+                          mb: 1,
+                        }}
+                      >
+                        <FontAwesomeIcon
+                          icon={faTriangleExclamation}
+                          style={{ color: 'inkMuted', fontSize: 14, flexShrink: 0 }}
+                        />
+                        <Typography
+                          variant="body2"
+                          sx={{ color: 'inkMuted', minWidth: 64, flexShrink: 0 }}
+                        >
+                          Missing
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          component="code"
+                          sx={{ fontFamily: MONO }}
+                        >
+                          {key}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+                {invalid.length > 0 && (
+                  <Box>
+                    {invalid.map((item) => (
+                      <Box
+                        key={item.key}
+                        data-testid={`invalid-var-${item.key}`}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.5,
+                          mb: 1,
+                        }}
+                      >
+                        <FontAwesomeIcon
+                          icon={faTriangleExclamation}
+                          style={{ color: 'inkMuted', fontSize: 14, flexShrink: 0 }}
+                        />
+                        <Typography
+                          variant="body2"
+                          sx={{ color: 'inkMuted', minWidth: 64, flexShrink: 0 }}
+                        >
+                          Invalid
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          component="code"
+                          sx={{ fontFamily: MONO }}
+                        >
+                          {item.key}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'inkMuted' }}>
+                          &mdash; {item.message}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Paper>
+            )}
+          </Box>
+        </Box>
       )}
     </Box>
   );

@@ -8,7 +8,6 @@ import React, {
 import {
   Box,
   Button,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -26,7 +25,6 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowRightArrowLeft,
   faDownload,
-  faFolderOpen,
   faFolderPlus,
   faFolderTree,
   faMagnifyingGlass,
@@ -60,7 +58,11 @@ import {
 } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
 import DialogTransition from '../motion/DialogTransition';
-import { gradients } from '../theme';
+import ScreenLoader from '../components/ScreenLoader';
+
+// Signal Deck measurement readout face — mono is reserved for counts and
+// data values, never body copy.
+const MONO = 'ui-monospace, SFMono-Regular, Consolas, monospace';
 
 let nextJobId = 1;
 
@@ -698,18 +700,7 @@ export default function DrivePage() {
   );
 
   if (loading) {
-    return (
-      <Box
-        sx={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <CircularProgress aria-label="Loading" />
-      </Box>
-    );
+    return <ScreenLoader />;
   }
 
   if (!user) {
@@ -718,9 +709,18 @@ export default function DrivePage() {
 
   return (
     <AppShell title="Drive">
+      {/* Bottom padding keeps the fixed transfer console from covering the
+          last rows of the manifest, especially on small screens. */}
+      <Box sx={{ pb: { xs: 12, md: 2 } }}>
       {notice && <ErrorNotice error={notice} onRetry={reload} />}
 
+      {/* Command deck: search spans the primary column; the amber Upload
+          action leads, grouped secondary controls follow; the view segment
+          and quota readout sit in utility cells. Below 768px the search
+          stacks full-width and the actions wrap without horizontal overflow. */}
       <Box
+        component="section"
+        aria-label="Drive commands"
         sx={{
           display: 'flex',
           flexWrap: 'wrap',
@@ -734,7 +734,10 @@ export default function DrivePage() {
           placeholder="Search files and folders"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          sx={{ flexGrow: 1, minWidth: 220 }}
+          sx={{
+            flex: isDesktop ? '1 1 220px' : '1 1 100%',
+            minWidth: 0,
+          }}
           inputProps={{ 'aria-label': 'Search files and folders' }}
           InputProps={{
             startAdornment: (
@@ -771,17 +774,40 @@ export default function DrivePage() {
           New folder
         </Button>
         {isDesktop && (
-          <Box sx={{ display: 'inline-flex', gap: 1 }}>
+          <Box
+            role="group"
+            aria-label="View"
+            sx={{
+              display: 'inline-flex',
+              border: 1,
+              borderColor: 'hairline',
+              borderRadius: 1,
+              overflow: 'hidden',
+              bgcolor: 'surface1',
+            }}
+          >
             <IconButton
               aria-label="List view"
               aria-pressed={view === 'list'}
               onClick={() => setView('list')}
               sx={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                color: view === 'list' ? 'ink' : 'inkMuted',
-                bgcolor: view === 'list' ? 'surface2' : 'transparent',
+                position: 'relative',
+                width: 34,
+                height: 34,
+                borderRadius: 0,
+                color: view === 'list' ? 'signal' : 'inkMuted',
+                bgcolor: view === 'list' ? 'signalSoft' : 'transparent',
+                '&::after': view === 'list'
+                  ? {
+                      content: '""',
+                      position: 'absolute',
+                      left: '25%',
+                      right: '25%',
+                      bottom: 2,
+                      height: 2,
+                      bgcolor: 'signal',
+                    }
+                  : {},
               }}
             >
               <FontAwesomeIcon icon={faTableList} />
@@ -791,11 +817,25 @@ export default function DrivePage() {
               aria-pressed={view === 'grid'}
               onClick={() => setView('grid')}
               sx={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                color: view === 'grid' ? 'ink' : 'inkMuted',
-                bgcolor: view === 'grid' ? 'surface2' : 'transparent',
+                position: 'relative',
+                width: 34,
+                height: 34,
+                borderRadius: 0,
+                color: view === 'grid' ? 'signal' : 'inkMuted',
+                bgcolor: view === 'grid' ? 'signalSoft' : 'transparent',
+                borderLeft: 1,
+                borderColor: 'hairlineSoft',
+                '&::after': view === 'grid'
+                  ? {
+                      content: '""',
+                      position: 'absolute',
+                      left: '25%',
+                      right: '25%',
+                      bottom: 2,
+                      height: 2,
+                      bgcolor: 'signal',
+                    }
+                  : {},
               }}
             >
               <FontAwesomeIcon icon={faTableCellsLarge} />
@@ -833,9 +873,9 @@ export default function DrivePage() {
           data-testid="selection-bar"
           sx={{
             bgcolor: 'surface2',
-            borderRadius: '20px',
-            px: 3,
-            py: 1.5,
+            borderRadius: '12px',
+            px: 2,
+            py: 1,
             mb: 2,
             display: 'flex',
             flexWrap: 'wrap',
@@ -843,7 +883,17 @@ export default function DrivePage() {
             alignItems: 'center',
           }}
         >
-          <Typography variant="caption" color="ink" sx={{ mr: 1 }}>
+          <Typography
+            variant="caption"
+            component="span"
+            sx={{
+              fontFamily: MONO,
+              color: 'ink',
+              letterSpacing: '0.04em',
+              whiteSpace: 'nowrap',
+              mr: 1,
+            }}
+          >
             {selectedIds.size} selected
           </Typography>
           <Button
@@ -889,6 +939,7 @@ export default function DrivePage() {
             Move
           </Button>
           <Button
+            variant="outlined"
             size="small"
             color="error"
             startIcon={<FontAwesomeIcon icon={faTrash} />}
@@ -972,47 +1023,73 @@ export default function DrivePage() {
             <Box
               data-testid="empty-state"
               sx={{
-                background: gradients.violet,
-                borderRadius: '30px',
-                p: 8,
+                position: 'relative',
+                overflow: 'hidden',
+                bgcolor: 'surface1',
+                border: 1,
+                borderColor: 'hairline',
+                borderRadius: '12px',
+                p: { xs: 5, md: 7 },
                 mt: 3,
                 textAlign: 'center',
                 maxWidth: 560,
                 mx: 'auto',
+                '&::before': {
+                  // Faint fixed-grid atmosphere, CSS-only, low contrast.
+                  content: '""',
+                  position: 'absolute',
+                  inset: 0,
+                  pointerEvents: 'none',
+                  opacity: 0.5,
+                  backgroundImage:
+                    'repeating-linear-gradient(0deg, rgba(193,211,205,0.05) 0 1px, transparent 1px 36px), repeating-linear-gradient(90deg, rgba(193,211,205,0.04) 0 1px, transparent 1px 36px)',
+                },
               }}
             >
-              <FontAwesomeIcon
-                icon={faFolderOpen}
-                size="4x"
-                color="#FFFFFF"
-                aria-hidden="true"
-              />
-              <Typography variant="h2" sx={{ mt: 3, color: '#FFFFFF' }}>
-                Your space is ready
-              </Typography>
-              <Typography
-                variant="caption"
-                component="p"
-                sx={{ mt: 1, mb: 3, color: 'rgba(255,255,255,0.85)' }}
-              >
-                Your files are encrypted before they&apos;re stored — only you
-                can see them.
-              </Typography>
-              <Button
-                variant="outlined"
-                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+              <Box
                 sx={{
-                  bgcolor: 'rgba(255,255,255,0.14)',
-                  borderColor: 'rgba(255,255,255,0.35)',
-                  color: '#FFFFFF',
-                  '&:hover': {
-                    bgcolor: 'rgba(255,255,255,0.22)',
-                    borderColor: 'rgba(255,255,255,0.35)',
-                  },
+                  position: 'relative',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
                 }}
               >
-                Upload your first file
-              </Button>
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: 'signalSoft',
+                    border: 1,
+                    borderColor: 'focusRing',
+                    borderRadius: '8px',
+                    color: 'signal',
+                  }}
+                  aria-hidden="true"
+                >
+                  <FontAwesomeIcon icon={faUpload} size="lg" />
+                </Box>
+                <Typography variant="h2" sx={{ mt: 3, color: 'ink' }}>
+                  Your space is ready
+                </Typography>
+                <Typography
+                  variant="caption"
+                  component="p"
+                  sx={{ mt: 1, mb: 3, color: 'inkMuted', maxWidth: 420 }}
+                >
+                  Your files are encrypted before they&apos;re stored — only
+                  you can see them.
+                </Typography>
+                <Button
+                  variant="contained"
+                  startIcon={<FontAwesomeIcon icon={faUpload} />}
+                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                >
+                  Upload your first file
+                </Button>
+              </Box>
             </Box>
           </>
         ) : isDesktop ? (
@@ -1130,6 +1207,7 @@ export default function DrivePage() {
         }
         data-testid="delete-snackbar"
       />
+      </Box>
     </AppShell>
   );
 }

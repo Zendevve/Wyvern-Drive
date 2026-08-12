@@ -658,3 +658,106 @@ describe('one-time drag-and-drop hint', () => {
     expect(screen.queryByTestId('drag-drop-hint')).not.toBeInTheDocument();
   });
 });
+
+describe('Signal Deck responsive proof', () => {
+  it('at 1024px renders the manifest table with working list/grid view controls', async () => {
+    window.matchMedia = createMatchMedia(1024);
+    client.api.entries.mockResolvedValue({ entries: [fileEntry()] });
+    renderDrive();
+    await screen.findByText('notes.txt');
+
+    expect(screen.getByTestId('entry-table')).toBeInTheDocument();
+    const listToggle = screen.getByRole('button', { name: 'List view' });
+    const gridToggle = screen.getByRole('button', { name: 'Grid view' });
+    expect(listToggle).toHaveAttribute('aria-pressed', 'true');
+    expect(gridToggle).toHaveAttribute('aria-pressed', 'false');
+
+    userEvent.click(gridToggle);
+    expect(await screen.findByTestId('entry-grid')).toBeInTheDocument();
+    expect(screen.queryByTestId('entry-table')).not.toBeInTheDocument();
+    expect(listToggle).toHaveAttribute('aria-pressed', 'false');
+    expect(gridToggle).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('at 1024px shows the selection bar with a count and a delete action after selecting a row', async () => {
+    window.matchMedia = createMatchMedia(1024);
+    client.api.entries.mockResolvedValue({ entries: [fileEntry()] });
+    renderDrive();
+    await screen.findByText('notes.txt');
+    expect(screen.queryByTestId('selection-bar')).not.toBeInTheDocument();
+
+    userEvent.click(screen.getByRole('checkbox', { name: 'Select notes.txt' }));
+    const bar = await screen.findByTestId('selection-bar');
+    expect(within(bar).getByText('1 selected')).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it('at 500px renders touch cards with always-visible actions and no fixed-width overflow source', async () => {
+    window.matchMedia = createMatchMedia(500);
+    client.api.entries.mockResolvedValue({
+      entries: [fileEntry(), folderEntry()],
+    });
+    renderDrive();
+    await screen.findByText('notes.txt');
+
+    const cards = screen.getByTestId('entry-cards');
+    expect(cards).toBeInTheDocument();
+    expect(screen.queryByTestId('entry-table')).not.toBeInTheDocument();
+
+    // Cards have no hover-only .row-actions reveal: every action is visible
+    // on touch without any hover state.
+    const deleteButton = screen.getByRole('button', { name: 'Delete notes.txt' });
+    expect(deleteButton.closest('.row-actions')).toBeNull();
+
+    // No fixed pixel width anywhere in the cards chain: the list carries no
+    // inline style and each card surface is 100% of its parent, so nothing
+    // can exceed the viewport width.
+    expect(cards).not.toHaveAttribute('style');
+    const card = deleteButton.closest('.MuiCard-root');
+    expect(card).toHaveStyle({ width: '100%' });
+
+    // jsdom does not compute layout, so this is a canary only; the
+    // structural guarantees above are the real assertions.
+    expect(document.body.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
+  });
+
+  it('at 500px keeps the transfer console inside the viewport', async () => {
+    window.matchMedia = createMatchMedia(500);
+    client.uploadFile.mockImplementation(
+      ({ onProgress }) =>
+        new Promise((resolve) => {
+          onProgress(50, 100);
+        })
+    );
+    renderDrive();
+    await screen.findByTestId('empty-state');
+
+    const file = new File(['hello world'], 'hello.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByTestId('file-input'), {
+      target: { files: [file] },
+    });
+
+    const queue = await screen.findByTestId('upload-queue');
+    // The console is clamped to the viewport edge on narrow screens; sx is
+    // injected as a class rule, so assert through the computed style.
+    expect(queue).toHaveStyle({ maxWidth: 'calc(100vw - 16px)' });
+  });
+
+  it('empty state: the primary CTA is the amber contained action', async () => {
+    window.matchMedia = createMatchMedia(1024);
+    renderDrive();
+    const empty = await screen.findByTestId('empty-state');
+    expect(
+      within(empty).getByRole('heading', { name: 'Your space is ready' })
+    ).toBeInTheDocument();
+    expect(
+      within(empty).getByText(
+        /Your files are encrypted before they're stored — only you can see them/
+      )
+    ).toBeInTheDocument();
+    const cta = within(empty).getByRole('button', {
+      name: /upload your first file/i,
+    });
+    expect(cta.className).toContain('MuiButton-contained');
+  });
+});

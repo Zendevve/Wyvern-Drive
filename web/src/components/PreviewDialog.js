@@ -87,8 +87,25 @@ export default function PreviewDialog({ entry, onClose }) {
       fullWidth
       TransitionComponent={DialogTransition}
     >
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="subtitle1" noWrap sx={{ flexGrow: 1 }} component="span">
+      <DialogTitle
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          borderBottom: '1px solid',
+          borderColor: 'hairline',
+        }}
+      >
+        <Typography
+          variant="subtitle1"
+          noWrap
+          sx={{
+            flexGrow: 1,
+            fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+            fontSize: 13,
+          }}
+          component="span"
+        >
           {entry ? entry.name : ''}
         </Typography>
         <IconButton
@@ -113,7 +130,7 @@ export default function PreviewDialog({ entry, onClose }) {
               width: 'auto',
               height: 'auto',
               mx: 'auto',
-              borderRadius: '10px',
+              borderRadius: '8px',
             }}
           />
         )}
@@ -122,7 +139,7 @@ export default function PreviewDialog({ entry, onClose }) {
             controls
             autoPlay
             src={src}
-            style={{ width: '100%', maxHeight: '70vh', borderRadius: '10px' }}
+            style={{ width: '100%', maxHeight: '70vh', borderRadius: '8px' }}
           />
         )}
         {isAudio && (
@@ -136,13 +153,21 @@ export default function PreviewDialog({ entry, onClose }) {
               width: '100%',
               height: 600,
               border: 'none',
-              borderRadius: '10px',
+              borderRadius: '8px',
               backgroundColor: '#FFFFFF',
             }}
           />
         )}
         {isText && (
-          <Box sx={{ bgcolor: 'surface1', borderRadius: '10px', p: 2 }}>
+          <Box
+            sx={{
+              bgcolor: 'surface1',
+              border: '1px solid',
+              borderColor: 'hairline',
+              borderRadius: '8px',
+              p: 2,
+            }}
+          >
             {textLoading && (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                 <CircularProgress size={28} aria-label="Loading preview" />
@@ -154,20 +179,22 @@ export default function PreviewDialog({ entry, onClose }) {
               </Typography>
             )}
             {textContent !== null && (
-              <pre
-                style={{
-                  margin: 0,
+              <Box
+                component="pre"
+                sx={{
+                  m: 0,
                   maxHeight: '70vh',
                   overflow: 'auto',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
-                  color: '#FFFFFF',
+                  color: 'ink',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
                   fontSize: 13,
                   lineHeight: 1.5,
                 }}
               >
                 {textContent}
-              </pre>
+              </Box>
             )}
           </Box>
         )}

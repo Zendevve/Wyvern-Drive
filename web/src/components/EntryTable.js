@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Checkbox,
-  IconButton,
   Paper,
   Table,
   TableBody,
@@ -14,24 +13,11 @@ import {
   Typography,
 } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-  faArrowRightArrowLeft,
-  faCopy,
-  faDownload,
-  faEye,
-  faPen,
-  faShareNodes,
-  faSortDown,
-  faSortUp,
-  faTrash,
-} from '@fortawesome/free-solid-svg-icons';
-import {
-  archiveUrl,
-  downloadUrl,
-  isPreviewableMime,
-} from '../api/client';
+import { faSortDown, faSortUp } from '@fortawesome/free-solid-svg-icons';
+import { isPreviewableMime } from '../api/client';
 import { formatBytes } from './QuotaMeter';
 import { entryIcon } from './entryIcons';
+import EntryActions from './EntryActions';
 
 function formatDate(value) {
   return new Date(value).toLocaleString();
@@ -65,6 +51,13 @@ function SortHeader({ label, field, sort, direction, onSort, align }) {
   );
 }
 
+/**
+ * Desktop list view — a ruled manifest ledger on a non-card surface.
+ * The theme already styles TableCell head as uppercase micro labels; the
+ * selected row carries the signal treatment (signalSoft fill + amber left
+ * edge), and the action shelf stays hidden until the row is hovered or
+ * focused (keyboard-reachable via Tab).
+ */
 export default function EntryTable({
   entries,
   sort,
@@ -83,11 +76,19 @@ export default function EntryTable({
     <TableContainer
       component={Paper}
       data-testid="entry-table"
-      sx={{ overflow: 'hidden' }}
+      variant="outlined"
+      sx={{ overflow: 'hidden', bgcolor: 'surface1' }}
     >
-      <Table aria-label="Files and folders" sx={{ '& .MuiTableCell-root': { py: 2 } }}>
+      <Table aria-label="Files and folders" sx={{ '& .MuiTableCell-root': { py: 1.5 } }}>
         <TableHead>
-          <TableRow>
+          <TableRow
+            sx={{
+              '& .MuiTableCell-head': {
+                color: 'inkMuted',
+                borderBottomColor: 'hairline',
+              },
+            }}
+          >
             <TableCell padding="checkbox">
               <Checkbox
                 size="small"
@@ -176,8 +177,13 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
         cursor: 'pointer',
         bgcolor: 'canvas',
         '&:hover': { bgcolor: 'surface1' },
-        '&.Mui-selected': { bgcolor: 'surface2' },
-        '&.Mui-selected:hover': { bgcolor: 'surface2' },
+        '&.Mui-selected': {
+          bgcolor: 'signalSoft',
+          '& .MuiTableCell-root:first-of-type': {
+            boxShadow: 'inset 3px 0 0 0 rgba(217,164,65,0.9)',
+          },
+        },
+        '&.Mui-selected:hover': { bgcolor: 'rgba(217,164,65,0.22)' },
         '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
       }}
     >
@@ -215,12 +221,26 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
         )}
       </TableCell>
       <TableCell align="right">
-        <Typography variant="body2" component="span" sx={{ color: 'inkMuted' }}>
+        <Typography
+          variant="body2"
+          component="span"
+          sx={{
+            color: 'inkMuted',
+            fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+          }}
+        >
           {isFolder ? '—' : formatBytes(entry.sizeBytes)}
         </Typography>
       </TableCell>
       <TableCell>
-        <Typography variant="body2" component="span" sx={{ color: 'inkMuted' }}>
+        <Typography
+          variant="body2"
+          component="span"
+          sx={{
+            color: 'inkMuted',
+            fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+          }}
+        >
           {formatDate(entry.updatedAt)}
         </Typography>
       </TableCell>
@@ -230,93 +250,15 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
         sx={{
           whiteSpace: 'nowrap',
           opacity: 0,
-          color: 'text.secondary',
-          transition: 'opacity 120ms ease',
+          transition: 'opacity 140ms ease',
         }}
       >
-        {isFolder ? (
-          <IconButton
-            component="a"
-            href={archiveUrl(entry.id)}
-            size="small"
-            aria-label={`Download ${entry.name}`}
-            title="Download"
-            onClick={stop()}
-          >
-            <FontAwesomeIcon icon={faDownload} />
-          </IconButton>
-        ) : (
-          <>
-            {previewable && (
-              <IconButton
-                size="small"
-                aria-label={`Preview ${entry.name}`}
-                title="Preview"
-                onClick={stop(() => actions.onPreview && actions.onPreview(entry))}
-              >
-                <FontAwesomeIcon icon={faEye} />
-              </IconButton>
-            )}
-            <IconButton
-              component="a"
-              href={downloadUrl(entry.id)}
-              size="small"
-              aria-label={`Download ${entry.name}`}
-              title="Download"
-              onClick={stop()}
-            >
-              <FontAwesomeIcon icon={faDownload} />
-            </IconButton>
-            <IconButton
-              size="small"
-              aria-label={`Share ${entry.name}`}
-              title="Share"
-              onClick={stop(() => actions.onShare(entry))}
-            >
-              <FontAwesomeIcon icon={faShareNodes} />
-            </IconButton>
-          </>
-        )}
-        <IconButton
+        <EntryActions
+          entry={entry}
+          actions={actions}
+          previewable={previewable}
           size="small"
-          aria-label={`Rename ${entry.name}`}
-          title="Rename"
-          onClick={stop(() => actions.onRename(entry))}
-        >
-          <FontAwesomeIcon icon={faPen} />
-        </IconButton>
-        <IconButton
-          size="small"
-          aria-label={`Move ${entry.name}`}
-          title="Move"
-          onClick={stop(() => actions.onMove(entry))}
-        >
-          <FontAwesomeIcon icon={faArrowRightArrowLeft} />
-        </IconButton>
-        <IconButton
-          size="small"
-          aria-label={`Copy ${entry.name}`}
-          title="Copy"
-          onClick={stop(() => actions.onCopy(entry))}
-        >
-          <FontAwesomeIcon icon={faCopy} />
-        </IconButton>
-        <IconButton
-          size="small"
-          aria-label={`Delete ${entry.name}`}
-          title="Delete"
-          color="error"
-          onClick={stop(() => actions.onDelete(entry))}
-          sx={{
-            color: 'error.main',
-            '&:hover': {
-              color: '#FF7575',
-              backgroundColor: 'rgba(255,92,92,0.08)',
-            },
-          }}
-        >
-          <FontAwesomeIcon icon={faTrash} />
-        </IconButton>
+        />
       </TableCell>
     </TableRow>
   );

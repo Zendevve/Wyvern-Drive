@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { Box, CircularProgress } from '@mui/material';
 import theme from './theme';
 import { AuthProvider } from './auth/AuthProvider';
 import { api } from './api/client';
+import ScreenLoader from './components/ScreenLoader';
 import LoginPage from './pages/LoginPage';
 import DrivePage from './pages/DrivePage';
 import SharePage from './pages/SharePage';
@@ -13,21 +13,6 @@ import SettingsPage from './pages/SettingsPage';
 import SetupPage from './pages/SetupPage';
 import TrashPage from './pages/TrashPage';
 import WebhookSetupPage from './pages/WebhookSetupPage';
-
-function FullScreenLoader() {
-  return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <CircularProgress aria-label="Loading" />
-    </Box>
-  );
-}
 
 /**
  * First-run gate: calls GET /api/setup/status before AuthProvider mounts so an
@@ -53,7 +38,7 @@ function SetupGate({ children }) {
   }, [refresh]);
 
   if (state.phase === 'loading') {
-    return <FullScreenLoader />;
+    return <ScreenLoader />;
   }
 
   if (state.phase === 'error') {

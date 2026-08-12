@@ -8,6 +8,23 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFolderOpen } from '@fortawesome/free-solid-svg-icons';
 
+// Route-trail face: mono keeps the trail in the measurement/data register
+// while the links stay keyboard-accessible buttons.
+const ROUTE_MONO = "'ui-monospace', SFMono-Regular, Consolas, monospace";
+
+// Long names clip to an ellipsis instead of overflowing the rail or mobile
+// viewport; MUI Breadcrumbs wraps, so clipped crumbs never cause a scroll.
+const crumbLinkSx = {
+  color: 'inkMuted',
+  fontFamily: ROUTE_MONO,
+  maxWidth: 200,
+  display: 'inline-block',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  '&:hover': { color: 'ink' },
+};
+
 /**
  * Breadcrumb trail. `trail` is an array of { id, name } ancestor folders,
  * newest last; an empty array means the root. `onNavigate(null)` goes home.
@@ -15,17 +32,27 @@ import { faFolderOpen } from '@fortawesome/free-solid-svg-icons';
 export default function Breadcrumbs({ trail, onNavigate }) {
   const parts = trail || [];
   return (
-    <MuiBreadcrumbs aria-label="breadcrumb" sx={{ mb: 2 }}>
-      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center' }}>
+    <MuiBreadcrumbs
+      aria-label="breadcrumb"
+      sx={{
+        mb: 2,
+        // hairline dividers: the route trail reads as ruled, not bulleted
+        '& .MuiBreadcrumbs-separator': { color: 'hairline' },
+      }}
+    >
+      <Box
+        component="span"
+        sx={{ display: 'inline-flex', alignItems: 'center', color: 'inkMuted' }}
+      >
         <FontAwesomeIcon
           icon={faFolderOpen}
           aria-hidden="true"
-          style={{ fontSize: 16, marginRight: 8, color: '#999999' }}
+          style={{ fontSize: 16, marginRight: 8 }}
         />
         <Link
           component="button"
           underline="hover"
-          sx={{ color: 'inkMuted', '&:hover': { color: 'ink' } }}
+          sx={crumbLinkSx}
           onClick={() => onNavigate(null)}
         >
           My drive
@@ -40,6 +67,8 @@ export default function Breadcrumbs({ trail, onNavigate }) {
               color="text.primary"
               fontWeight={500}
               aria-current="page"
+              noWrap
+              sx={{ maxWidth: 220, fontFamily: ROUTE_MONO }}
             >
               {part.name}
             </Typography>
@@ -50,7 +79,7 @@ export default function Breadcrumbs({ trail, onNavigate }) {
             component="button"
             key={part.id}
             underline="hover"
-            sx={{ color: 'inkMuted', '&:hover': { color: 'ink' } }}
+            sx={crumbLinkSx}
             onClick={() => onNavigate(part.id)}
           >
             {part.name}

@@ -4,28 +4,15 @@ import {
   Button,
   Card,
   CardContent,
-  IconButton,
   List,
   ListItem,
   Typography,
 } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-  faArrowRightArrowLeft,
-  faCopy,
-  faDownload,
-  faEye,
-  faPen,
-  faShareNodes,
-  faTrash,
-} from '@fortawesome/free-solid-svg-icons';
-import {
-  archiveUrl,
-  downloadUrl,
-  isPreviewableMime,
-} from '../api/client';
+import { isPreviewableMime } from '../api/client';
 import { formatBytes } from './QuotaMeter';
 import { entryIcon, fileTypeLabel } from './entryIcons';
+import EntryActions from './EntryActions';
 
 function formatDate(value) {
   return new Date(value).toLocaleString();
@@ -34,7 +21,10 @@ function formatDate(value) {
 /**
  * Stacked accessible cards used below 768px. Receives the exact same
  * row/action model as EntryTable so mobile and desktop behave identically.
- * Action buttons stay always visible here — touch has no hover state.
+ * Action buttons stay always visible here — touch has no hover state, and
+ * the cards have no surface onClick (only onDoubleClick), so EntryActions
+ * runs with stopPropagation={false} exactly like the previous no-stop
+ * handlers.
  */
 export default function EntryCards({ entries, actions, onPreview }) {
   const handlePreview = onPreview || (actions && actions.onPreview);
@@ -58,7 +48,7 @@ export default function EntryCards({ entries, actions, onPreview }) {
                   handlePreview(entry);
                 }
               }}
-              sx={{ width: '100%', borderRadius: '15px', bgcolor: 'surface1' }}
+              sx={{ width: '100%', borderRadius: 6, bgcolor: 'surface1' }}
             >
               <CardContent
                 sx={{
@@ -90,83 +80,24 @@ export default function EntryCards({ entries, actions, onPreview }) {
                       {entry.name}
                     </Typography>
                   )}
-                  <Typography variant="caption" color="textSecondary" component="p">
+                  <Typography
+                    variant="caption"
+                    component="p"
+                    sx={{
+                      color: 'inkMuted',
+                      fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+                    }}
+                  >
                     {meta}
                   </Typography>
                 </Box>
-                {isFolder ? (
-                  <IconButton
-                    component="a"
-                    href={archiveUrl(entry.id)}
-                    aria-label={`Download ${entry.name}`}
-                    title="Download"
-                  >
-                    <FontAwesomeIcon icon={faDownload} />
-                  </IconButton>
-                ) : (
-                  <>
-                    {previewable && (
-                      <IconButton
-                        aria-label={`Preview ${entry.name}`}
-                        title="Preview"
-                        onClick={() => handlePreview && handlePreview(entry)}
-                      >
-                        <FontAwesomeIcon icon={faEye} />
-                      </IconButton>
-                    )}
-                    <IconButton
-                      component="a"
-                      href={downloadUrl(entry.id)}
-                      aria-label={`Download ${entry.name}`}
-                      title="Download"
-                    >
-                      <FontAwesomeIcon icon={faDownload} />
-                    </IconButton>
-                    <IconButton
-                      aria-label={`Share ${entry.name}`}
-                      title="Share"
-                      onClick={() => actions.onShare(entry)}
-                    >
-                      <FontAwesomeIcon icon={faShareNodes} />
-                    </IconButton>
-                  </>
-                )}
-                <IconButton
-                  aria-label={`Rename ${entry.name}`}
-                  title="Rename"
-                  onClick={() => actions.onRename(entry)}
-                >
-                  <FontAwesomeIcon icon={faPen} />
-                </IconButton>
-                <IconButton
-                  aria-label={`Move ${entry.name}`}
-                  title="Move"
-                  onClick={() => actions.onMove(entry)}
-                >
-                  <FontAwesomeIcon icon={faArrowRightArrowLeft} />
-                </IconButton>
-                <IconButton
-                  aria-label={`Copy ${entry.name}`}
-                  title="Copy"
-                  onClick={() => actions.onCopy(entry)}
-                >
-                  <FontAwesomeIcon icon={faCopy} />
-                </IconButton>
-                <IconButton
-                  aria-label={`Delete ${entry.name}`}
-                  title="Delete"
-                  color="error"
-                  onClick={() => actions.onDelete(entry)}
-                  sx={{
-                    color: 'error.main',
-                    '&:hover': {
-                      color: '#FF7575',
-                      backgroundColor: 'rgba(255,92,92,0.08)',
-                    },
-                  }}
-                >
-                  <FontAwesomeIcon icon={faTrash} />
-                </IconButton>
+                <EntryActions
+                  entry={entry}
+                  actions={actions}
+                  previewable={previewable}
+                  size="medium"
+                  stopPropagation={false}
+                />
               </CardContent>
             </Card>
           </ListItem>

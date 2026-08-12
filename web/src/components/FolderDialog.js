@@ -63,7 +63,9 @@ export default function FolderDialog({
       fullWidth
       TransitionComponent={DialogTransition}
     >
-      <DialogTitle>{title}</DialogTitle>
+      <DialogTitle sx={{ borderBottom: '1px solid', borderColor: 'hairline' }}>
+        {title}
+      </DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="inkMuted" sx={{ mb: 2 }}>
           {description}

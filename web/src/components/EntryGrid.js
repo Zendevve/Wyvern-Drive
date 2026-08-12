@@ -3,36 +3,24 @@ import {
   Box,
   Button,
   Checkbox,
-  IconButton,
   Paper,
   Typography,
 } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-  faArrowRightArrowLeft,
-  faCopy,
-  faDownload,
-  faEye,
-  faPen,
-  faShareNodes,
-  faTrash,
-} from '@fortawesome/free-solid-svg-icons';
-import {
-  archiveUrl,
-  downloadUrl,
-  isPreviewableMime,
-} from '../api/client';
+import { isPreviewableMime } from '../api/client';
 import { formatBytes } from './QuotaMeter';
 import { entryIcon, fileTypeLabel } from './entryIcons';
+import EntryActions from './EntryActions';
 
 function formatDate(value) {
   return new Date(value).toLocaleString();
 }
 
 /**
- * Desktop grid view (Google Drive "grid" style). Each entry is a card;
- * clicking the card surface toggles selection, while the folder name button
- * and the action row stop propagation and keep their own behaviour.
+ * Desktop grid view — fixed-cell file tiles. Each tile is a graphite cell
+ * with a hairline border; clicking the tile surface toggles selection, while
+ * the folder name button and the action shelf stop propagation and keep their
+ * own behaviour. Selected tiles carry the signal border + signalSoft fill.
  */
 export default function EntryGrid({
   entries,
@@ -94,17 +82,18 @@ function GridCard({ entry, actions, selected, onToggleSelect }) {
       onDoubleClick={handleDoubleClick}
       sx={{
         position: 'relative',
-        borderRadius: '15px',
+        borderRadius: 6,
         p: 1.5,
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
         gap: 0.5,
-        bgcolor: selected ? 'surface2' : 'surface1',
-        transition: 'background-color 150ms ease, box-shadow 150ms ease',
+        bgcolor: selected ? 'signalSoft' : 'surface1',
+        borderColor: selected ? 'signal' : 'hairlineSoft',
+        transition: 'background-color 160ms ease, border-color 160ms ease',
         '&:hover': {
-          bgcolor: 'surface2',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), 0 10px 30px rgba(0,0,0,0.25)',
+          bgcolor: selected ? 'rgba(217,164,65,0.22)' : 'surface2',
+          borderColor: selected ? 'signal' : 'hairline',
         },
         '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
       }}
@@ -159,7 +148,15 @@ function GridCard({ entry, actions, selected, onToggleSelect }) {
           {entry.name}
         </Typography>
       )}
-      <Typography variant="caption" color="textSecondary" noWrap>
+      <Typography
+        variant="caption"
+        component="p"
+        noWrap
+        sx={{
+          color: 'inkMuted',
+          fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+        }}
+      >
         {meta}
       </Typography>
       <Box
@@ -170,92 +167,15 @@ function GridCard({ entry, actions, selected, onToggleSelect }) {
           gap: 0.5,
           mt: 0.5,
           opacity: 0,
-          transition: 'opacity 120ms ease',
+          transition: 'opacity 140ms ease',
         }}
       >
-        {isFolder ? (
-          <IconButton
-            component="a"
-            href={archiveUrl(entry.id)}
-            size="small"
-            aria-label={`Download ${entry.name}`}
-            title="Download"
-            onClick={stop()}
-          >
-            <FontAwesomeIcon icon={faDownload} />
-          </IconButton>
-        ) : (
-          <>
-            {previewable && (
-              <IconButton
-                size="small"
-                aria-label={`Preview ${entry.name}`}
-                title="Preview"
-                onClick={stop(() => actions.onPreview && actions.onPreview(entry))}
-              >
-                <FontAwesomeIcon icon={faEye} />
-              </IconButton>
-            )}
-            <IconButton
-              component="a"
-              href={downloadUrl(entry.id)}
-              size="small"
-              aria-label={`Download ${entry.name}`}
-              title="Download"
-              onClick={stop()}
-            >
-              <FontAwesomeIcon icon={faDownload} />
-            </IconButton>
-            <IconButton
-              size="small"
-              aria-label={`Share ${entry.name}`}
-              title="Share"
-              onClick={stop(() => actions.onShare(entry))}
-            >
-              <FontAwesomeIcon icon={faShareNodes} />
-            </IconButton>
-          </>
-        )}
-        <IconButton
+        <EntryActions
+          entry={entry}
+          actions={actions}
+          previewable={previewable}
           size="small"
-          aria-label={`Rename ${entry.name}`}
-          title="Rename"
-          onClick={stop(() => actions.onRename(entry))}
-        >
-          <FontAwesomeIcon icon={faPen} />
-        </IconButton>
-        <IconButton
-          size="small"
-          aria-label={`Move ${entry.name}`}
-          title="Move"
-          onClick={stop(() => actions.onMove(entry))}
-        >
-          <FontAwesomeIcon icon={faArrowRightArrowLeft} />
-        </IconButton>
-        <IconButton
-          size="small"
-          aria-label={`Copy ${entry.name}`}
-          title="Copy"
-          onClick={stop(() => actions.onCopy(entry))}
-        >
-          <FontAwesomeIcon icon={faCopy} />
-        </IconButton>
-        <IconButton
-          size="small"
-          aria-label={`Delete ${entry.name}`}
-          title="Delete"
-          color="error"
-          onClick={stop(() => actions.onDelete(entry))}
-          sx={{
-            color: 'error.main',
-            '&:hover': {
-              color: '#FF7575',
-              backgroundColor: 'rgba(255,92,92,0.08)',
-            },
-          }}
-        >
-          <FontAwesomeIcon icon={faTrash} />
-        </IconButton>
+        />
       </Box>
     </Paper>
   );

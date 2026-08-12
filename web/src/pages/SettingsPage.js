@@ -3,10 +3,7 @@ import {
   Avatar,
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
-  Divider,
   IconButton,
   TextField,
   Typography,
@@ -17,8 +14,21 @@ import { useNavigate } from 'react-router-dom';
 import AppShell from '../components/AppShell';
 import ErrorNotice from '../components/ErrorNotice';
 import QuotaMeter, { formatBytes } from '../components/QuotaMeter';
+import ScreenLoader from '../components/ScreenLoader';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
+
+// Measurement/data role: IDs, webhook numbers, sizes, dates.
+const MONO = "'ui-monospace, SFMono-Regular, Consolas, monospace'";
+
+// Ruled section header shared by the stats band and the webhook ledger.
+const sectionHeader = {
+  color: 'ink',
+  fontSize: 12,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  fontWeight: 600,
+};
 
 function formatDate(value) {
   return new Date(value).toLocaleString();
@@ -124,18 +134,7 @@ export default function SettingsPage() {
   };
 
   if (loading) {
-    return (
-      <Box
-        sx={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <CircularProgress aria-label="Loading" />
-      </Box>
-    );
+    return <ScreenLoader />;
   }
 
   if (!user) {
@@ -144,49 +143,135 @@ export default function SettingsPage() {
 
   return (
     <AppShell title="Settings">
-      <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
-        Settings
-      </Typography>
-      <Card variant="outlined" elevation={0} sx={{ maxWidth: 560, borderRadius: '20px' }}>
-        <CardContent sx={{ p: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <Avatar
-              src={user.avatarUrl || undefined}
-              alt={user.username}
-              sx={{ width: 56, height: 56 }}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 7fr) minmax(0, 5fr)' },
+          gap: 2.5,
+          alignItems: 'start',
+        }}
+      >
+        {/* Identity / health band */}
+        <Box
+          sx={{
+            gridColumn: '1 / -1',
+            bgcolor: 'surface1',
+            border: 1,
+            borderColor: 'hairline',
+            borderRadius: '12px',
+            p: 2.5,
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              alignItems: { xs: 'flex-start', sm: 'center' },
+              gap: 2,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
+              <Avatar
+                src={user.avatarUrl || undefined}
+                alt={user.username}
+                sx={{ width: 48, height: 48, bgcolor: 'surface3', color: 'ink' }}
+              >
+                {user.username ? user.username.charAt(0).toUpperCase() : '?'}
+              </Avatar>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                  {user.username}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="inkMuted"
+                  component="p"
+                  sx={{ fontFamily: MONO }}
+                >
+                  Discord ID: {user.discordId}
+                </Typography>
+              </Box>
+            </Box>
+            <Box
+              sx={{
+                flexGrow: 1,
+                width: { xs: '100%', sm: 'auto' },
+                maxWidth: { xs: '100%', sm: 320 },
+                ml: { sm: 'auto' },
+              }}
             >
-              {user.username ? user.username.charAt(0).toUpperCase() : '?'}
-            </Avatar>
-            <Box>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                {user.username}
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Discord ID: {user.discordId}
-              </Typography>
+              <QuotaMeter drive={drive} />
             </Box>
           </Box>
-          <Divider sx={{ my: 2 }} />
-          <QuotaMeter drive={drive} />
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-            Drive stats
-          </Typography>
-          {statsError ? (
-            <ErrorNotice error={statsError} onRetry={loadStats} />
-          ) : statsLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-              <CircularProgress size={24} aria-label="Loading drive stats" />
+          {drive && (
+            <Box sx={{ borderTop: 1, borderColor: 'hairlineSoft', mt: 2, pt: 2 }}>
+              <Box
+                data-testid="storage-connected"
+                sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+              >
+                <FontAwesomeIcon
+                  icon={faCircleCheck}
+                  aria-hidden="true"
+                  sx={{ color: 'success.main', fontSize: 15, flexShrink: 0 }}
+                />
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Storage connected
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="inkMuted"
+                  sx={{ ml: 'auto', fontFamily: MONO }}
+                >
+                  {webhooksLoading ? '' : `${webhooks.length} connection(s)`}
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="inkMuted" component="p" sx={{ mt: 0.5 }}>
+                Your files are encrypted before they&apos;re stored.
+              </Typography>
             </Box>
-          ) : stats ? (
+          )}
+        </Box>
+
+        {/* Drive stats — ruled number band */}
+        {statsError ? (
+          <Box sx={{ bgcolor: 'surface1', border: 1, borderColor: 'hairline', borderRadius: '12px', p: 2.5 }}>
+            <ErrorNotice error={statsError} onRetry={loadStats} />
+          </Box>
+        ) : statsLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2, bgcolor: 'surface1', border: 1, borderColor: 'hairline', borderRadius: '12px' }}>
+            <CircularProgress size={24} aria-label="Loading drive stats" />
+          </Box>
+        ) : stats ? (
+          <Box
+            data-testid="drive-stats"
+            sx={{
+              bgcolor: 'surface1',
+              border: 1,
+              borderColor: 'hairline',
+              borderRadius: '12px',
+              overflow: 'hidden',
+            }}
+          >
             <Box
-              data-testid="drive-stats"
               sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' },
+                px: 2.5,
+                py: 1.5,
+                borderBottom: 1,
+                borderColor: 'hairlineSoft',
+                display: 'flex',
+                alignItems: 'center',
                 gap: 1.5,
               }}
             >
+              <Box
+                sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'signal', flexShrink: 0 }}
+                aria-hidden="true"
+              />
+              <Typography variant="overline" component="h2" sx={sectionHeader}>
+                Drive stats
+              </Typography>
+            </Box>
+            <Box sx={{ px: 2.5, py: 0.5 }}>
               {[
                 { label: 'Files', value: stats.files },
                 { label: 'Folders', value: stats.folders },
@@ -208,167 +293,205 @@ export default function SettingsPage() {
                 <Box
                   key={item.label}
                   sx={{
-                    bgcolor: 'surface1',
-                    borderRadius: '10px',
-                    px: 2,
-                    py: 1.5,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 2,
+                    py: 1.25,
+                    borderBottom: 1,
+                    borderColor: 'hairlineSoft',
+                    '&:last-of-type': { borderBottom: 0 },
                   }}
                 >
-                  <Typography variant="caption" color="textSecondary" component="p">
+                  <Typography variant="body2" color="inkMuted" component="p">
                     {item.label}
                   </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontFamily: MONO, color: 'ink', fontWeight: 500 }}
+                  >
                     {item.value}
                   </Typography>
                 </Box>
               ))}
             </Box>
-          ) : null}
-        </CardContent>
-      </Card>
-      <Card variant="outlined" elevation={0} sx={{ maxWidth: 560, borderRadius: '20px', mt: 3 }}>
-        <CardContent sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
-            Storage
-          </Typography>
-          {drive && (
+          </Box>
+        ) : null}
+
+        {/* Webhook connection ledger */}
+        <Box
+          sx={{
+            bgcolor: 'surface1',
+            border: 1,
+            borderColor: 'hairline',
+            borderRadius: '12px',
+            overflow: 'hidden',
+          }}
+        >
+          <Box
+            sx={{
+              px: 2.5,
+              py: 1.5,
+              borderBottom: 1,
+              borderColor: 'hairlineSoft',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+            }}
+          >
             <Box
-              data-testid="storage-connected"
-              sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}
-            >
-              <FontAwesomeIcon
-                icon={faCircleCheck}
-                aria-hidden="true"
-                sx={{ color: 'success.main', fontSize: 16, flexShrink: 0 }}
-              />
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                Storage connected
-              </Typography>
-              <Typography
-                variant="caption"
-                color="textSecondary"
-                sx={{ ml: 'auto' }}
-              >
-                {webhooksLoading ? '' : `${webhooks.length} connection(s)`}
-              </Typography>
-            </Box>
-          )}
-          {drive && (
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-              Your files are encrypted before they&apos;re stored.
+              sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'signal', flexShrink: 0 }}
+              aria-hidden="true"
+            />
+            <Typography variant="overline" component="h2" sx={sectionHeader}>
+              Webhooks
             </Typography>
-          )}
-          {webhookError && (
-            <Box
-              role="alert"
-              sx={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 1,
-                bgcolor: 'rgba(255,92,92,0.08)',
-                border: '1px solid',
-                borderColor: 'error.main',
-                borderRadius: '10px',
-                p: 1.5,
-                mb: 2,
-              }}
-            >
+          </Box>
+          <Box sx={{ px: 2.5, py: 2 }}>
+            {webhookError && (
               <Box
-                component="span"
-                sx={{ display: 'inline-flex', color: 'error.main', fontSize: 18, mt: 0.25, flexShrink: 0 }}
+                role="alert"
+                sx={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 1.25,
+                  bgcolor: 'dangerSoft',
+                  border: 1,
+                  borderColor: 'error.main',
+                  borderRadius: '12px',
+                  p: 1.75,
+                  mb: 2,
+                }}
               >
-                <FontAwesomeIcon icon={faTriangleExclamation} aria-hidden="true" />
-              </Box>
-              <Box>
-                <Typography variant="body2" sx={{ color: 'error.main' }}>
-                  {webhookError.message}
-                </Typography>
-                {webhookError.code === 'WEBHOOK_IN_USE' && (
-                  <Typography variant="caption" color="textSecondary" component="p" sx={{ mt: 0.5 }}>
-                    This webhook still stores files in your drive or trash. Permanently
-                    delete those files first, then remove it.
-                  </Typography>
-                )}
-              </Box>
-            </Box>
-          )}
-          {webhooksLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-              <CircularProgress size={28} aria-label="Loading webhooks" />
-            </Box>
-          ) : webhooks.length === 0 ? (
-            <Typography variant="body2" color="textSecondary">
-              No webhooks configured yet. Add one to start storing files.
-            </Typography>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {webhooks.map((webhook) => (
                 <Box
-                  key={webhook.id}
+                  component="span"
                   sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                    bgcolor: 'surface1',
-                    borderRadius: '10px',
-                    px: 2,
-                    py: 1,
+                    display: 'inline-flex',
+                    color: 'error.main',
+                    fontSize: 16,
+                    mt: 0.25,
+                    flexShrink: 0,
                   }}
                 >
-                  <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                    <Typography variant="body2" noWrap>
-                      Webhook #{webhook.id}
+                  <FontAwesomeIcon icon={faTriangleExclamation} aria-hidden="true" />
+                </Box>
+                <Box>
+                  <Typography variant="body2" sx={{ color: 'error.main' }}>
+                    {webhookError.message}
+                  </Typography>
+                  {webhookError.code === 'WEBHOOK_IN_USE' && (
+                    <Typography variant="caption" color="inkMuted" component="p" sx={{ mt: 0.5 }}>
+                      This webhook still stores files in your drive or trash. Permanently
+                      delete those files first, then remove it.
                     </Typography>
-                    <Typography variant="caption" color="textSecondary" component="p">
-                      Added {formatDate(webhook.createdAt)}
-                    </Typography>
-                  </Box>
-                  <IconButton
-                    aria-label={`Remove webhook ${webhook.id}`}
-                    title="Remove"
-                    color="error"
-                    onClick={() => handleRemoveWebhook(webhook)}
-                    disabled={removingWebhookId === webhook.id}
-                    data-testid={`remove-webhook-${webhook.id}`}
+                  )}
+                </Box>
+              </Box>
+            )}
+            {webhooksLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                <CircularProgress size={28} aria-label="Loading webhooks" />
+              </Box>
+            ) : webhooks.length === 0 ? (
+              <Typography variant="body2" color="inkMuted">
+                No webhooks configured yet. Add one to start storing files.
+              </Typography>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                {webhooks.map((webhook) => (
+                  <Box
+                    key={webhook.id}
                     sx={{
-                      color: 'error.main',
-                      '&:hover': {
-                        color: '#FF7575',
-                        backgroundColor: 'rgba(255,92,92,0.08)',
-                      },
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      py: 1.25,
+                      borderBottom: 1,
+                      borderColor: 'hairlineSoft',
+                      '&:last-of-type': { borderBottom: 0 },
                     }}
                   >
-                    <FontAwesomeIcon icon={faTrashCan} />
-                  </IconButton>
-                </Box>
-              ))}
-            </Box>
-          )}
-          <Box
-            component="form"
-            onSubmit={handleAddWebhook}
-            sx={{ display: 'flex', gap: 1, mt: 2 }}
-          >
-            <TextField
-              size="small"
-              fullWidth
-              placeholder="Paste a Discord webhook URL"
-              value={webhookUrl}
-              onChange={(e) => setWebhookUrl(e.target.value)}
-              inputProps={{ 'aria-label': 'Webhook URL' }}
-            />
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={addingWebhook || !webhookUrl.trim()}
-              data-testid="add-webhook"
+                    <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                      <Typography variant="body2" noWrap sx={{ fontFamily: MONO }}>
+                        Webhook #{webhook.id}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="inkMuted"
+                        component="p"
+                        sx={{ fontFamily: MONO }}
+                      >
+                        Added {formatDate(webhook.createdAt)}
+                      </Typography>
+                    </Box>
+                    <IconButton
+                      aria-label={`Remove webhook ${webhook.id}`}
+                      title="Remove"
+                      color="error"
+                      onClick={() => handleRemoveWebhook(webhook)}
+                      disabled={removingWebhookId === webhook.id}
+                      data-testid={`remove-webhook-${webhook.id}`}
+                      sx={{
+                        color: 'error.main',
+                        '&:hover': { backgroundColor: 'dangerSoft' },
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faTrashCan} />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+            )}
+            <Box
+              component="form"
+              onSubmit={handleAddWebhook}
+              sx={{ display: 'flex', gap: 1.5, mt: 2.5 }}
             >
-              Add another connection
-            </Button>
+              <TextField
+                size="small"
+                fullWidth
+                placeholder="Paste a Discord webhook URL"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                inputProps={{ 'aria-label': 'Webhook URL' }}
+              />
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={addingWebhook || !webhookUrl.trim()}
+                data-testid="add-webhook"
+              >
+                Add another connection
+              </Button>
+            </Box>
           </Box>
-        </CardContent>
-      </Card>
-      <Box sx={{ mt: 3 }}>
+        </Box>
+      </Box>
+
+      {/* Logout danger zone */}
+      <Box
+        sx={{
+          mt: 2.5,
+          p: 2.5,
+          border: 1,
+          borderColor: 'dangerSoft',
+          borderRadius: '12px',
+          bgcolor: 'dangerSoft',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 2,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="body2" sx={{ color: 'error.main', fontWeight: 600 }}>
+            Danger zone
+          </Typography>
+          <Typography variant="caption" color="inkMuted" component="p" sx={{ mt: 0.25 }}>
+            End your session on this device.
+          </Typography>
+        </Box>
         <Button
           variant="outlined"
           color="error"
