@@ -30,10 +30,10 @@ import BrandLockup from './BrandLockup';
 const DRAWER_WIDTH = 240;
 
 /**
- * Responsive Signal Deck shell: a fixed manifest rail on desktop (ruled
- * header, grouped nav rows, bottom identity/logout zone); a temporary
- * drawer plus app bar below 768px. A keyboard skip link targets the main
- * content region, which carries a visible route header built from `title`.
+ * Responsive Framer-style shell: a fixed rail on desktop (wordmark band,
+ * nav pill rows, bottom identity/logout zone); a temporary drawer plus
+ * app bar below 768px. A keyboard skip link targets the main content
+ * region, which carries a visible route header built from `title`.
  */
 export default function AppShell({ title, children }) {
   const { user, refresh } = useAuth();
@@ -77,12 +77,7 @@ export default function AppShell({ title, children }) {
       >
         <BrandLockup />
       </Box>
-      <Box sx={{ px: 3, pt: 2, pb: 1 }}>
-        <Typography variant="overline" component="p" sx={{ color: 'inkMuted' }}>
-          Manifest
-        </Typography>
-      </Box>
-      <List sx={{ px: 1 }}>
+      <List sx={{ px: 1, pt: 1 }}>
         {navItems.map((item) => {
           const selected = location.pathname.startsWith(item.to);
           return (
@@ -94,13 +89,16 @@ export default function AppShell({ title, children }) {
                 sx={{
                   gap: 1,
                   minHeight: 44,
+                  borderRadius: '10px',
                   color: 'inkMuted',
-                  '&:hover': { bgcolor: 'surface1' },
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.04)', color: 'ink' },
                   '& .MuiListItemIcon-root': { color: 'inkMuted' },
                   '&:hover .MuiListItemIcon-root': { color: 'ink' },
+                  '&.Mui-selected': { bgcolor: 'surface2' },
+                  '&.Mui-selected:hover': { bgcolor: 'surface2' },
                   ...(selected && {
                     color: 'ink',
-                    '& .MuiListItemIcon-root': { color: 'signal' },
+                    '& .MuiListItemIcon-root': { color: 'ink' },
                   }),
                 }}
               >
@@ -124,13 +122,6 @@ export default function AppShell({ title, children }) {
           gap: 1.5,
         }}
       >
-        <Typography
-          variant="overline"
-          component="p"
-          sx={{ color: 'inkMuted', px: 1 }}
-        >
-          Account
-        </Typography>
         {user && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 1 }}>
             <Avatar
@@ -155,7 +146,9 @@ export default function AppShell({ title, children }) {
               data-testid="sidebar-logout"
               sx={{
                 minHeight: 44,
-                '&:hover': { bgcolor: 'surface1' },
+                borderRadius: '10px',
+                color: 'inkMuted',
+                '&:hover': { bgcolor: 'rgba(255,255,255,0.04)', color: 'ink' },
                 '& .MuiListItemIcon-root': { color: 'inkMuted' },
                 '&:hover .MuiListItemIcon-root': { color: 'ink' },
               }}
@@ -177,31 +170,21 @@ export default function AppShell({ title, children }) {
       sx={{
         display: 'flex',
         alignItems: 'center',
-        gap: 1.5,
         mb: 2.5,
         pb: 1.5,
         borderBottom: 1,
         borderColor: 'hairlineSoft',
       }}
     >
-      <Box
-        sx={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          bgcolor: 'signal',
-          flexShrink: 0,
-        }}
-        aria-hidden="true"
-      />
       <Typography
-        variant="overline"
+        variant="body1"
         component="h1"
         sx={{
+          fontFamily: 'Inter, sans-serif',
           color: 'ink',
-          fontSize: 13,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
+          fontWeight: 600,
+          fontSize: 18,
+          lineHeight: 1.4,
         }}
       >
         {title}
@@ -220,7 +203,7 @@ export default function AppShell({ title, children }) {
           left: 8,
           zIndex: 2000,
           transform: 'translateY(-200%)',
-          bgcolor: 'surface3',
+          bgcolor: 'surface2',
           color: 'ink',
           border: 1,
           borderColor: 'hairline',

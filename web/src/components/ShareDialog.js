@@ -108,9 +108,7 @@ export default function ShareDialog({ open, entry, onClose }) {
       fullWidth
       TransitionComponent={DialogTransition}
     >
-      <DialogTitle sx={{ borderBottom: '1px solid', borderColor: 'hairline' }}>
-        Share {entry ? entry.name : ''}
-      </DialogTitle>
+      <DialogTitle>Share {entry ? entry.name : ''}</DialogTitle>
       <DialogContent dividers>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -122,9 +120,7 @@ export default function ShareDialog({ open, entry, onClose }) {
             <Box
               sx={{
                 bgcolor: 'surface1',
-                border: '1px solid',
-                borderColor: 'hairlineSoft',
-                borderRadius: '8px',
+                borderRadius: '10px',
                 px: 2,
                 py: 1.5,
                 mb: 1,
@@ -135,7 +131,7 @@ export default function ShareDialog({ open, entry, onClose }) {
                 color="inkMuted"
                 component="p"
                 sx={{
-                  fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+                  fontFamily: "'Consolas', monospace",
                   wordBreak: 'break-all',
                 }}
               >
@@ -192,7 +188,7 @@ export default function ShareDialog({ open, entry, onClose }) {
                     <Typography
                       variant="body2"
                       sx={{
-                        fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+                        fontFamily: "'Consolas', monospace",
                         wordBreak: 'break-all',
                       }}
                     >
@@ -200,11 +196,7 @@ export default function ShareDialog({ open, entry, onClose }) {
                     </Typography>
                   }
                   secondary={
-                    <Typography
-                      variant="caption"
-                      color="inkMuted"
-                      sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace' }}
-                    >
+                    <Typography variant="caption" color="inkMuted">
                       {share.revokedAt
                         ? 'Revoked'
                         : share.expiresAt

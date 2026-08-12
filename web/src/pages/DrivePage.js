@@ -25,6 +25,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowRightArrowLeft,
   faDownload,
+  faFolderOpen,
   faFolderPlus,
   faFolderTree,
   faMagnifyingGlass,
@@ -59,10 +60,7 @@ import {
 import { useAuth } from '../auth/AuthProvider';
 import DialogTransition from '../motion/DialogTransition';
 import ScreenLoader from '../components/ScreenLoader';
-
-// Signal Deck measurement readout face — mono is reserved for counts and
-// data values, never body copy.
-const MONO = 'ui-monospace, SFMono-Regular, Consolas, monospace';
+import { gradients } from '../theme';
 
 let nextJobId = 1;
 
@@ -714,10 +712,10 @@ export default function DrivePage() {
       <Box sx={{ pb: { xs: 12, md: 2 } }}>
       {notice && <ErrorNotice error={notice} onRetry={reload} />}
 
-      {/* Command deck: search spans the primary column; the amber Upload
-          action leads, grouped secondary controls follow; the view segment
-          and quota readout sit in utility cells. Below 768px the search
-          stacks full-width and the actions wrap without horizontal overflow. */}
+      {/* Command row: search spans the primary column; the white Upload pill
+          leads, charcoal secondary pills follow; the circular view toggle
+          and quota cell sit in utility slots. Below 768px the search stacks
+          full-width and the actions wrap without horizontal overflow. */}
       <Box
         component="section"
         aria-label="Drive commands"
@@ -734,9 +732,10 @@ export default function DrivePage() {
           placeholder="Search files and folders"
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
+          disabled={entriesLoading}
           sx={{
-            flex: isDesktop ? '1 1 220px' : '1 1 100%',
-            minWidth: 0,
+            flexGrow: 1,
+            minWidth: 220,
           }}
           inputProps={{ 'aria-label': 'Search files and folders' }}
           InputProps={{
@@ -774,40 +773,17 @@ export default function DrivePage() {
           New folder
         </Button>
         {isDesktop && (
-          <Box
-            role="group"
-            aria-label="View"
-            sx={{
-              display: 'inline-flex',
-              border: 1,
-              borderColor: 'hairline',
-              borderRadius: 1,
-              overflow: 'hidden',
-              bgcolor: 'surface1',
-            }}
-          >
+          <Box sx={{ display: 'inline-flex', gap: 1 }}>
             <IconButton
               aria-label="List view"
               aria-pressed={view === 'list'}
               onClick={() => setView('list')}
               sx={{
-                position: 'relative',
-                width: 34,
-                height: 34,
-                borderRadius: 0,
-                color: view === 'list' ? 'signal' : 'inkMuted',
-                bgcolor: view === 'list' ? 'signalSoft' : 'transparent',
-                '&::after': view === 'list'
-                  ? {
-                      content: '""',
-                      position: 'absolute',
-                      left: '25%',
-                      right: '25%',
-                      bottom: 2,
-                      height: 2,
-                      bgcolor: 'signal',
-                    }
-                  : {},
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                color: view === 'list' ? 'ink' : 'inkMuted',
+                bgcolor: view === 'list' ? 'surface2' : 'transparent',
               }}
             >
               <FontAwesomeIcon icon={faTableList} />
@@ -817,25 +793,11 @@ export default function DrivePage() {
               aria-pressed={view === 'grid'}
               onClick={() => setView('grid')}
               sx={{
-                position: 'relative',
-                width: 34,
-                height: 34,
-                borderRadius: 0,
-                color: view === 'grid' ? 'signal' : 'inkMuted',
-                bgcolor: view === 'grid' ? 'signalSoft' : 'transparent',
-                borderLeft: 1,
-                borderColor: 'hairlineSoft',
-                '&::after': view === 'grid'
-                  ? {
-                      content: '""',
-                      position: 'absolute',
-                      left: '25%',
-                      right: '25%',
-                      bottom: 2,
-                      height: 2,
-                      bgcolor: 'signal',
-                    }
-                  : {},
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                color: view === 'grid' ? 'ink' : 'inkMuted',
+                bgcolor: view === 'grid' ? 'surface2' : 'transparent',
               }}
             >
               <FontAwesomeIcon icon={faTableCellsLarge} />
@@ -873,9 +835,9 @@ export default function DrivePage() {
           data-testid="selection-bar"
           sx={{
             bgcolor: 'surface2',
-            borderRadius: '12px',
-            px: 2,
-            py: 1,
+            borderRadius: '20px',
+            px: 3,
+            py: 1.5,
             mb: 2,
             display: 'flex',
             flexWrap: 'wrap',
@@ -886,13 +848,7 @@ export default function DrivePage() {
           <Typography
             variant="caption"
             component="span"
-            sx={{
-              fontFamily: MONO,
-              color: 'ink',
-              letterSpacing: '0.04em',
-              whiteSpace: 'nowrap',
-              mr: 1,
-            }}
+            sx={{ color: 'ink', whiteSpace: 'nowrap', mr: 1 }}
           >
             {selectedIds.size} selected
           </Typography>
@@ -939,7 +895,6 @@ export default function DrivePage() {
             Move
           </Button>
           <Button
-            variant="outlined"
             size="small"
             color="error"
             startIcon={<FontAwesomeIcon icon={faTrash} />}
@@ -950,7 +905,7 @@ export default function DrivePage() {
           <IconButton
             aria-label="Clear selection"
             onClick={clearSelection}
-            sx={{ ml: 'auto' }}
+            sx={{ ml: 'auto', width: 40, height: 40, borderRadius: '50%' }}
           >
             <FontAwesomeIcon icon={faXmark} />
           </IconButton>
@@ -1023,73 +978,47 @@ export default function DrivePage() {
             <Box
               data-testid="empty-state"
               sx={{
-                position: 'relative',
-                overflow: 'hidden',
-                bgcolor: 'surface1',
-                border: 1,
-                borderColor: 'hairline',
-                borderRadius: '12px',
-                p: { xs: 5, md: 7 },
+                background: gradients.violet,
+                borderRadius: '30px',
+                p: 8,
                 mt: 3,
                 textAlign: 'center',
                 maxWidth: 560,
                 mx: 'auto',
-                '&::before': {
-                  // Faint fixed-grid atmosphere, CSS-only, low contrast.
-                  content: '""',
-                  position: 'absolute',
-                  inset: 0,
-                  pointerEvents: 'none',
-                  opacity: 0.5,
-                  backgroundImage:
-                    'repeating-linear-gradient(0deg, rgba(193,211,205,0.05) 0 1px, transparent 1px 36px), repeating-linear-gradient(90deg, rgba(193,211,205,0.04) 0 1px, transparent 1px 36px)',
-                },
               }}
             >
-              <Box
+              <FontAwesomeIcon
+                icon={faFolderOpen}
+                size="4x"
+                color="#FFFFFF"
+                aria-hidden="true"
+              />
+              <Typography variant="h2" sx={{ mt: 3, color: '#FFFFFF' }}>
+                Your space is ready
+              </Typography>
+              <Typography
+                variant="caption"
+                component="p"
+                sx={{ mt: 1, mb: 3, color: 'rgba(255,255,255,0.85)' }}
+              >
+                Your files are encrypted before they&apos;re stored — only
+                you can see them.
+              </Typography>
+              <Button
+                variant="contained"
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
                 sx={{
-                  position: 'relative',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
+                  bgcolor: 'rgba(255,255,255,0.14)',
+                  color: '#FFFFFF',
+                  border: '1px solid rgba(255,255,255,0.35)',
+                  borderRadius: '100px',
+                  '&:hover': {
+                    bgcolor: 'rgba(255,255,255,0.22)',
+                  },
                 }}
               >
-                <Box
-                  sx={{
-                    width: 48,
-                    height: 48,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    bgcolor: 'signalSoft',
-                    border: 1,
-                    borderColor: 'focusRing',
-                    borderRadius: '8px',
-                    color: 'signal',
-                  }}
-                  aria-hidden="true"
-                >
-                  <FontAwesomeIcon icon={faUpload} size="lg" />
-                </Box>
-                <Typography variant="h2" sx={{ mt: 3, color: 'ink' }}>
-                  Your space is ready
-                </Typography>
-                <Typography
-                  variant="caption"
-                  component="p"
-                  sx={{ mt: 1, mb: 3, color: 'inkMuted', maxWidth: 420 }}
-                >
-                  Your files are encrypted before they&apos;re stored — only
-                  you can see them.
-                </Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<FontAwesomeIcon icon={faUpload} />}
-                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                >
-                  Upload your first file
-                </Button>
-              </Box>
+                Upload your first file
+              </Button>
             </Box>
           </>
         ) : isDesktop ? (

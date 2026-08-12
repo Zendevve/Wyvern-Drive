@@ -21,9 +21,9 @@ export default function ErrorNotice({ error, onRetry }) {
         gap: 1.5,
         p: 1.5,
         mb: 2,
-        borderRadius: '8px',
-        bgcolor: 'dangerSoft',
-        borderColor: alpha(theme.palette.error.main, 0.4),
+        borderRadius: '10px',
+        bgcolor: alpha(theme.palette.error.main, 0.1),
+        borderColor: alpha(theme.palette.error.main, 0.35),
       })}
     >
       <Box

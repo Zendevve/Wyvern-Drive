@@ -81,17 +81,17 @@ never auto-migrated.
 ## Brand Commitments
 
 - Name: **Wyvern Drive**. Tagline: "Your files, encrypted, stored on Discord."
-- Visual world (locked Signal Deck commitment — split-flap operations board):
-  matte graphite canvas (#0A0E10) with measured surface steps
-  (#11181B / #1A2428 / #233036); warm white ink (#F4F1E8) with muted steel
-  text (#9BA7A7); one amber signal (#D9A441) for primary actions, selection,
-  focus, and drop targets — every other color is semantic, never decorative;
-  local monospace stack reserved for measurement and data roles (IDs, sizes,
-  dates, status, byte values); fixed-grid instrument grammar — ruled headers,
-  fixed character cells, status lamps, restrained steel inset edges; 5px
-  spacing base; radius by role (panels 12px, cells 6px, controls and icon
-  actions 8px); rectangular controls only — no pill-button system, no
-  gradients, no glass, no glow.
+- Visual world (locked Framer dark-canvas commitment): near-black canvas
+  (#0E0E10) with surface-lift steps (#1A1A1D / #242428); binary ink hierarchy
+  — white ink (#FFFFFF) and ink-muted text (#999999); accent blue (#0099FF)
+  is reserved for links, focus, selection, and drop targets — never a fill; one violet gradient spotlight card (the drive empty state) as the
+  system's only atmosphere device; Mona Sans Variable display at 500 with hard
+  negative tracking (62px/-3.1px login hero), Inter Variable body with bespoke
+  OpenType variants (cv01 cv05 cv09 cv11 ss03 ss07 dlig); 5px spacing base;
+  radius scale from 10px inputs to 15px entry tiles, 20px cards, 30px
+  spotlight, 100px pill CTAs; white pill primary CTA; light-edge elevation
+  (inset white top edge over a deep drop shadow); dark-only — no light mode,
+  no glass, no glow, no gradients beyond the one spotlight card.
 - User-confirmed decisions: keep the cloud-drive left sidebar chrome (240px
   manifest rail); file-type icons are monochrome (folders ink, files ink-muted
   — type carried by glyph, not color).
@@ -111,8 +111,9 @@ never auto-migrated.
    third-party file host ever sees plaintext.
 2. Familiar cloud-drive flows over invention — users should feel at home in the
    Google Drive / Dropbox / Mega pattern.
-3. The interface carries a premium, calm dark register (the locked Signal
-   Deck world — matte graphite, one amber signal, mono measurement);
+3. The interface carries a premium, calm dark register (the locked Framer
+   dark-canvas world — near-black canvas, white pill CTAs, accent blue
+   reserved for links and focus, one violet gradient spotlight card);
    expression is saved for moments, never at the cost of the task.
 4. Self-hostable: runtime depends on nothing external (fonts, assets self-
    hosted).

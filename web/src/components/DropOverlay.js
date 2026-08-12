@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { reducedMotion, useSpring } from '../motion/springs';
 
 /**
@@ -103,9 +104,9 @@ export default function DropOverlay({ active, dropCount }) {
       sx={(theme) => ({
         position: 'absolute',
         inset: 0,
-        border: `2px dashed ${theme.palette.signal}`,
-        borderRadius: '12px',
-        bgcolor: theme.palette.signalSoft,
+        border: `2px dashed ${theme.palette.primary.main}`,
+        borderRadius: '15px',
+        bgcolor: alpha(theme.palette.primary.main, 0.06),
         zIndex: 1100,
         pointerEvents: 'none',
         display: 'flex',
@@ -122,7 +123,7 @@ export default function DropOverlay({ active, dropCount }) {
             }),
       }}
     >
-      <Typography fontWeight={600} sx={{ color: 'signal' }}>
+      <Typography fontWeight={600} sx={{ color: 'primary.main' }}>
         {active
           ? 'Drop files or folders to upload to this folder'
           : `Added ${lastCount} file${lastCount === 1 ? '' : 's'} — uploading`}

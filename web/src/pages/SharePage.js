@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Button, Paper, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faDownload,
@@ -15,9 +15,6 @@ import { api, shareDownloadUrl } from '../api/client';
 import { formatBytes } from '../components/QuotaMeter';
 import BrandLockup from '../components/BrandLockup';
 import ScreenLoader from '../components/ScreenLoader';
-
-// Measurement/data role — sizes, types, dates (Signal Deck mono stack).
-const MONO = 'ui-monospace, SFMono-Regular, Consolas, monospace';
 
 function formatDate(value) {
   return new Date(value).toLocaleString();
@@ -43,7 +40,7 @@ function mimeIcon(mimeType) {
 }
 
 /**
- * Public share landing page — a recipient-facing transfer manifest.
+ * Public share landing page — a recipient-facing poster on the dark canvas.
  * Requires no login; missing, revoked, or expired shares render one
  * generic unavailable state.
  */
@@ -85,41 +82,15 @@ export default function SharePage() {
         sx={{
           minHeight: '100vh',
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
-          px: 2,
-          py: 6,
+          justifyContent: 'center',
+          p: 2,
         }}
         data-testid="share-not-found"
       >
-        <BrandLockup align="center" />
-        <Box
-          sx={{
-            width: '100%',
-            maxWidth: 520,
-            mt: 8,
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            textAlign: 'center',
-          }}
-        >
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              bgcolor: 'surface2',
-              border: 1,
-              borderColor: 'hairline',
-              borderRadius: '8px',
-              p: 3,
-              color: 'inkMuted',
-            }}
-          >
-            <FontAwesomeIcon icon={faFileCircleXmark} aria-hidden="true" size="3x" />
+        <Box sx={{ width: '100%', maxWidth: 520, textAlign: 'center' }}>
+          <Box sx={{ color: 'inkMuted', fontSize: 48, lineHeight: 1 }}>
+            <FontAwesomeIcon icon={faFileCircleXmark} aria-hidden="true" />
           </Box>
           <Typography variant="h3" component="h1" sx={{ mt: 3, color: 'ink' }}>
             This share is not available
@@ -137,82 +108,48 @@ export default function SharePage() {
       sx={{
         minHeight: '100vh',
         display: 'flex',
-        flexDirection: 'column',
         alignItems: 'center',
-        px: 2,
-        py: 6,
+        justifyContent: 'center',
+        p: 2,
       }}
       data-testid="share-meta"
     >
-      <BrandLockup align="center" />
-      <Box
-        sx={{
-          width: '100%',
-          maxWidth: 980,
-          mt: 5,
-          display: 'grid',
-          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) 340px' },
-          gap: 3,
-          alignItems: 'start',
-        }}
-      >
-        {/* Left: file-type signal tile + name + mono meta */}
-        <Box sx={{ minWidth: 0 }}>
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              bgcolor: 'surface2',
-              border: 1,
-              borderColor: 'hairline',
-              borderRadius: '8px',
-              p: 3,
-              color: 'ink',
-            }}
-          >
-            <FontAwesomeIcon icon={mimeIcon(share.mimeType)} aria-hidden="true" size="4x" />
-          </Box>
-          <Typography variant="h2" component="h1" noWrap sx={{ mt: 2.5, color: 'ink' }}>
-            {share.name}
-          </Typography>
-          <Box sx={{ mt: 2.5, borderTop: 1, borderColor: 'hairlineSoft' }}>
-            <Typography sx={{ mt: 1.5, color: 'inkMuted', fontFamily: MONO, fontSize: 13 }}>
-              {formatBytes(share.sizeBytes)}
-            </Typography>
-            <Typography sx={{ mt: 1, color: 'inkMuted', fontFamily: MONO, fontSize: 13 }}>
-              {share.mimeType || 'Unknown type'}
-            </Typography>
-            {share.expiresAt && (
-              <Typography sx={{ mt: 1, color: 'inkMuted', fontFamily: MONO, fontSize: 13 }}>
-                Expires {formatDate(share.expiresAt)}
-              </Typography>
-            )}
-          </Box>
+      <Box sx={{ width: '100%', maxWidth: 520, textAlign: 'center' }}>
+        <BrandLockup align="center" />
+        <Box sx={{ mt: 5, color: 'inkMuted', fontSize: 48, lineHeight: 1 }}>
+          <FontAwesomeIcon icon={mimeIcon(share.mimeType)} aria-hidden="true" />
         </Box>
-
-        {/* Right: download action panel */}
-        <Paper
-          variant="outlined"
+        <Typography variant="h2" component="h1" noWrap sx={{ mt: 2, color: 'ink' }}>
+          {share.name}
+        </Typography>
+        <Typography sx={{ mt: 0.5, color: 'inkMuted' }}>
+          {formatBytes(share.sizeBytes)}
+        </Typography>
+        <Typography sx={{ mt: 0.5, color: 'inkMuted' }}>
+          {share.mimeType || 'Unknown type'}
+        </Typography>
+        {share.expiresAt && (
+          <Typography sx={{ mt: 0.5, color: 'inkMuted' }}>
+            Expires {formatDate(share.expiresAt)}
+          </Typography>
+        )}
+        <Button
+          component="a"
+          href={shareDownloadUrl(token)}
+          download
+          variant="contained"
+          size="large"
+          fullWidth
+          startIcon={<FontAwesomeIcon icon={faDownload} />}
           sx={{
-            bgcolor: 'surface1',
-            borderColor: 'hairline',
-            borderRadius: '8px',
-            p: 3,
+            mt: 3,
+            bgcolor: 'white',
+            color: 'black',
+            '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.88)' },
           }}
         >
-          <Button
-            component="a"
-            href={shareDownloadUrl(token)}
-            download
-            variant="contained"
-            size="large"
-            fullWidth
-            startIcon={<FontAwesomeIcon icon={faDownload} />}
-          >
-            Download
-          </Button>
-        </Paper>
+          Download
+        </Button>
       </Box>
     </Box>
   );

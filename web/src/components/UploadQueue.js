@@ -23,12 +23,8 @@ import {
 import { api } from '../api/client';
 import { reducedMotion, useSpring } from '../motion/springs';
 
-// Measurement/data roles (progress readouts, status labels, counts) use the
-// mono stack; body copy never does.
-const MONO = "'ui-monospace', SFMono-Regular, Consolas, monospace";
-
 /**
- * Fixed transfer console (Signal Deck). One job per upload request; jobs
+ * Floating transfer manager (Mega-style). One job per upload request; jobs
  * show progress while uploading, the server-returned name when done, and a
  * retry action on failure. Pinned to the bottom-right of the viewport,
  * safe-area aware, and clamped inside the viewport edge below 412px.
@@ -66,13 +62,13 @@ export default function UploadQueue({ jobs, onRetry, onRemove }) {
       data-testid="upload-queue"
     >
       <Paper
-        elevation={2}
+        elevation={0}
         sx={{
-          borderRadius: '12px',
+          borderRadius: '20px',
           overflow: 'hidden',
           backgroundColor: 'surface2',
-          border: '1px solid',
-          borderColor: 'hairline',
+          boxShadow:
+            'inset 0 1px 0 rgba(255,255,255,0.10), 0 10px 30px rgba(0,0,0,0.25)',
         }}
         style={{
           opacity: panelEnter,
@@ -89,7 +85,7 @@ export default function UploadQueue({ jobs, onRetry, onRemove }) {
             px: 2,
             py: 1.5,
             borderBottom: '1px solid',
-            borderColor: 'hairline',
+            borderColor: 'divider',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -98,7 +94,7 @@ export default function UploadQueue({ jobs, onRetry, onRemove }) {
           <Typography variant="subtitle1" fontWeight={600}>
             Uploads
           </Typography>
-          <Typography variant="caption" color="inkMuted" sx={{ fontFamily: MONO }}>
+          <Typography variant="caption" color="inkMuted">
             {activeCount} active
           </Typography>
         </Box>
@@ -178,9 +174,9 @@ function QueueJobItem({ job, removing, onRequestRemove, onRetry, onRemove }) {
 
   const statusColor =
     job.status === 'done'
-      ? 'success.main'
+      ? '#3AC36F'
       : job.status === 'failed'
-        ? 'error.main'
+        ? '#FF5C5C'
         : 'inkMuted';
 
   return (
@@ -226,7 +222,6 @@ function QueueJobItem({ job, removing, onRequestRemove, onRetry, onRemove }) {
         secondaryTypographyProps={{
           variant: 'caption',
           color: 'inkMuted',
-          sx: { fontFamily: MONO },
         }}
       />
       {job.status === 'uploading' && (
@@ -249,7 +244,7 @@ function QueueJobItem({ job, removing, onRequestRemove, onRetry, onRemove }) {
         </IconButton>
       )}
       {job.status === 'failed' && (
-        <Button size="small" variant="outlined" onClick={() => onRetry(job)}>
+        <Button size="small" onClick={() => onRetry(job)}>
           Retry
         </Button>
       )}

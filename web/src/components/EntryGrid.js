@@ -17,10 +17,10 @@ function formatDate(value) {
 }
 
 /**
- * Desktop grid view — fixed-cell file tiles. Each tile is a graphite cell
- * with a hairline border; clicking the tile surface toggles selection, while
- * the folder name button and the action shelf stop propagation and keep their
- * own behaviour. Selected tiles carry the signal border + signalSoft fill.
+ * Desktop grid view — Framer file tiles. Each tile is an outlined card that
+ * lifts to surface2 on hover and selection; clicking the tile surface toggles
+ * selection, while the folder name button and the action shelf stop
+ * propagation and keep their own behaviour.
  */
 export default function EntryGrid({
   entries,
@@ -82,18 +82,17 @@ function GridCard({ entry, actions, selected, onToggleSelect }) {
       onDoubleClick={handleDoubleClick}
       sx={{
         position: 'relative',
-        borderRadius: 6,
+        borderRadius: '15px',
         p: 1.5,
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
         gap: 0.5,
-        bgcolor: selected ? 'signalSoft' : 'surface1',
-        borderColor: selected ? 'signal' : 'hairlineSoft',
-        transition: 'background-color 160ms ease, border-color 160ms ease',
+        bgcolor: selected ? 'surface2' : 'surface1',
+        transition: 'background-color 150ms ease, box-shadow 150ms ease',
         '&:hover': {
-          bgcolor: selected ? 'rgba(217,164,65,0.22)' : 'surface2',
-          borderColor: selected ? 'signal' : 'hairline',
+          bgcolor: 'surface2',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), 0 10px 30px rgba(0,0,0,0.25)',
         },
         '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
       }}
@@ -152,10 +151,7 @@ function GridCard({ entry, actions, selected, onToggleSelect }) {
         variant="caption"
         component="p"
         noWrap
-        sx={{
-          color: 'inkMuted',
-          fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
-        }}
+        sx={{ color: 'inkMuted' }}
       >
         {meta}
       </Typography>
@@ -167,7 +163,7 @@ function GridCard({ entry, actions, selected, onToggleSelect }) {
           gap: 0.5,
           mt: 0.5,
           opacity: 0,
-          transition: 'opacity 140ms ease',
+          transition: 'opacity 120ms ease',
         }}
       >
         <EntryActions

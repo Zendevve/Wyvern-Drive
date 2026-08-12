@@ -48,7 +48,7 @@ export default function EntryCards({ entries, actions, onPreview }) {
                   handlePreview(entry);
                 }
               }}
-              sx={{ width: '100%', borderRadius: 6, bgcolor: 'surface1' }}
+              sx={{ width: '100%', borderRadius: '15px', bgcolor: 'surface1' }}
             >
               <CardContent
                 sx={{
@@ -83,10 +83,7 @@ export default function EntryCards({ entries, actions, onPreview }) {
                   <Typography
                     variant="caption"
                     component="p"
-                    sx={{
-                      color: 'inkMuted',
-                      fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
-                    }}
+                    sx={{ color: 'inkMuted' }}
                   >
                     {meta}
                   </Typography>

@@ -52,11 +52,10 @@ function SortHeader({ label, field, sort, direction, onSort, align }) {
 }
 
 /**
- * Desktop list view — a ruled manifest ledger on a non-card surface.
- * The theme already styles TableCell head as uppercase micro labels; the
- * selected row carries the signal treatment (signalSoft fill + amber left
- * edge), and the action shelf stays hidden until the row is hovered or
- * focused (keyboard-reachable via Tab).
+ * Desktop list view — a Framer ledger on a card surface. Header cells are
+ * styled by the theme (inkMuted small caps-free labels); the selected row
+ * lifts to surface2, and the action shelf stays hidden until the row is
+ * hovered or focused (keyboard-reachable via Tab).
  */
 export default function EntryTable({
   entries,
@@ -177,13 +176,8 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
         cursor: 'pointer',
         bgcolor: 'canvas',
         '&:hover': { bgcolor: 'surface1' },
-        '&.Mui-selected': {
-          bgcolor: 'signalSoft',
-          '& .MuiTableCell-root:first-of-type': {
-            boxShadow: 'inset 3px 0 0 0 rgba(217,164,65,0.9)',
-          },
-        },
-        '&.Mui-selected:hover': { bgcolor: 'rgba(217,164,65,0.22)' },
+        '&.Mui-selected': { bgcolor: 'surface2' },
+        '&.Mui-selected:hover': { bgcolor: 'surface2' },
         '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
       }}
     >
@@ -224,10 +218,7 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
         <Typography
           variant="body2"
           component="span"
-          sx={{
-            color: 'inkMuted',
-            fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
-          }}
+          sx={{ color: 'inkMuted' }}
         >
           {isFolder ? '—' : formatBytes(entry.sizeBytes)}
         </Typography>
@@ -236,10 +227,7 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
         <Typography
           variant="body2"
           component="span"
-          sx={{
-            color: 'inkMuted',
-            fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
-          }}
+          sx={{ color: 'inkMuted' }}
         >
           {formatDate(entry.updatedAt)}
         </Typography>
@@ -250,7 +238,7 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
         sx={{
           whiteSpace: 'nowrap',
           opacity: 0,
-          transition: 'opacity 140ms ease',
+          transition: 'opacity 120ms ease',
         }}
       >
         <EntryActions

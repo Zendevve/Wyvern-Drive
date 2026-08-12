@@ -4,43 +4,45 @@
   "title": "Design System: Wyvern Drive",
   "extensions": {
     "colorMeta": {
-      "canvas": { "role": "neutral", "displayName": "Canvas", "canonical": "#0A0E10", "tonalRamp": ["#0A0E10", "#11181B", "#1A2428"] },
-      "surface-1": { "role": "neutral", "displayName": "Surface One", "canonical": "#11181B", "tonalRamp": ["#0A0E10", "#11181B", "#1A2428"] },
-      "surface-2": { "role": "neutral", "displayName": "Surface Two", "canonical": "#1A2428", "tonalRamp": ["#11181B", "#1A2428", "#233036"] },
-      "surface-3": { "role": "neutral", "displayName": "Surface Three", "canonical": "#233036", "tonalRamp": ["#1A2428", "#233036"] },
-      "ink": { "role": "primary", "displayName": "Ink", "canonical": "#F4F1E8" },
-      "ink-muted": { "role": "neutral", "displayName": "Ink Muted", "canonical": "#9BA7A7" },
-      "hairline": { "role": "neutral", "displayName": "Hairline", "canonical": "rgba(193,211,205,0.18)" },
-      "hairline-soft": { "role": "neutral", "displayName": "Hairline Soft", "canonical": "rgba(193,211,205,0.10)" },
-      "signal": { "role": "primary", "displayName": "Signal", "canonical": "#D9A441", "tonalRamp": ["rgba(217,164,65,0.18)", "#D9A441", "#E0AE52"] },
-      "focus-ring": { "role": "primary", "displayName": "Focus Ring", "canonical": "rgba(217,164,65,0.18)" },
-      "success": { "role": "tertiary", "displayName": "Success", "canonical": "#79C49A", "tonalRamp": ["rgba(121,196,154,0.14)", "#79C49A"] },
-      "danger": { "role": "tertiary", "displayName": "Danger", "canonical": "#E57569", "tonalRamp": ["rgba(229,117,105,0.14)", "#E57569"] },
-      "warning": { "role": "tertiary", "displayName": "Warning", "canonical": "#D9A441", "tonalRamp": ["rgba(217,164,65,0.18)", "#D9A441"] },
-      "info": { "role": "tertiary", "displayName": "Info", "canonical": "#84B7C4" },
-      "steel": { "role": "neutral", "displayName": "Steel", "canonical": "#8A9795" }
+      "canvas": { "role": "neutral", "displayName": "Canvas", "canonical": "#0E0E10", "tonalRamp": ["#0E0E10", "#1A1A1D", "#242428"] },
+      "surface-1": { "role": "neutral", "displayName": "Surface One", "canonical": "#1A1A1D", "tonalRamp": ["#0E0E10", "#1A1A1D", "#242428"] },
+      "surface-2": { "role": "neutral", "displayName": "Surface Two", "canonical": "#242428", "tonalRamp": ["#1A1A1D", "#242428"] },
+      "ink": { "role": "primary", "displayName": "Ink", "canonical": "#FFFFFF" },
+      "ink-muted": { "role": "neutral", "displayName": "Ink Muted", "canonical": "#999999" },
+      "hairline": { "role": "neutral", "displayName": "Hairline", "canonical": "rgba(255,255,255,0.08)" },
+      "hairline-soft": { "role": "neutral", "displayName": "Hairline Soft", "canonical": "rgba(255,255,255,0.06)" },
+      "accent-blue": { "role": "primary", "displayName": "Accent Blue", "canonical": "#0099FF", "tonalRamp": ["rgba(0,153,255,0.15)", "#0099FF"], "note": "The single secondary color — links, focus, selection, drop targets. Never a button fill." },
+      "focus-ring": { "role": "primary", "displayName": "Focus Ring", "canonical": "rgba(0,153,255,0.15)" },
+      "success": { "role": "tertiary", "displayName": "Success", "canonical": "#3AC36F", "tonalRamp": ["rgba(58,195,111,0.10)", "#3AC36F"] },
+      "danger": { "role": "tertiary", "displayName": "Danger", "canonical": "#FF5C5C", "tonalRamp": ["rgba(255,92,92,0.10)", "#FF5C5C"] },
+      "warning": { "role": "tertiary", "displayName": "Warning", "canonical": "#F5A524" },
+      "violet-base": { "role": "tertiary", "displayName": "Violet Base", "canonical": "#7C3AED", "note": "Gradient spotlight family anchor; the built app ships the violet variant only." },
+      "magenta-base": { "role": "tertiary", "displayName": "Magenta Base", "canonical": "#DB2777", "note": "Gradient spotlight family anchor; unused in the built app." },
+      "orange-base": { "role": "tertiary", "displayName": "Orange Base", "canonical": "#F97316", "note": "Gradient spotlight family anchor; unused in the built app." },
+      "coral-base": { "role": "tertiary", "displayName": "Coral Base", "canonical": "#FB7185", "note": "Gradient spotlight family anchor; unused in the built app." }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display / Brand", "purpose": "Mona Sans Variable — page and panel titles, boot-screen headline. Never labels or buttons." },
-      "body": { "displayName": "Body / UI", "purpose": "Inter Variable — default body, file names, descriptions, control text." },
-      "label": { "displayName": "Label", "purpose": "Inter Variable — table headers, quota readouts, captions, ruled manifest headers (11px uppercase overline, 0.08em)." },
-      "mono-data": { "displayName": "Mono Data", "purpose": "ui-monospace, SFMono-Regular, Consolas, monospace — IDs, sizes, dates, status labels, progress readouts, webhook numbers, byte values. Never body copy or buttons." }
+      "display": { "displayName": "Display / Brand", "purpose": "Mona Sans Variable 500 (GT Walsheim substitute) — page titles, empty-state headings, the 62px login hero. Never labels or buttons." },
+      "body": { "displayName": "Body / UI", "purpose": "Inter Variable 400 — default body, file names, descriptions, control text. Carries OpenType variants cv01 cv05 cv09 cv11 ss03 ss07 dlig." },
+      "label": { "displayName": "Label", "purpose": "Inter Variable 500 — table headers, quota readouts, captions, footer links, eyebrows (13px, -0.13px)." },
+      "button": { "displayName": "Button", "purpose": "Inter Variable 500, 14px, lh 1.0, -0.14px — pill CTA text, no uppercase transform." }
     },
     "shadows": [
-      { "name": "panel-edge", "value": "inset 0 1px 0 rgba(193,211,205,0.10), 0 10px 30px rgba(0,0,0,0.35)", "purpose": "Floating panels, menu popovers, hovered tiles." },
-      { "name": "command-strip", "value": "inset 0 1px 0 rgba(193,211,205,0.12), 0 16px 40px rgba(0,0,0,0.4)", "purpose": "Selection bar / command strip, transfer console." },
-      { "name": "dialog", "value": "inset 0 1px 0 rgba(193,211,205,0.12), 0 24px 64px rgba(0,0,0,0.55)", "purpose": "Dialogs, elevated panels." }
+      { "name": "light-edge", "value": "inset 0 1px 0 rgba(255,255,255,0.10), 0 10px 30px rgba(0,0,0,0.25)", "purpose": "Floating cards, upload queue, menus, hovered grid cards." },
+      { "name": "light-edge-strong", "value": "inset 0 1px 0 rgba(255,255,255,0.12), 0 16px 40px rgba(0,0,0,0.35)", "purpose": "Selection bar, dialogs, elevated panels." },
+      { "name": "focus-ring", "value": "0 0 0 1px rgba(0,153,255,0.15)", "purpose": "Focused inputs — same surface, blue ring, no surface change." },
+      { "name": "drop-target", "value": "2px dashed #0099FF + rgba(0,153,255,0.06) fill", "purpose": "Drag-over ring on the file area; pointer-inert overlay." }
     ],
     "motion": [
-      { "name": "state-transition", "value": "140-220ms", "purpose": "State feedback for cell/row/control transitions (hover, focus, selection, reveal)." },
-      { "name": "split-flap", "value": "one-character flips", "purpose": "State changes flip a character cell — status lamp, count, byte readout — nothing sweeps." },
-      { "name": "spring-system", "value": "web/src/motion/springs.js", "purpose": "Existing springs and DialogTransition APIs; no new motion library." },
-      { "name": "reduced-motion", "value": "opacity-only", "purpose": "prefers-reduced-motion: state changes become opacity-only, no transforms or flips." }
+      { "name": "state-transition", "value": "120-150ms", "purpose": "State feedback for hover, focus, selection, action reveal — quick and quiet, never choreographed page-load sequences." },
+      { "name": "pressed-scale", "value": "scale(0.97)", "purpose": "Pills shrink on press; no darkened fills. Icon buttons pulse their glyph instead." },
+      { "name": "spring-system", "value": "web/src/motion/springs.js", "purpose": "Existing springs and DialogTransition APIs drive dialog/queue entry; no new motion library." },
+      { "name": "reduced-motion", "value": "opacity-only", "purpose": "prefers-reduced-motion: state changes become opacity-only, no transforms, springs, or slides." }
     ],
     "breakpoints": [
-      { "name": "rail-collapse", "value": "768px", "purpose": "Fixed 240px manifest rail becomes app bar + temporary drawer; table/grid collapse to full-width cards with all actions always visible. Contractual — never moved." },
-      { "name": "public-asymmetric", "value": "900px", "purpose": "Asymmetric public surfaces (login, share): brand/statement left, control panel right; stacked below." },
-      { "name": "narrow-console", "value": "412px", "purpose": "Transfer console must not cover the viewport edge — maxWidth calc(100vw - 16px), left 8 fallback, safe-area-aware bottom padding." }
+      { "name": "rail-collapse", "value": "768px", "purpose": "Fixed 240px side rail becomes app bar + temporary drawer; table/grid collapse to full-width cards with all actions always visible. Contractual — never moved." },
+      { "name": "grid-collapse", "value": "810px", "purpose": "Entry grid collapses to full-width cards below 810px; the list/grid view toggle is desktop-only." },
+      { "name": "narrow-queue", "value": "412px", "purpose": "Upload queue must not cover the viewport edge — maxWidth calc(100vw - 16px), left 8 fallback, safe-area-aware bottom padding." }
     ]
   },
   "components": [
@@ -48,127 +50,128 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The single primary action — amber rectangular control, dark text.",
+      "description": "The single primary CTA — white pill, canvas text, pressed scale(0.97).",
       "html": "<button class=\"ds-btn-primary\">Upload</button>",
-      "css": ".ds-btn-primary { background: #D9A441; color: #1B1408; padding: 10px 15px; border-radius: 8px; border: none; font: 600 13px/1.2 'Inter Variable'; letter-spacing: 0.02em; transition: background-color 160ms ease; } .ds-btn-primary:hover { background: #E0AE52; } .ds-btn-primary:focus-visible { outline: 2px solid rgba(217,164,65,0.18); }"
+      "css": ".ds-btn-primary { background: #FFFFFF; color: #0E0E10; padding: 10px 15px; border-radius: 100px; border: none; font: 500 14px/1.0 'Inter Variable'; letter-spacing: -0.14px; transition: transform 150ms ease, background-color 150ms ease; } .ds-btn-primary:active { transform: scale(0.97); } .ds-btn-primary:focus-visible { outline: 2px solid rgba(0,153,255,0.55); outline-offset: 2px; }"
     },
     {
       "name": "Secondary Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Graphite rectangular control — surface-2 fill with hairline border.",
+      "description": "Charcoal pill — surface-1 fill, ink text, hairline border; hover lifts to surface-2.",
       "html": "<button class=\"ds-btn-secondary\">New folder</button>",
-      "css": ".ds-btn-secondary { background: #1A2428; color: #F4F1E8; padding: 10px 15px; border-radius: 8px; border: 1px solid rgba(193,211,205,0.18); font: 600 13px/1.2 'Inter Variable'; letter-spacing: 0.02em; transition: background-color 160ms ease, border-color 160ms ease; } .ds-btn-secondary:hover { background: #233036; border-color: rgba(193,211,205,0.28); }"
+      "css": ".ds-btn-secondary { background: #1A1A1D; color: #FFFFFF; padding: 10px 15px; border-radius: 100px; border: 1px solid rgba(255,255,255,0.08); font: 500 14px/1.0 'Inter Variable'; letter-spacing: -0.14px; transition: background-color 150ms ease, border-color 150ms ease; } .ds-btn-secondary:hover { background: #242428; border-color: rgba(255,255,255,0.14); } .ds-btn-secondary:active { transform: scale(0.97); }"
     },
     {
       "name": "Text Input",
       "kind": "input",
       "refersTo": "text-input",
-      "description": "Form fields — surface-1 fill, hairline border, amber focus ring.",
+      "description": "Form fields — surface-1 fill, hairline border, blue focus ring, ink-muted placeholder.",
       "html": "<input class=\"ds-input\" placeholder=\"Search files and folders\" />",
-      "css": ".ds-input { background: #11181B; color: #F4F1E8; border: 1px solid rgba(193,211,205,0.18); border-radius: 8px; padding: 10px 14px; font: 400 15px/1.45 'Inter Variable'; letter-spacing: -0.1px; transition: border-color 160ms ease, box-shadow 160ms ease; } .ds-input::placeholder { color: #9BA7A7; } .ds-input:focus { outline: none; box-shadow: 0 0 0 1px rgba(217,164,65,0.18); border-color: rgba(217,164,65,0.18); }"
+      "css": ".ds-input { background: #1A1A1D; color: #FFFFFF; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 14px; font: 400 15px/1.3 'Inter Variable'; letter-spacing: -0.15px; transition: border-color 150ms ease, box-shadow 150ms ease; } .ds-input::placeholder { color: #999999; } .ds-input:focus { outline: none; box-shadow: 0 0 0 1px rgba(0,153,255,0.15); border-color: rgba(0,153,255,0.15); }"
     },
     {
       "name": "Dialog",
       "kind": "custom",
       "refersTo": "dialog",
-      "description": "Surface-2 matte panel, ruled header, dialog elevation, 12px corners; mono for URLs/IDs.",
+      "description": "Surface-2 panel, 20px radius, light-edge-strong, 24px padding, rgba(0,0,0,0.72) backdrop; headline tier title.",
       "html": "<div class=\"ds-dialog\"><h3>New folder</h3><p>Folders can contain files and other folders.</p></div>",
-      "css": ".ds-dialog { background: #1A2428; border-radius: 12px; padding: 20px; box-shadow: inset 0 1px 0 rgba(193,211,205,0.12), 0 24px 64px rgba(0,0,0,0.55); color: #F4F1E8; } .ds-dialog h3 { font: 600 20px/1.25 'Inter Variable'; letter-spacing: -0.3px; margin: 0 0 16px; }"
+      "css": ".ds-dialog { background: #242428; border-radius: 20px; padding: 24px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 16px 40px rgba(0,0,0,0.35); color: #FFFFFF; } .ds-dialog h3 { font: 700 22px/1.2 'Inter Variable'; letter-spacing: -0.8px; margin: 0 0 16px; }"
+    },
+    {
+      "name": "Selection Bar",
+      "kind": "custom",
+      "refersTo": "selection-bar",
+      "description": "Floating surface-2 bar over the manifest, 20px radius, light-edge-strong; count in caption/ink, actions as small charcoal pills.",
+      "html": "<div class=\"ds-selection\"><span>3 selected</span><button>Delete</button></div>",
+      "css": ".ds-selection { position: fixed; background: #242428; border-radius: 20px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 16px 40px rgba(0,0,0,0.35); padding: 8px 12px; color: #FFFFFF; } .ds-selection span { font: 500 13px/1.2 'Inter Variable'; color: #999999; }"
     },
     {
       "name": "Entry Table Row",
       "kind": "custom",
       "refersTo": "entry-table",
-      "description": "Ruled manifest row — canvas surface, surface-1 hover, surface-2 + signal marker selected; keyboard-visible action reveal.",
-      "html": "<tr class=\"ds-row\"><td>notes.txt</td><td class=\"ds-mono\">1.2 KiB</td></tr>",
-      "css": ".ds-row { cursor: pointer; } .ds-row td { padding: 10px 0; border-bottom: 1px solid rgba(193,211,205,0.10); color: #F4F1E8; font: 400 15px/1.45 'Inter Variable'; letter-spacing: -0.1px; } .ds-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: #9BA7A7; } .ds-row:hover { background: #11181B; } .ds-row.selected { background: #1A2428; box-shadow: inset 2px 0 0 #D9A441; }"
+      "description": "Manifest row — canvas surface, surface-1 hover, surface-2 selected, hairline-soft dividers; actions reveal on hover (desktop).",
+      "html": "<tr class=\"ds-row\"><td>notes.txt</td><td>1.2 KiB</td></tr>",
+      "css": ".ds-row { cursor: pointer; } .ds-row td { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06); color: #FFFFFF; font: 400 15px/1.3 'Inter Variable'; letter-spacing: -0.15px; } .ds-row:hover { background: #1A1A1D; } .ds-row.selected { background: #242428; }"
     },
     {
       "name": "Entry Grid Tile",
       "kind": "custom",
       "refersTo": "entry-grid-tile",
-      "description": "Fixed-cell file tile — icon cell, name, mono metadata; signal border + signal-soft when selected.",
-      "html": "<div class=\"ds-tile\"><div class=\"ds-tile-icon\"></div><span>report.pdf</span><span class=\"ds-mono\">4.1 MiB</span></div>",
-      "css": ".ds-tile { background: #11181B; border: 1px solid rgba(193,211,205,0.10); border-radius: 6px; padding: 10px; color: #F4F1E8; } .ds-tile.selected { border-color: #D9A441; background: rgba(217,164,65,0.18); } .ds-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: #9BA7A7; }"
+      "description": "File tile — icon cell, name, meta; surface-1, 15px radius; hover lifts to surface-2 + light-edge.",
+      "html": "<div class=\"ds-tile\"><div class=\"ds-tile-icon\"></div><span>report.pdf</span><span>4.1 MiB</span></div>",
+      "css": ".ds-tile { background: #1A1A1D; border: 1px solid rgba(255,255,255,0.08); border-radius: 15px; padding: 10px; color: #FFFFFF; transition: background-color 150ms ease, box-shadow 150ms ease; } .ds-tile:hover { background: #242428; box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 10px 30px rgba(0,0,0,0.25); } .ds-tile span:last-child { color: #999999; }"
     },
     {
       "name": "Entry Cards",
       "kind": "custom",
       "refersTo": "entry-card",
-      "description": "Same cell grammar stacked for touch; all actions always visible below 768px (no hover dependency).",
-      "html": "<div class=\"ds-card\"><span>photo.png</span><span class=\"ds-mono\">2.0 MiB</span></div>",
-      "css": ".ds-card { background: #11181B; border: 1px solid rgba(193,211,205,0.10); border-radius: 12px; padding: 15px; color: #F4F1E8; } .ds-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: #9BA7A7; }"
+      "description": "Same tile grammar stacked for touch; all actions always visible below 768px (no hover dependency).",
+      "html": "<div class=\"ds-card\"><span>photo.png</span><span>2.0 MiB</span></div>",
+      "css": ".ds-card { background: #1A1A1D; border: 1px solid rgba(255,255,255,0.08); border-radius: 15px; padding: 15px; color: #FFFFFF; } .ds-card span:last-child { color: #999999; }"
     },
     {
-      "name": "Quota Readout",
+      "name": "Spotlight Card",
       "kind": "custom",
-      "refersTo": "quota-readout",
-      "description": "Compact signal readout — mono values, segmented/ruled progress track, exact 'X of Y used' copy.",
-      "html": "<div class=\"ds-quota\" aria-label=\"42% of quota used\"><span class=\"ds-mono\">4.2 GiB of 10.0 GiB used</span></div>",
-      "css": ".ds-quota { color: #9BA7A7; border-radius: 6px; } .ds-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }"
+      "refersTo": "spotlight-card",
+      "description": "The one gradient card: violet linear-gradient(140deg, #5B21B6, #7C3AED 48%, #A78BFA), 30px radius, 40px padding, centered; frosted translucent pill CTA. Appears exactly once — the drive empty state.",
+      "html": "<div class=\"ds-spotlight\"><h2>Your space is ready</h2><p>Your files are encrypted before they're stored — only you can see them.</p><button>Upload your first file</button></div>",
+      "css": ".ds-spotlight { background: linear-gradient(140deg, #5B21B6 0%, #7C3AED 48%, #A78BFA 100%); border-radius: 30px; padding: 40px; text-align: center; color: #FFFFFF; } .ds-spotlight h2 { font: 500 32px/1.13 'Mona Sans Variable'; letter-spacing: -1.0px; margin: 15px 0 5px; } .ds-spotlight button { background: rgba(255,255,255,0.14); color: #FFFFFF; border: none; border-radius: 100px; padding: 10px 15px; font: 500 14px/1.0 'Inter Variable'; }"
     },
     {
-      "name": "Transfer Console",
+      "name": "Upload Queue",
       "kind": "custom",
-      "refersTo": "transfer-console",
-      "description": "Fixed transfer console, not a floating card — ruled 'Uploads' header with active count, segmented progress, abort/retry/remove; safe-area-aware below 412px.",
-      "html": "<div class=\"ds-console\"><header>Uploads <span class=\"ds-mono\">2</span></header></div>",
-      "css": ".ds-console { position: fixed; right: 16px; bottom: 16px; background: #1A2428; border-radius: 12px; box-shadow: inset 0 1px 0 rgba(193,211,205,0.12), 0 16px 40px rgba(0,0,0,0.4); color: #F4F1E8; } @media (max-width: 412px) { .ds-console { max-width: calc(100vw - 16px); left: 8px; right: 8px; } }"
+      "refersTo": "upload-queue",
+      "description": "Floating bottom-right surface-2 panel, 20px radius, light-edge; 6px white progress bar on white-10% track; done = success-green check glyph; safe-area aware and clamped below 412px.",
+      "html": "<div class=\"ds-queue\"><header>Uploads <span>2</span></header></div>",
+      "css": ".ds-queue { position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); background: #242428; border-radius: 20px; width: 380px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 10px 30px rgba(0,0,0,0.25); color: #FFFFFF; } @media (max-width: 412px) { .ds-queue { max-width: calc(100vw - 16px); left: 8px; right: 8px; } }"
     },
     {
       "name": "Drop Zone",
       "kind": "custom",
       "refersTo": "drop-zone",
-      "description": "Signal Deck drop-zone state — amber dashed ring with signal-soft fill; pointer-inert overlay.",
+      "description": "Drag-over state — blue dashed ring with rgba(0,153,255,0.06) fill; pointer-inert overlay over the file area.",
       "html": "<div class=\"ds-drop\">Drop files to upload</div>",
-      "css": ".ds-drop { border: 2px dashed #D9A441; background: rgba(217,164,65,0.18); border-radius: 12px; pointer-events: none; color: #F4F1E8; }"
-    },
-    {
-      "name": "Empty-State Panel",
-      "kind": "custom",
-      "refersTo": "empty-state-panel",
-      "description": "NO FILES / CHANNEL READY panel — surface-1, fixed-grid atmosphere, amber upload marker, one primary CTA. Exact strings: 'Your space is ready' / 'Your files are encrypted before they're stored — only you can see them.' / 'Upload your first file'.",
-      "html": "<div class=\"ds-empty\"><h2>Your space is ready</h2><p>Your files are encrypted before they're stored — only you can see them.</p><button>Upload your first file</button></div>",
-      "css": ".ds-empty { background: #11181B; border: 1px solid rgba(193,211,205,0.10); border-radius: 12px; padding: 40px; text-align: center; color: #F4F1E8; } .ds-empty h2 { font: 500 28px/1.15 'Mona Sans Variable'; letter-spacing: -0.6px; margin: 15px 0 5px; } .ds-empty button { background: #D9A441; color: #1B1408; border: none; border-radius: 8px; padding: 10px 15px; font: 600 13px/1.2 'Inter Variable'; }"
+      "css": ".ds-drop { border: 2px dashed #0099FF; background: rgba(0,153,255,0.06); border-radius: 20px; pointer-events: none; color: #FFFFFF; }"
     }
   ],
   "narrative": {
-    "northStar": "Signal Deck",
-    "overview": "A private file system whose encrypted payloads move through Discord attachments deserves an instrument, not another dark SaaS card skin. Signal Deck is a split-flap operations board: matte graphite canvas, one amber signal, a local mono register for every measurement, and fixed-grid grammar — ruled headers, fixed character cells, status lamps, restrained steel inset edges — that makes storage state legible for a technical self-hosting operator. The category default it refuses: the centered SaaS dashboard of equal cards. Identity lives in the shell, the ruled rows, the state changes, and the task hierarchy, not in uniform tiles.",
+    "northStar": "The Dark Canvas",
+    "overview": "Wyvern Drive is a personal cloud drive backed by Discord — files split into chunks, AES-256-GCM encrypted at rest, served from one per-user Discord webhook — and it wears Framer's dark-canvas world: a near-black canvas, oversized white display type with hard negative tracking, and one chromatic accent (blue) reserved for links, focus, and selection, never a fill. The app is a poster at the edges (login, share links) and a quiet instrument in the middle (the drive itself), where scanability, density, and familiar cloud-drive idioms outrank expression. Hierarchy is carried by surface lift — canvas #0E0E10 → surface-1 #1A1A1D → surface-2 #242428 — and the text scale is binary ink #FFFFFF / ink-muted #999999. The only chromatic depth in the whole system is the scarce gradient spotlight card (the drive's empty state), the memorable moment that sits in an otherwise monochrome grid like a Framer showcase tile. The category default it refuses: the light Google-Drive chrome of every other file manager.",
     "keyCharacteristics": [
-      "Matte graphite canvas everywhere; no light mode, no white cards",
-      "One amber signal (#D9A441) for primary actions, selection, focus, drop targets",
-      "Semantic colors (success/danger/info) are states, never decoration",
-      "Local mono stack reserved for measurement: IDs, sizes, dates, status, byte values",
-      "Rectangular controls by radius role — no pill-button system, no circular icon buttons",
-      "Fixed 240px manifest rail; ruled tables and fixed-cell tiles",
-      "Split-flap state vocabulary: 140–220ms transitions, one-character flips, no page-load choreography",
-      "Cross-surface story: boot screen, live file manifest, storage control room, recovery ledger, guided check-in, transfer manifest",
-      "Cloud-drive side rail; monochrome file-type glyphs",
-      "No gradients, no violet, no glass, no glow"
+      "Near-black canvas everywhere; no light mode, no white cards, no light interludes",
+      "Hard negative display tracking (Mona Sans at 500, -3.1px at 62px, -1.0px at 32px) for poster-grade headlines",
+      "White pill is the only primary CTA; charcoal pills and text links cover everything else",
+      "One gradient spotlight card (violet, 30px radius) as the system's only atmosphere device — the drive empty state",
+      "Inter Variable body with bespoke OpenType variants (cv01 cv05 cv09 cv11 ss03 ss07 dlig)",
+      "5px spacing base (5/10/15/20/30/40); radius from 4px chips to 100px pills, 15–20px cards, 30px spotlight",
+      "Cloud-drive side rail (user-confirmed over a marketing top nav); monochrome file-type glyphs (folders ink, files ink-muted)",
+      "Light-edge elevation: an inset white top edge over a deep drop shadow — the only shadow language",
+      "Poster at the edges (login, share), quiet instrument in the middle (drive, Operate-first)",
+      "Accent blue #0099FF is the single secondary color — links, focus, selection, drop targets; never a fill"
     ],
     "rules": [
-      { "name": "The One Signal Rule", "body": "Amber is the single primary signal — primary actions, selection, focus, drop targets, active route marker. Never a second amber, never amber as decorative fill, never a different primary color.", "section": "colors" },
-      { "name": "The Mono Measurement Rule", "body": "Anything that is a measurement or identity — IDs, sizes, dates, status labels, progress readouts, webhook numbers, byte values — is set in ui-monospace/SFMono-Regular/Consolas. Prose is never mono; body copy and buttons never are.", "section": "typography" },
-      { "name": "The No-Pill Rule", "body": "Every control is a rectangle in its radius class (panels 12px, cells 6px, controls 8px, icon actions 8px). No pill buttons, no circular icon buttons, no ghost buttons with transparent fills.", "section": "shapes" },
-      { "name": "The Flat-Graphite Rule", "body": "Surfaces are flat matte graphite at rest. Steel inset edges and panel-edge shadows mark floating; nothing glows, no gradients, no glass. If a surface looks lit from inside, the system is drifting.", "section": "elevation" }
+      { "name": "The One Blue Rule", "body": "Accent blue #0099FF is reserved for links, focus, and selection. If you reach for a second blue — or a blue button fill — the brand is drifting.", "section": "colors" },
+      { "name": "The Binary Ink Rule", "body": "Secondary type is ink-muted #999999 or it is ink #FFFFFF. No mid-tone grays, no opacity gradients on white type.", "section": "colors" },
+      { "name": "The Lift Rule", "body": "Hierarchy on dark is marked by surface lift (canvas → surface-1 → surface-2), never by color or brightness of type. Selected = one step up, never a tint.", "section": "elevation" },
+      { "name": "The Gradient-Is-Cards Rule", "body": "Gradients belong to the spotlight card alone. A gradient on a whole section, a button, or a background is a drift; gradients are cards.", "section": "colors" }
     ],
     "dos": [
-      "Keep canvas and ink as the two anchor surfaces; use surface-1/2/3 as measured steps.",
-      "Reserve amber for the primary signal — actions, selection, focus, drop targets.",
-      "Set measurements and identities (IDs, sizes, dates, status, byte values) in the mono register.",
-      "Compose every control as a rectangle in its radius class; keep the no-pill, no-circle discipline.",
-      "Mark floating with steel inset edges and panel-edge shadows; keep everything else matte.",
-      "Keep state feedback at 140–220ms with split-flap flips; honor reduced motion with opacity-only changes.",
+      "Keep canvas and ink as the two anchor surfaces; every band chooses one or the other.",
+      "Push display tracking hard negative and keep the Inter OpenType variants on.",
+      "Use blue only for links, focus, selection — and the drop-target ring.",
+      "Mark hierarchy with surface lift; selected = one step up, never a tint.",
+      "Compose every CTA as a pill and every icon action as a circle.",
+      "Keep the gradient scarce — one spotlight card, ever.",
       "Show the task and the primary action in the first viewport on every route."
     ],
     "donts": [
-      "Ship a light surface anywhere, or any white pill CTA — the world is graphite, the CTA is amber.",
-      "Introduce gradients, violet, glass, or glow — the fixed-grid atmosphere is texture, not illumination.",
-      "Use semantic colors as decoration; success/danger/info mean states.",
-      "Reach for a second primary color or a second amber.",
-      "Set labels or buttons in the display face, or body copy in mono.",
+      "Ship a light surface anywhere. The brand is dark.",
+      "Introduce mid-tone grays outside ink-muted.",
+      "Make the blue a brand fill — no blue pills, no blue logo tiles.",
+      "Square off CTAs or use bordered ghost buttons with transparent fills.",
+      "Reduce display negative tracking \"for accessibility\" — reduce size, keep the percentage.",
+      "Apply gradients to whole sections; gradients are cards.",
       "Color-code file types; the glyph carries the type, folders are ink and files are ink-muted."
     ]
   }

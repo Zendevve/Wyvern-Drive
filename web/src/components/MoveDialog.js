@@ -180,9 +180,17 @@ export default function MoveDialog({
           }}
           sx={{
             pl: 2 + depth * 3,
-            borderRadius: '8px',
+            borderRadius: '10px',
             opacity: isForbidden ? 0.4 : undefined,
             '&:hover:not(.Mui-selected)': { bgcolor: 'surface1' },
+            // Selected = lift on the surface-2 panel; neutralize any
+            // ruled-edge marker so selection never reads as a signal.
+            '&.Mui-selected': {
+              bgcolor: 'surface2',
+              color: 'ink',
+              '&:hover': { bgcolor: 'surface2' },
+              '&::before': { display: 'none' },
+            },
           }}
         >
           <IconButton
@@ -201,7 +209,7 @@ export default function MoveDialog({
             <FontAwesomeIcon icon={isExpanded ? faChevronDown : faChevronRight} />
           </IconButton>
           <ListItemIcon sx={{ minWidth: 32 }}>
-            <FontAwesomeIcon icon={faFolder} color={theme.palette.inkMuted} />
+            <FontAwesomeIcon icon={faFolder} color={theme.palette.ink} />
           </ListItemIcon>
           <ListItemText primary={node.name} />
           {isForbidden && (
@@ -224,7 +232,7 @@ export default function MoveDialog({
       fullWidth
       TransitionComponent={DialogTransition}
     >
-      <DialogTitle sx={{ borderBottom: '1px solid', borderColor: 'hairline' }}>
+      <DialogTitle>
         {mode === 'copy' ? 'Copy' : 'Move'} {entry ? entry.name : ''}
       </DialogTitle>
       <DialogContent dividers>

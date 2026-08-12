@@ -8,15 +8,10 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFolderOpen } from '@fortawesome/free-solid-svg-icons';
 
-// Route-trail face: mono keeps the trail in the measurement/data register
-// while the links stay keyboard-accessible buttons.
-const ROUTE_MONO = "'ui-monospace', SFMono-Regular, Consolas, monospace";
-
 // Long names clip to an ellipsis instead of overflowing the rail or mobile
 // viewport; MUI Breadcrumbs wraps, so clipped crumbs never cause a scroll.
 const crumbLinkSx = {
   color: 'inkMuted',
-  fontFamily: ROUTE_MONO,
   maxWidth: 200,
   display: 'inline-block',
   overflow: 'hidden',
@@ -68,7 +63,7 @@ export default function Breadcrumbs({ trail, onNavigate }) {
               fontWeight={500}
               aria-current="page"
               noWrap
-              sx={{ maxWidth: 220, fontFamily: ROUTE_MONO }}
+              sx={{ maxWidth: 220 }}
             >
               {part.name}
             </Typography>

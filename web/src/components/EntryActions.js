@@ -17,8 +17,8 @@ import { archiveUrl, downloadUrl } from '../api/client';
 const destructiveSx = {
   color: 'error.main',
   '&:hover': {
-    color: '#EE8378',
-    backgroundColor: 'dangerSoft',
+    color: '#FF7575',
+    backgroundColor: 'rgba(255,92,92,0.08)',
   },
 };
 

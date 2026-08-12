@@ -4,10 +4,9 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFolder } from '@fortawesome/free-solid-svg-icons';
 
 /**
- * Wyvern Drive brand lockup: the folder glyph inside the Signal Deck mark —
- * a graphite cell with an amber signal lamp — plus the wordmark. `compact`
- * is the rail/app-bar size; `align` controls the text alignment for
- * full-width contexts.
+ * Wyvern Drive brand lockup: the folder glyph in a surface2 circle plus
+ * the wordmark. `compact` is the rail/app-bar size; `align` controls the
+ * text alignment for full-width contexts.
  */
 export default function BrandLockup({ compact = false, align = 'left' }) {
   const size = compact ? 30 : 38;
@@ -23,7 +22,6 @@ export default function BrandLockup({ compact = false, align = 'left' }) {
     >
       <Box
         sx={{
-          position: 'relative',
           width: size,
           height: size,
           flexShrink: 0,
@@ -31,25 +29,11 @@ export default function BrandLockup({ compact = false, align = 'left' }) {
           alignItems: 'center',
           justifyContent: 'center',
           bgcolor: 'surface2',
-          border: 1,
-          borderColor: 'hairline',
-          borderRadius: '8px',
+          borderRadius: '50%',
         }}
         aria-hidden="true"
       >
-        <FontAwesomeIcon icon={faFolder} color="#F4F1E8" size="sm" />
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 5,
-            right: 5,
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            bgcolor: 'signal',
-            boxShadow: '0 0 6px rgba(217,164,65,0.7)',
-          }}
-        />
+        <FontAwesomeIcon icon={faFolder} color="#FFFFFF" size="sm" />
       </Box>
       <Typography
         variant={compact ? 'subtitle2' : 'h6'}
@@ -57,7 +41,7 @@ export default function BrandLockup({ compact = false, align = 'left' }) {
         sx={{
           fontFamily: "'Mona Sans Variable', sans-serif",
           fontWeight: 500,
-          letterSpacing: '-0.4px',
+          letterSpacing: '-0.5px',
           color: 'ink',
         }}
       >

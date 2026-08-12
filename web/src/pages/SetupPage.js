@@ -77,9 +77,7 @@ function RedirectUriChip() {
         alignItems: 'center',
         gap: 1,
         bgcolor: 'surface2',
-        borderRadius: '8px',
-        border: '1px solid',
-        borderColor: 'hairline',
+        borderRadius: '10px',
         px: 1.5,
         py: 1,
       }}
@@ -115,25 +113,6 @@ function RedirectUriChip() {
         {copied ? 'Copied' : 'Copy'}
       </Button>
     </Box>
-  );
-}
-
-/** Ruled panel header — hairline rule under the title, Signal Deck grammar. */
-function RuledTitle({ children, sx }) {
-  return (
-    <Typography
-      variant="h3"
-      component="h2"
-      sx={{
-        mb: 2,
-        pb: 1.5,
-        borderBottom: '1px solid',
-        borderColor: 'hairlineSoft',
-        ...sx,
-      }}
-    >
-      {children}
-    </Typography>
   );
 }
 
@@ -378,16 +357,16 @@ export default function SetupPage({ status, onRetry }) {
               data-testid="setup-checklist"
               sx={{ p: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
             >
-              <RuledTitle>Connect Discord sign-in</RuledTitle>
+              <Typography variant="h3" component="h2" sx={{ mb: 2 }}>
+                Connect Discord sign-in
+              </Typography>
               {STAGE_1_STEPS.map((step, i) => (
                 <Box key={i} sx={{ display: 'flex', gap: 2, mb: 2 }}>
                   <Box
                     sx={{
                       width: 32,
                       height: 32,
-                      borderRadius: '8px',
-                      border: '1px solid',
-                      borderColor: 'hairlineSoft',
+                      borderRadius: '50%',
                       bgcolor: 'surface2',
                       display: 'flex',
                       alignItems: 'center',
@@ -421,7 +400,9 @@ export default function SetupPage({ status, onRetry }) {
               variant="outlined"
               sx={{ p: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
             >
-              <RuledTitle>For your users</RuledTitle>
+              <Typography variant="h3" component="h2" sx={{ mb: 2 }}>
+                For your users
+              </Typography>
               <Typography variant="body1" sx={{ color: 'inkMuted' }}>
                 Once sign-in works, people sign in with Discord and connect their
                 own storage in about a minute — no technical knowledge needed.
@@ -437,7 +418,9 @@ export default function SetupPage({ status, onRetry }) {
                 data-testid="setup-meta"
                 sx={{ p: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
               >
-                <RuledTitle>Add your Discord application</RuledTitle>
+                <Typography variant="h3" component="h2" sx={{ mb: 2 }}>
+                  Add your Discord application
+                </Typography>
                 <Typography variant="body1" sx={{ color: 'inkMuted', mb: 2 }}>
                   Paste the Client ID and Client Secret from your Discord
                   application below. They are saved in server/.env on this server
@@ -602,7 +585,9 @@ export default function SetupPage({ status, onRetry }) {
               variant="outlined"
               sx={{ p: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
             >
-              <RuledTitle>Restart &amp; check</RuledTitle>
+              <Typography variant="h3" component="h2" sx={{ mb: 2 }}>
+                Restart &amp; check
+              </Typography>
               <Typography variant="body1" sx={{ color: 'inkMuted', mb: 2 }}>
                 Restart the server, then come back here.
               </Typography>
@@ -625,7 +610,9 @@ export default function SetupPage({ status, onRetry }) {
                 data-testid="setup-diagnostics"
                 sx={{ p: 3, bgcolor: 'surface1', borderColor: 'hairline' }}
               >
-                <RuledTitle>What&apos;s left</RuledTitle>
+                <Typography variant="h3" component="h2" sx={{ mb: 2 }}>
+                  What&apos;s left
+                </Typography>
                 {missing.length > 0 && (
                   <Box sx={{ mb: invalid.length > 0 ? 2 : 0 }}>
                     {missing.map((key) => (

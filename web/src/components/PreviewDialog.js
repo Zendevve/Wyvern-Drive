@@ -92,18 +92,12 @@ export default function PreviewDialog({ entry, onClose }) {
           display: 'flex',
           alignItems: 'center',
           gap: 1,
-          borderBottom: '1px solid',
-          borderColor: 'hairline',
         }}
       >
         <Typography
           variant="subtitle1"
           noWrap
-          sx={{
-            flexGrow: 1,
-            fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
-            fontSize: 13,
-          }}
+          sx={{ flexGrow: 1 }}
           component="span"
         >
           {entry ? entry.name : ''}
@@ -130,7 +124,7 @@ export default function PreviewDialog({ entry, onClose }) {
               width: 'auto',
               height: 'auto',
               mx: 'auto',
-              borderRadius: '8px',
+              borderRadius: '10px',
             }}
           />
         )}
@@ -139,7 +133,7 @@ export default function PreviewDialog({ entry, onClose }) {
             controls
             autoPlay
             src={src}
-            style={{ width: '100%', maxHeight: '70vh', borderRadius: '8px' }}
+            style={{ width: '100%', maxHeight: '70vh', borderRadius: '10px' }}
           />
         )}
         {isAudio && (
@@ -153,7 +147,7 @@ export default function PreviewDialog({ entry, onClose }) {
               width: '100%',
               height: 600,
               border: 'none',
-              borderRadius: '8px',
+              borderRadius: '10px',
               backgroundColor: '#FFFFFF',
             }}
           />
@@ -162,9 +156,7 @@ export default function PreviewDialog({ entry, onClose }) {
           <Box
             sx={{
               bgcolor: 'surface1',
-              border: '1px solid',
-              borderColor: 'hairline',
-              borderRadius: '8px',
+              borderRadius: '10px',
               p: 2,
             }}
           >
@@ -188,7 +180,7 @@ export default function PreviewDialog({ entry, onClose }) {
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
                   color: 'ink',
-                  fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+                  fontFamily: "'Consolas', monospace",
                   fontSize: 13,
                   lineHeight: 1.5,
                 }}
