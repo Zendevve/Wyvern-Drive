@@ -3,7 +3,7 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert');
 const zlib = require('node:zlib');
-const { startTestServer, makeClient, login, uploadFile, makeFixture, sha256hex, dbAll } = require('./helpers');
+const { startTestServer, makeClient, login, uploadFile, makeFixture, sha256hex, dbAll, dbRun } = require('./helpers');
 
 let ctx;
 let client;
@@ -290,14 +290,15 @@ test('retryable recursive purge: failure keeps the subtree in trash, retry compl
   assert.strictEqual((await ctx.repositories.getChunksByEntry(fileEntry.id)).length, 0);
 });
 
-test('usedBytes counts kept failed uploads in addition to ready files', async (t) => {
+test('usedBytes stays flat for kept failed uploads and counts ready files', async (t) => {
   const { ctx, client: c2 } = await freshContext(t, { chunkSizeBytes: 8 });
   const before = (await c2.request('/api/drive')).json.usedBytes;
 
-  // A failed upload keeps its entry row; sumUsedBytes counts rows with status
-  // IN ('ready','uploading','failed'). The failed row's size_bytes is 0 (only
-  // a successful upload commits size), so the total is unchanged — but the
-  // counting query includes it, and the quota state stays consistent.
+  // A failed upload keeps its entry row for resume, but sumUsedBytes counts
+  // only status 'ready' (interrupted entries are resumable and, once
+  // abandoned, reclaimed by the orphan sweep). The failed row's size_bytes is
+  // 0 (only a successful upload commits size), so the total is unchanged —
+  // and the quota state stays consistent.
   ctx.discordStorage.failPutChunkOnCall = 2;
   const res = await uploadFile(c2, { name: 'stuck.bin', data: makeFixture(24) });
   assert.strictEqual(res.status, 502);
@@ -306,7 +307,7 @@ test('usedBytes counts kept failed uploads in addition to ready files', async (t
   const failedRows = await dbAll(ctx.db, "SELECT * FROM entries WHERE status = 'failed'");
   assert.strictEqual(failedRows.length, 1);
   assert.strictEqual(failedRows[0].size_bytes, 0);
-  assert.strictEqual(await ctx.repositories.sumUsedBytes(1), before, 'failed entries are counted (0 bytes until ready)');
+  assert.strictEqual(await ctx.repositories.sumUsedBytes(1), before, 'failed uploads are not counted');
   assert.strictEqual((await c2.request('/api/drive')).json.usedBytes, before);
 
   // A ready upload counts normally.
@@ -573,4 +574,80 @@ test('cancel purges an in-flight uploading entry with no stored chunks', async (
   assert.strictEqual(cancel.status, 204);
   assert.strictEqual(await ctx.repositories.getEntryById(row.id), undefined);
   assert.strictEqual(ctx.discordStorage.countMessages(), 0);
+});
+
+test('purgeStaleUploads removes abandoned uploads and their blocks, keeping fresh ones', async (t) => {
+  const { ctx, client: c2 } = await freshContext(t);
+  const webhook = (await ctx.repositories.listWebhooks(1))[0];
+
+  // Two uploading entries with one posted block+chunk each (the shape a page
+  // refresh leaves behind); the fresh entry's updated_at stays "now".
+  async function insertPhantom(name, token) {
+    const entry = await ctx.repositories.insertEntry({
+      driveId: 1,
+      parentId: null,
+      kind: 'file',
+      name,
+      sizeBytes: 0,
+      mimeType: 'application/octet-stream',
+      status: 'uploading',
+      uploadToken: token,
+      expectedSizeBytes: null,
+    });
+    const [posted] = await ctx.discordStorage.putChunks(
+      webhook,
+      [{ filename: `chunk-${token}.bin`, encryptedBuffer: Buffer.alloc(16, 3), ordinal: 0 }]
+    );
+    const block = await ctx.repositories.insertBlock({
+      driveId: 1,
+      contentHash: sha256hex(Buffer.from(`stale-${token}`)),
+      messageId: posted.messageId,
+      webhookId: webhook.id,
+      plainSizeBytes: 8,
+      cipherSizeBytes: 16,
+      nonce: Buffer.alloc(12, 1),
+      authTag: Buffer.alloc(16, 2),
+      compression: 'none',
+    });
+    await ctx.repositories.insertChunk({ entryId: entry.id, ordinal: 0, blockId: block.id });
+    return { entry, block };
+  }
+  const stale = await insertPhantom('stale-upload.bin', 'stale-token');
+  const fresh = await insertPhantom('fresh-upload.bin', 'fresh-token');
+  assert.strictEqual(ctx.discordStorage.countMessages(), 2, 'one Discord message per phantom');
+
+  // Force the stale entry's last activity 25h into the past (25h > 24h TTL).
+  const oldIso = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+  await dbRun(ctx.db, 'UPDATE entries SET updated_at = ? WHERE id = ?', [oldIso, stale.entry.id]);
+
+  const drive = await ctx.repositories.getDriveById(1);
+  await ctx.fileService.purgeStaleUploads({ drive, now: Date.now() });
+
+  // Stale entry and its rows/message are hard-purged; the fresh entry survives.
+  assert.strictEqual(await ctx.repositories.getEntryById(stale.entry.id), undefined, 'stale entry purged');
+  assert.strictEqual(
+    await ctx.repositories.getBlockByContentHash(1, sha256hex(Buffer.from('stale-stale-token'))),
+    undefined,
+    'stale block row deleted'
+  );
+  const freshEntryAfter = await ctx.repositories.getEntryById(fresh.entry.id);
+  assert.ok(freshEntryAfter, 'fresh entry kept');
+  assert.strictEqual(freshEntryAfter.id, fresh.entry.id);
+  assert.ok(
+    await ctx.repositories.getBlockByContentHash(1, sha256hex(Buffer.from('stale-fresh-token'))),
+    'fresh block row kept'
+  );
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM content_blocks'))[0].c, 1, 'one block remains');
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM file_chunks'))[0].c, 1, 'one chunk row remains');
+  assert.strictEqual(ctx.discordStorage.countMessages(), 1, 'stale Discord message deleted, fresh kept');
+  assert.ok(ctx.discordStorage.messagesForWebhook(webhook.id), 'webhook store still has the fresh message');
+
+  // Neither phantom is a committed file, so driveStats shows no blocks.
+  const stats = await ctx.repositories.driveStats(1);
+  assert.strictEqual(stats.blocks, 0, 'no ready entry references a block');
+  assert.strictEqual(stats.files, 0);
+
+  // The fresh entry remains listable only as an upload, never as a file.
+  const root = await c2.request('/api/entries');
+  assert.deepStrictEqual(root.json.entries, []);
 });

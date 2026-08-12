@@ -6,6 +6,12 @@ const { WyvernError, httpError } = require('../errors');
 
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 
+// An upload entry with no activity for 24h was abandoned: a live upload keeps
+// streaming, but a page refresh drops the client's in-memory upload queue, so
+// its token can never resume. The boot/interval orphan sweep hard-purges these
+// entries so drive stats never count phantom files.
+const ORPHAN_UPLOAD_TTL_MS = 24 * 60 * 60 * 1000;
+
 function sha256hex(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
 }
@@ -759,6 +765,29 @@ function createFileService({ db, repositories, discordStorage, config }) {
             console.error(`purgeExpiredTrash: failed to purge entry ${row.id}: ${err && err.message}`);
             continue;
           }
+        }
+      }
+    },
+
+    /**
+     * Orphan sweep: hard-purge upload entries (status 'uploading' or 'failed')
+     * whose updated_at is older than the 24h orphan TTL. A live upload keeps
+     * streaming and a resumable failure keeps its row fresh for retry; the
+     * stale query only ever returns abandoned entries, so the per-entry purge
+     * needs no status re-check.
+     */
+    async purgeStaleUploads({ drive, now }) {
+      const timestamp = now !== undefined && now !== null ? now : Date.now();
+      const cutoff = new Date(timestamp - ORPHAN_UPLOAD_TTL_MS).toISOString();
+      const stale = await repositories.listStaleUploads(drive.id, cutoff);
+      for (const row of stale) {
+        try {
+          await this.purgeEntry({ drive, entryId: row.id });
+        } catch (err) {
+          // One failing entry must not abort the sweep for the rest of the
+          // drive: log and move on (mirrors purgeExpiredTrash).
+          console.error(`purgeStaleUploads: failed to purge entry ${row.id}: ${err && err.message}`);
+          continue;
         }
       }
     },

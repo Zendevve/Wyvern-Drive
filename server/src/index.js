@@ -110,9 +110,34 @@ async function main() {
     }
   };
 
+  // Fire-and-forget orphan-upload sweep: a page refresh orphans the client's
+  // in-memory upload queue, leaving an uploading/failed entry that can never
+  // resume; after the 24h TTL it is hard-purged (entry, chunks, blocks,
+  // Discord messages) so drive stats never count phantom files. Runs at boot
+  // and every 6 hours, guarded per drive like the retention sweep.
+  const runOrphanUploadSweep = async () => {
+    try {
+      const driveIds = await repositories.listDriveIds();
+      for (const { id } of driveIds) {
+        try {
+          const drive = await repositories.getDriveById(id);
+          if (drive) {
+            await fileService.purgeStaleUploads({ drive });
+          }
+        } catch (err) {
+          console.error(`Orphan upload sweep failed for drive ${id}: ${err && err.message}`);
+        }
+      }
+    } catch (err) {
+      console.error(`Orphan upload sweep failed: ${err && err.message}`);
+    }
+  };
+  setInterval(() => void runOrphanUploadSweep(), 6 * 60 * 60 * 1000).unref();
+
   const server = app.listen(config.port, () => {
     console.log(`Wyvern server listening on ${config.appOrigin}`);
     void runBootRetentionSweep();
+    void runOrphanUploadSweep();
   });
   server.on('error', async (err) => {
     console.error(`Wyvern server failed to start: ${err.message}`);

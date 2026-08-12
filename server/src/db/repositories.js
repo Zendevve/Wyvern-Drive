@@ -72,24 +72,37 @@ function createRepositories(db) {
     },
 
     /**
-     * Drive-wide usage summary. sizeBytes is the logical user byte count over
-     * file entries (ready/uploading/failed, trashed included); storedBytes is
-     * the actual Discord footprint over content_blocks; messages counts
-     * distinct Discord messages holding blocks. compressionRatio is null when
-     * nothing is uploaded, 0 when no blocks are stored, else sizeBytes /
-     * storedBytes.
+     * Drive-wide usage summary over COMMITTED files only: uploading/failed
+     * entries are resumable or abandoned (see the orphan sweep) and must not
+     * count as phantom files, size, or stored blocks. sizeBytes is the logical
+     * user byte count over ready file entries; storedBytes is the actual
+     * Discord footprint over blocks referenced by a ready entry; messages
+     * counts distinct Discord messages holding such blocks. Trashed ready
+     * files still count (soft delete keeps status 'ready'), so deleted_at is
+     * deliberately absent from the size/blocks clauses. Folders count
+     * unchanged. compressionRatio is null when nothing is uploaded, 0 when no
+     * blocks are stored, else sizeBytes / storedBytes.
      */
     async driveStats(driveId) {
       const row = await get(
         db,
         `SELECT
-           COALESCE(SUM(CASE WHEN kind = 'file' AND status IN ('ready','uploading','failed') THEN size_bytes END), 0) AS sizeBytes,
-           (SELECT COUNT(*) FROM entries WHERE drive_id = ? AND kind = 'file' AND status IN ('ready','uploading','failed') AND deleted_at IS NULL) AS files,
+           COALESCE(SUM(CASE WHEN kind = 'file' AND status = 'ready' THEN size_bytes END), 0) AS sizeBytes,
+           (SELECT COUNT(*) FROM entries WHERE drive_id = ? AND kind = 'file' AND status = 'ready' AND deleted_at IS NULL) AS files,
            (SELECT COUNT(*) FROM entries WHERE drive_id = ? AND kind = 'folder' AND status = 'ready' AND deleted_at IS NULL) AS folders,
-           (SELECT COUNT(*) FROM content_blocks WHERE drive_id = ?) AS blocks,
-           (SELECT COUNT(DISTINCT message_id) FROM content_blocks WHERE drive_id = ?) AS messages,
+           (SELECT COUNT(*) FROM content_blocks b WHERE b.drive_id = ? AND EXISTS (
+              SELECT 1 FROM file_chunks fc JOIN entries e ON e.id = fc.entry_id
+              WHERE fc.block_id = b.id AND e.status = 'ready'
+            )) AS blocks,
+           (SELECT COUNT(DISTINCT b.message_id) FROM content_blocks b WHERE b.drive_id = ? AND EXISTS (
+              SELECT 1 FROM file_chunks fc JOIN entries e ON e.id = fc.entry_id
+              WHERE fc.block_id = b.id AND e.status = 'ready'
+            )) AS messages,
            (SELECT COUNT(*) FROM webhooks WHERE drive_id = ?) AS webhooks,
-           (SELECT COALESCE(SUM(cipher_size_bytes), 0) FROM content_blocks WHERE drive_id = ?) AS storedBytes
+           (SELECT COALESCE(SUM(b.cipher_size_bytes), 0) FROM content_blocks b WHERE b.drive_id = ? AND EXISTS (
+              SELECT 1 FROM file_chunks fc JOIN entries e ON e.id = fc.entry_id
+              WHERE fc.block_id = b.id AND e.status = 'ready'
+            )) AS storedBytes
          FROM entries WHERE drive_id = ?`,
         [driveId, driveId, driveId, driveId, driveId, driveId, driveId]
       );
@@ -246,10 +259,16 @@ function createRepositories(db) {
       ]);
     },
 
+    /**
+     * Logical bytes of COMMITTED file entries (status 'ready'; trashed files
+     * keep counting until purged, matching driveStats.sizeBytes). Interrupted
+     * uploading/failed entries are excluded: they are resumable and, once
+     * abandoned, reclaimed by the orphan-upload sweep.
+     */
     async sumUsedBytes(driveId) {
       const row = await get(
         db,
-        "SELECT COALESCE(SUM(size_bytes), 0) AS total FROM entries WHERE drive_id = ? AND kind = 'file' AND status IN ('ready','uploading','failed')",
+        "SELECT COALESCE(SUM(size_bytes), 0) AS total FROM entries WHERE drive_id = ? AND kind = 'file' AND status = 'ready'",
         [driveId]
       );
       return row.total;
@@ -261,6 +280,15 @@ function createRepositories(db) {
         db,
         'SELECT * FROM entries WHERE drive_id = ? AND upload_token = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT 1',
         [driveId, uploadToken]
+      );
+    },
+
+    /** Abandoned upload entries: no activity within the orphan TTL window. */
+    listStaleUploads(driveId, cutoffIso) {
+      return all(
+        db,
+        "SELECT id FROM entries WHERE drive_id = ? AND kind = 'file' AND status IN ('uploading','failed') AND deleted_at IS NULL AND updated_at < ?",
+        [driveId, cutoffIso]
       );
     },
 
