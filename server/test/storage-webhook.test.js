@@ -177,7 +177,7 @@ before(async () => {
 
 after(() => ctx.close());
 
-test('configure webhook: 201 with drive summary, no URL leaks, ciphertext-only storage', async () => {
+test('configure webhook: 201 with drive summary + webhook list, no URL leaks, ciphertext-only storage', async () => {
   const res = await client.request('/api/storage/webhook', {
     method: 'POST',
     body: JSON.stringify({ webhookUrl: VALID_URL }),
@@ -185,7 +185,13 @@ test('configure webhook: 201 with drive summary, no URL leaks, ciphertext-only s
     csrf: true,
     expect: 201,
   });
-  assert.deepStrictEqual(res.json, { id: 1, quotaBytes: ctx.config.defaultQuotaBytes, usedBytes: 0 });
+  assert.deepStrictEqual(Object.keys(res.json).sort(), ['id', 'quotaBytes', 'usedBytes', 'webhooks']);
+  assert.strictEqual(res.json.id, 1);
+  assert.strictEqual(res.json.quotaBytes, ctx.config.defaultQuotaBytes);
+  assert.strictEqual(res.json.usedBytes, 0);
+  assert.strictEqual(res.json.webhooks.length, 1);
+  assert.strictEqual(res.json.webhooks[0].id, 1);
+  assert.ok(res.json.webhooks[0].createdAt, 'webhook list carries creation dates');
   assert.ok(!JSON.stringify(res.json).includes('discord.com'), 'response must not contain the webhook URL');
 
   // auth/me carries the drive summary, never the credential or URL.
@@ -193,14 +199,18 @@ test('configure webhook: 201 with drive summary, no URL leaks, ciphertext-only s
   assert.strictEqual(me.json.drive.id, 1);
   assert.ok(!JSON.stringify(me.json).includes('discord.com'));
 
-  // The URL appears nowhere in the drive credential columns.
+  // The URL appears nowhere in the legacy drive credential columns; the
+  // sealed credential lives in the webhooks table instead.
   const drive = await ctx.repositories.getDriveByOwner(1);
   assert.strictEqual(drive.legacy_discord_channel_id, null);
-  assert.ok(Buffer.isBuffer(drive.webhook_ciphertext), 'ciphertext is a blob');
-  assert.strictEqual(drive.webhook_nonce.length, 12, 'fresh 12-byte nonce');
-  assert.strictEqual(drive.webhook_auth_tag.length, 16, 'GCM auth tag persisted');
+  assert.strictEqual(drive.webhook_ciphertext, null, 'legacy drive credential columns stay NULL for new drives');
+  const webhooks = await ctx.repositories.listWebhooks(1);
+  assert.strictEqual(webhooks.length, 1);
+  assert.ok(Buffer.isBuffer(webhooks[0].webhook_ciphertext), 'ciphertext is a blob');
+  assert.strictEqual(webhooks[0].webhook_nonce.length, 12, 'fresh 12-byte nonce');
+  assert.strictEqual(webhooks[0].webhook_auth_tag.length, 16, 'GCM auth tag persisted');
   assert.ok(
-    !drive.webhook_ciphertext.includes(Buffer.from(VALID_URL)),
+    !webhooks[0].webhook_ciphertext.includes(Buffer.from(VALID_URL)),
     'ciphertext must not embed the plaintext URL'
   );
   const allDrives = await dbAll(ctx.db, 'SELECT * FROM drives');
@@ -242,9 +252,11 @@ test('upload/download round trip through the real adapter keeps ciphertext-only 
 });
 
 test('packing: 25 chunks at 8-byte chunks -> 3 posts with 10/10/5 attachments', async () => {
-  // 200 bytes / 8-byte chunks = 25 chunks -> batches of 10/10/5. The shared
-  // adapter fake accumulates calls across tests, so snapshot the baseline.
-  const fixture = makeFixture(200);
+  // 200 bytes / 8-byte chunks = 25 chunks -> batches of 10/10/5. The fixture
+  // is distinct from every earlier upload so content dedup posts no fewer
+  // chunks. The shared adapter fake accumulates calls across tests, so
+  // snapshot the baseline.
+  const fixture = Buffer.from(Array.from({ length: 200 }, (_, i) => (i * 3 + 1) % 256));
   const beforeAttempts = discordFetch.state.putAttempts;
   const beforeAttachments = discordFetch.state.attachments.length;
   const fd = new FormData();
@@ -290,23 +302,28 @@ test('packing: 25 chunks at 8-byte chunks -> 3 posts with 10/10/5 attachments', 
   assert.deepStrictEqual(buf, fixture);
 });
 
-test('delete removes the webhook messages', async () => {
+test('delete trashes the entry; purging removes the webhook messages', async () => {
   const up = await client.request('/api/files/upload', {
     method: 'POST',
     body: (() => {
       const fd = new FormData();
       fd.append('parentId', '');
-      fd.append('file', new Blob([makeFixture(8)]), 'doomed.bin');
+      fd.append('file', new Blob([Buffer.from([7, 6, 5, 4, 3, 2, 1, 0])]), 'doomed.bin');
       return fd;
     })(),
     csrf: true,
     expect: 201,
   });
   const before = discordFetch.state.deleted.length;
+  // Soft delete: no Discord I/O, the file is hidden and lands in the trash.
   await client.request(`/api/entries/${up.json.id}`, { method: 'DELETE', csrf: true, expect: 204 });
-  assert.strictEqual(discordFetch.state.deleted.length, before + 1);
+  assert.strictEqual(discordFetch.state.deleted.length, before, 'soft delete must not touch Discord');
   const dl = await client.request(`/api/files/${up.json.id}/download`);
   assert.strictEqual(dl.status, 404);
+
+  // Purging from the trash reclaims the Discord message.
+  await client.request(`/api/trash/${up.json.id}`, { method: 'DELETE', csrf: true, expect: 204 });
+  assert.strictEqual(discordFetch.state.deleted.length, before + 1);
 });
 
 test('invalid or unauthorized webhook returns 400 INVALID_WEBHOOK', async () => {
@@ -355,51 +372,51 @@ test('adapter unit: 429 retry policy (bounded) and failure mapping', async () =>
   const fetch2 = createFakeDiscordFetch();
   const storage = createDiscordWebhookStorage(config, { chunkSizeBytes: 8, fetchImpl: fetch2 });
   const sealed = await storage.validateAndSealWebhook(VALID_URL);
-  const drive = { id: 99, webhook_ciphertext: sealed.webhook_ciphertext, webhook_nonce: sealed.webhook_nonce, webhook_auth_tag: sealed.webhook_auth_tag };
+  const webhook = { id: 99, webhook_ciphertext: sealed.webhook_ciphertext, webhook_nonce: sealed.webhook_nonce, webhook_auth_tag: sealed.webhook_auth_tag };
 
   // Two 429s, then success: exactly 3 attempts.
   fetch2.state.putFailures = 2;
-  const mid = await storage.putChunk(drive, 'chunk-0.bin', Buffer.from('encrypted-bytes'));
+  const mid = await storage.putChunk(webhook, 'chunk-0.bin', Buffer.from('encrypted-bytes'));
   assert.strictEqual(mid, 'm-1');
   assert.strictEqual(fetch2.state.putAttempts, 3);
 
   // Exhausted 429 budget -> STORAGE_UNAVAILABLE.
   fetch2.state.putFailures = 10;
   await assert.rejects(
-    storage.putChunk(drive, 'chunk-1.bin', Buffer.from('more-bytes')),
+    storage.putChunk(webhook, 'chunk-1.bin', Buffer.from('more-bytes')),
     (err) => err.code === 'STORAGE_UNAVAILABLE'
   );
 
   // getChunk: a transient message GET 500 is retried (exponential backoff),
   // so the chunk still loads; the CDN path has no retry and fails fast.
   fetch2.state.getMessageFailures = 1;
-  const retried = await storage.getChunk(drive, mid);
+  const retried = await storage.getChunk(webhook, mid);
   assert.deepStrictEqual(retried, Buffer.from('encrypted-bytes'));
   assert.strictEqual(fetch2.state.messageGetCalls, 2, 'one retry after the transient 500');
 
   // getChunk: CDN fetch failure -> STORAGE_UNAVAILABLE.
   fetch2.state.putFailures = 0;
   fetch2.state.cdnFailures = 1;
-  const okMid = await storage.putChunk(drive, 'chunk-2.bin', Buffer.from('third'));
+  const okMid = await storage.putChunk(webhook, 'chunk-2.bin', Buffer.from('third'));
   await assert.rejects(
-    storage.getChunk(drive, okMid),
+    storage.getChunk(webhook, okMid),
     (err) => err.code === 'STORAGE_UNAVAILABLE'
   );
 
   // getChunk happy path returns the stored bytes.
-  const bytes = await storage.getChunk(drive, mid);
+  const bytes = await storage.getChunk(webhook, mid);
   assert.deepStrictEqual(bytes, Buffer.from('encrypted-bytes'));
 
   // deleteChunk is idempotent: a missing message (Discord 404) resolves.
-  await storage.deleteChunk(drive, 'm-does-not-exist');
-  await storage.deleteChunk(drive, mid);
+  await storage.deleteChunk(webhook, 'm-does-not-exist');
+  await storage.deleteChunk(webhook, mid);
   assert.deepStrictEqual(fetch2.state.deleted, [mid]);
 
   // No webhook configured -> STORAGE_UNAVAILABLE on every storage op.
-  const bareDrive = { id: 98 };
-  await assert.rejects(storage.putChunk(bareDrive, 'x', Buffer.alloc(1)), (err) => err.code === 'STORAGE_UNAVAILABLE');
-  await assert.rejects(storage.getChunk(bareDrive, 'm1'), (err) => err.code === 'STORAGE_UNAVAILABLE');
-  await assert.rejects(storage.deleteChunk(bareDrive, 'm1'), (err) => err.code === 'STORAGE_UNAVAILABLE');
+  const bareWebhook = { id: 98 };
+  await assert.rejects(storage.putChunk(bareWebhook, 'x', Buffer.alloc(1)), (err) => err.code === 'STORAGE_UNAVAILABLE');
+  await assert.rejects(storage.getChunk(bareWebhook, 'm1'), (err) => err.code === 'STORAGE_UNAVAILABLE');
+  await assert.rejects(storage.deleteChunk(bareWebhook, 'm1'), (err) => err.code === 'STORAGE_UNAVAILABLE');
 });
 
 test('adapter unit: putChunks packs up to 10 chunks into one message', async () => {
@@ -408,7 +425,7 @@ test('adapter unit: putChunks packs up to 10 chunks into one message', async () 
   const fetch3 = createFakeDiscordFetch();
   const storage = createDiscordWebhookStorage(config, { chunkSizeBytes: 8, fetchImpl: fetch3 });
   const sealed = await storage.validateAndSealWebhook(VALID_URL);
-  const drive = {
+  const webhook = {
     id: 97,
     webhook_ciphertext: sealed.webhook_ciphertext,
     webhook_nonce: sealed.webhook_nonce,
@@ -420,7 +437,7 @@ test('adapter unit: putChunks packs up to 10 chunks into one message', async () 
     filename: `chunk-${i}.bin`,
     encryptedBuffer: Buffer.from(`enc-${i}`),
   }));
-  const results = await storage.putChunks(drive, chunks);
+  const results = await storage.putChunks(webhook, chunks);
 
   assert.strictEqual(fetch3.state.putAttempts, 1, 'ten chunks -> one webhook POST');
   assert.strictEqual(fetch3.state.attachments.length, 10);
@@ -439,13 +456,13 @@ test('adapter unit: putChunks packs up to 10 chunks into one message', async () 
 
   // getChunk(drive, messageId, attachmentIndex) selects the right attachment.
   for (let i = 0; i < 10; i += 1) {
-    const bytes = await storage.getChunk(drive, results[0].messageId, i);
+    const bytes = await storage.getChunk(webhook, results[0].messageId, i);
     assert.deepStrictEqual(bytes, Buffer.from(`enc-${i}`), `attachment ${i}`);
   }
 
   // 11 chunks exceed the Discord message limit -> BAD_REQUEST before any POST.
   await assert.rejects(
-    storage.putChunks(drive, chunks.concat([{ ordinal: 10, filename: 'chunk-10.bin', encryptedBuffer: Buffer.from('x') }])),
+    storage.putChunks(webhook, chunks.concat([{ ordinal: 10, filename: 'chunk-10.bin', encryptedBuffer: Buffer.from('x') }])),
     (err) => err.code === 'BAD_REQUEST'
   );
   assert.strictEqual(fetch3.state.putAttempts, 1, 'no POST for an oversized batch');

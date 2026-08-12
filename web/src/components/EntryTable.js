@@ -16,6 +16,7 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowRightArrowLeft,
+  faCopy,
   faDownload,
   faEye,
   faPen,
@@ -291,6 +292,14 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
           onClick={stop(() => actions.onMove(entry))}
         >
           <FontAwesomeIcon icon={faArrowRightArrowLeft} />
+        </IconButton>
+        <IconButton
+          size="small"
+          aria-label={`Copy ${entry.name}`}
+          title="Copy"
+          onClick={stop(() => actions.onCopy(entry))}
+        >
+          <FontAwesomeIcon icon={faCopy} />
         </IconButton>
         <IconButton
           size="small"

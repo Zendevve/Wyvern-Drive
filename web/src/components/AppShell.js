@@ -21,6 +21,7 @@ import {
   faFolderOpen,
   faGear,
   faRightFromBracket,
+  faTrashCan,
 } from '@fortawesome/free-solid-svg-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
@@ -41,6 +42,7 @@ export default function AppShell({ title, children }) {
 
   const navItems = [
     { label: 'Drive', icon: faFolderOpen, to: '/drive' },
+    { label: 'Trash', icon: faTrashCan, to: '/trash' },
     { label: 'Settings', icon: faGear, to: '/settings' },
   ];
 

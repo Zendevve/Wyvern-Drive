@@ -176,6 +176,26 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ webhookUrl }),
     }),
+  webhooks: {
+    list: () => apiFetch('/api/storage/webhooks'),
+    add: (webhookUrl) =>
+      apiFetch('/api/storage/webhook', {
+        method: 'POST',
+        body: JSON.stringify({ webhookUrl }),
+      }),
+    remove: (id) =>
+      apiFetch(`/api/storage/webhooks/${id}`, { method: 'DELETE' }),
+  },
+  trash: {
+    list: () => apiFetch('/api/trash'),
+    restore: (id) => apiFetch(`/api/trash/${id}/restore`, { method: 'POST' }),
+    purge: (id) => apiFetch(`/api/trash/${id}`, { method: 'DELETE' }),
+  },
+  copyEntry: (id, parentId) =>
+    apiFetch(`/api/entries/${id}/copy`, {
+      method: 'POST',
+      body: JSON.stringify({ parentId }),
+    }),
   entries: (params = {}) => {
     const q = new URLSearchParams();
     if (params.parentId != null) {

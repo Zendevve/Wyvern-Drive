@@ -72,10 +72,18 @@ function createFakeOAuthFetch() {
 
 /**
  * In-memory fake DiscordStorage. Models webhook credential configuration
- * (validateAndSealWebhook over a set of accepted URLs) and per-drive message
- * storage, with failure injection: failNextWebhookValidations,
+ * (validateAndSealWebhook over a set of accepted URLs) and per-webhook
+ * message storage, with failure injection: failNextWebhookValidations,
  * failNextPutChunks, failPutChunkOnCall, failNextGetChunks,
  * failNextDeleteChunks, failDeleteChunkOnCall.
+ *
+ * Chunk operations take WEBHOOK CREDENTIALS ({ id, drive_id,
+ * webhook_ciphertext, ... }) exactly like the real adapter — the file
+ * service passes `webhooks` table rows through — so messages are stored per
+ * webhook.id and the fake tracks which webhooks a drive has seen
+ * (webhooksByDrive). Tests map drive -> webhook ids through the repository
+ * (listWebhooks(driveId)) or the fake's webhooksForDrive(driveId), then read
+ * the per-webhook store via messagesForWebhook(webhookId).
  *
  * Messages hold 1..10 attachments (packed uploads). Counting and failure
  * injection are PER-CHUNK — putCalls increments once per chunk, and
@@ -86,7 +94,8 @@ function createFakeOAuthFetch() {
  * is idempotent, matching the real adapter's 404-as-success contract.
  */
 function createFakeDiscordStorage() {
-  const drives = new Map(); // driveId -> Map(messageId -> [{ filename, buffer }])
+  const webhooksByDrive = new Map(); // driveId -> webhook credentials seen by putChunks
+  const stores = new Map(); // webhookId -> Map(messageId -> [{ filename, buffer }])
   const deletedMessages = [];
   const storage = {
     failNextWebhookValidations: 0,
@@ -100,6 +109,7 @@ function createFakeDiscordStorage() {
     deleteCalls: 0,
     msgSeq: 0,
     deletedMessages,
+    postCountsByWebhook: new Map(), // webhookId -> putChunks batches posted
     validWebhooks: new Set([DEFAULT_WEBHOOK_URL]),
 
     async validateAndSealWebhook(webhookUrl) {
@@ -127,11 +137,14 @@ function createFakeDiscordStorage() {
     /**
      * Store one batch of chunks as a single message (one attachment per
      * chunk). Resolves [{ ordinal, messageId }] in input order. The counter
-     * loop is synchronous so concurrent batches consume putCalls in
-     * invocation order; a tripped counter aborts the whole batch.
+     * loop runs before any store mutation, so a tripped counter aborts the
+     * whole batch atomically. Credentials come from the `webhooks` table, so
+     * the drive id is available to track webhooksByDrive.
      */
-    async putChunks(drive, chunks) {
-      const attachments = [];
+    async putChunks(webhook, chunks) {
+      if (!webhook || webhook.id === undefined || webhook.id === null) {
+        throw storageError('fake: missing webhook credential');
+      }
       for (const chunk of chunks) {
         storage.putCalls += 1;
         if (storage.failPutChunkOnCall > 0 && storage.putCalls === storage.failPutChunkOnCall) {
@@ -141,37 +154,50 @@ function createFakeDiscordStorage() {
           storage.failNextPutChunks -= 1;
           throw storageError('fake: putChunk failed');
         }
-        attachments.push({ filename: chunk.filename, buffer: Buffer.from(chunk.encryptedBuffer) });
       }
-      let msgs = drives.get(drive.id);
+      if (webhook.drive_id !== undefined && webhook.drive_id !== null) {
+        let driveWebhooks = webhooksByDrive.get(webhook.drive_id);
+        if (!driveWebhooks) {
+          driveWebhooks = [];
+          webhooksByDrive.set(webhook.drive_id, driveWebhooks);
+        }
+        if (!driveWebhooks.some((w) => w.id === webhook.id)) {
+          driveWebhooks.push(webhook);
+        }
+      }
+      let msgs = stores.get(webhook.id);
       if (!msgs) {
         msgs = new Map();
-        drives.set(drive.id, msgs);
+        stores.set(webhook.id, msgs);
       }
       storage.msgSeq += 1;
       const messageId = `msg-${storage.msgSeq}`;
-      msgs.set(messageId, attachments);
+      msgs.set(
+        messageId,
+        chunks.map((chunk) => ({ filename: chunk.filename, buffer: Buffer.from(chunk.encryptedBuffer) }))
+      );
+      storage.postCountsByWebhook.set(webhook.id, (storage.postCountsByWebhook.get(webhook.id) || 0) + 1);
       return chunks.map((chunk) => ({ ordinal: chunk.ordinal, messageId }));
     },
 
-    async putChunk(drive, filename, encryptedBuffer) {
-      const results = await storage.putChunks(drive, [{ filename, encryptedBuffer, ordinal: 0 }]);
+    async putChunk(webhook, filename, encryptedBuffer) {
+      const results = await storage.putChunks(webhook, [{ filename, encryptedBuffer, ordinal: 0 }]);
       return results[0].messageId;
     },
 
-    async getChunk(drive, messageId, attachmentIndex = 0) {
+    async getChunk(webhook, messageId, attachmentIndex = 0) {
       if (storage.failNextGetChunks > 0) {
         storage.failNextGetChunks -= 1;
         throw storageError('fake: getChunk failed');
       }
-      const msgs = drives.get(drive.id);
+      const msgs = stores.get(webhook.id);
       const attachments = msgs && msgs.get(messageId);
       const attachment = attachments && attachments[attachmentIndex];
       if (!attachment) throw storageError('fake: chunk not found');
       return Buffer.from(attachment.buffer);
     },
 
-    async deleteChunk(drive, messageId) {
+    async deleteChunk(webhook, messageId) {
       storage.deleteCalls += 1;
       if (storage.failDeleteChunkOnCall > 0 && storage.deleteCalls === storage.failDeleteChunkOnCall) {
         throw storageError('fake: deleteChunk failed');
@@ -180,32 +206,38 @@ function createFakeDiscordStorage() {
         storage.failNextDeleteChunks -= 1;
         throw storageError('fake: deleteChunk failed');
       }
-      const msgs = drives.get(drive.id);
+      const msgs = stores.get(webhook.id);
       if (msgs && msgs.has(messageId)) {
         msgs.delete(messageId);
-        deletedMessages.push({ driveId: drive.id, messageId });
+        deletedMessages.push({ webhookId: webhook.id, messageId });
       }
       // Missing message: idempotent success (mirrors the real adapter).
     },
 
-    /** Unique Discord message ids across all drives (packed chunks share one). */
+    /** Unique Discord message ids across all webhooks (packed chunks share one). */
     countMessages() {
       let n = 0;
-      for (const msgs of drives.values()) n += msgs.size;
+      for (const msgs of stores.values()) n += msgs.size;
       return n;
     },
 
-    /** Total attachment count across all drives (one per chunk). */
+    /** Total attachment count across all webhooks (one per chunk). */
     countAttachments() {
       let n = 0;
-      for (const msgs of drives.values()) {
+      for (const msgs of stores.values()) {
         for (const attachments of msgs.values()) n += attachments.length;
       }
       return n;
     },
 
-    getMessages(driveId) {
-      return drives.get(driveId);
+    /** Webhook credentials the fake has seen chunks posted for, per drive. */
+    webhooksForDrive(driveId) {
+      return webhooksByDrive.get(driveId) || [];
+    },
+
+    /** Messages stored for one webhook: Map(messageId -> attachments). */
+    messagesForWebhook(webhookId) {
+      return stores.get(webhookId);
     },
   };
   return storage;
@@ -224,6 +256,9 @@ async function startTestServer(overrides = {}) {
   // config.test.js; service-level tests may shrink chunks so multi-chunk
   // fixtures stay tiny (e.g. 8 bytes for the classic 24-byte / 3-chunk case).
   if (overrides.chunkSizeBytes != null) config.chunkSizeBytes = overrides.chunkSizeBytes;
+  if (overrides.compressChunks != null) config.compressChunks = overrides.compressChunks;
+  if (overrides.maxWebhooksPerDrive != null) config.maxWebhooksPerDrive = overrides.maxWebhooksPerDrive;
+  if (overrides.trashRetentionDays != null) config.trashRetentionDays = overrides.trashRetentionDays;
 
   const db = await openDatabase(config.dbUrl);
   await migrate(db, MIGRATIONS_DIR);

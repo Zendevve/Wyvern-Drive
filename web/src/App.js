@@ -11,6 +11,7 @@ import DrivePage from './pages/DrivePage';
 import SharePage from './pages/SharePage';
 import SettingsPage from './pages/SettingsPage';
 import SetupPage from './pages/SetupPage';
+import TrashPage from './pages/TrashPage';
 import WebhookSetupPage from './pages/WebhookSetupPage';
 
 function FullScreenLoader() {
@@ -85,6 +86,7 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/connect" element={<WebhookSetupPage />} />
               <Route path="/drive" element={<DrivePage />} />
+              <Route path="/trash" element={<TrashPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/share/:token" element={<SharePage />} />
               <Route path="*" element={<Navigate to="/drive" replace />} />

@@ -11,6 +11,17 @@ jest.mock('../api/client', () => ({
     setupStatus: jest.fn(),
     me: jest.fn(),
     drive: jest.fn(),
+    webhooks: {
+      list: jest.fn(),
+      add: jest.fn(),
+      remove: jest.fn(),
+    },
+    trash: {
+      list: jest.fn(),
+      restore: jest.fn(),
+      purge: jest.fn(),
+    },
+    copyEntry: jest.fn(),
     entries: jest.fn(),
     createFolder: jest.fn(),
     updateEntry: jest.fn(),

@@ -66,30 +66,50 @@ function createRepositories(db) {
       return get(db, 'SELECT * FROM drives WHERE id = ?', [driveId]);
     },
 
-    async insertDrive({ ownerId, webhookCiphertext, webhookNonce, webhookAuthTag, quotaBytes }) {
+    // Drive rows still carry the legacy webhook credential columns (never
+    // auto-migrated, like legacy_discord_channel_id) but no code path reads or
+    // writes them: credentials live in the webhooks table (migration 004).
+    async insertDrive({ ownerId, quotaBytes }) {
       const now = nowIso();
-      const res = await run(
-        db,
-        'INSERT INTO drives (owner_id, webhook_ciphertext, webhook_nonce, webhook_auth_tag, quota_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [ownerId, webhookCiphertext, webhookNonce, webhookAuthTag, quotaBytes, now]
-      );
+      const res = await run(db, 'INSERT INTO drives (owner_id, quota_bytes, created_at) VALUES (?, ?, ?)', [
+        ownerId,
+        quotaBytes,
+        now,
+      ]);
       return {
         id: res.lastID,
         owner_id: ownerId,
-        webhook_ciphertext: webhookCiphertext,
-        webhook_nonce: webhookNonce,
-        webhook_auth_tag: webhookAuthTag,
         quota_bytes: quotaBytes,
         created_at: now,
       };
     },
 
-    updateDriveWebhook(driveId, { webhookCiphertext, webhookNonce, webhookAuthTag }) {
-      return run(
+    // ---- webhooks ----
+    async insertWebhook({ driveId, webhookCiphertext, webhookNonce, webhookAuthTag }) {
+      const now = nowIso();
+      const res = await run(
         db,
-        'UPDATE drives SET webhook_ciphertext = ?, webhook_nonce = ?, webhook_auth_tag = ? WHERE id = ?',
-        [webhookCiphertext, webhookNonce, webhookAuthTag, driveId]
+        'INSERT INTO webhooks (drive_id, webhook_ciphertext, webhook_nonce, webhook_auth_tag, created_at) VALUES (?, ?, ?, ?, ?)',
+        [driveId, webhookCiphertext, webhookNonce, webhookAuthTag, now]
       );
+      return get(db, 'SELECT * FROM webhooks WHERE id = ?', [res.lastID]);
+    },
+
+    listWebhooks(driveId) {
+      return all(db, 'SELECT * FROM webhooks WHERE drive_id = ? ORDER BY id ASC', [driveId]);
+    },
+
+    getWebhookById(id) {
+      return get(db, 'SELECT * FROM webhooks WHERE id = ?', [id]);
+    },
+
+    deleteWebhook(id) {
+      return run(db, 'DELETE FROM webhooks WHERE id = ?', [id]);
+    },
+
+    async countWebhooks(driveId) {
+      const row = await get(db, 'SELECT COUNT(*) AS c FROM webhooks WHERE drive_id = ?', [driveId]);
+      return row.c;
     },
 
     // ---- entries ----
@@ -102,7 +122,7 @@ function createRepositories(db) {
     },
 
     listEntries(driveId, { parentId, query, kind, sort, direction }) {
-      const where = ['drive_id = ?', "status = 'ready'"];
+      const where = ['drive_id = ?', "status = 'ready'", 'deleted_at IS NULL'];
       const params = [driveId];
       if (parentId == null) {
         where.push('parent_id IS NULL');
@@ -189,19 +209,23 @@ function createRepositories(db) {
       return row.total;
     },
 
-    /** Resume target: the entry (if any) already bound to a client upload token. */
+    /** Resume target: the live entry (if any) already bound to a client upload token. */
     getEntryByUploadToken(driveId, uploadToken) {
-      return get(db, 'SELECT * FROM entries WHERE drive_id = ? AND upload_token = ? ORDER BY id DESC LIMIT 1', [
-        driveId,
-        uploadToken,
-      ]);
+      return get(
+        db,
+        'SELECT * FROM entries WHERE drive_id = ? AND upload_token = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT 1',
+        [driveId, uploadToken]
+      );
     },
 
     /** Plaintext bytes currently posted for an entry (deleted chunks excluded). */
     async sumPlainBytesByEntry(entryId) {
       const row = await get(
         db,
-        'SELECT COALESCE(SUM(plain_size_bytes), 0) AS total FROM file_chunks WHERE entry_id = ? AND deleted_at IS NULL',
+        `SELECT COALESCE(SUM(b.plain_size_bytes), 0) AS total
+         FROM file_chunks c
+         JOIN content_blocks b ON b.id = c.block_id
+         WHERE c.entry_id = ? AND c.deleted_at IS NULL`,
         [entryId]
       );
       return row.total;
@@ -216,10 +240,11 @@ function createRepositories(db) {
       );
     },
 
+    /** Live siblings only: a trashed entry with the same name does not conflict. */
     async siblingCount(driveId, parentId, name) {
       const row = await get(
         db,
-        'SELECT COUNT(*) AS c FROM entries WHERE drive_id = ? AND parent_id IS ? AND name = ?',
+        'SELECT COUNT(*) AS c FROM entries WHERE drive_id = ? AND parent_id IS ? AND name = ? AND deleted_at IS NULL',
         [driveId, parentId, name]
       );
       return row.c;
@@ -233,24 +258,107 @@ function createRepositories(db) {
       return row.c;
     },
 
-    // ---- file_chunks ----
-    async insertChunk({ entryId, ordinal, messageId, plainSizeBytes, cipherSizeBytes, nonce, authTag, checksum }) {
+    // ---- trash (soft delete) ----
+    listTrash(driveId) {
+      return all(
+        db,
+        'SELECT * FROM entries WHERE drive_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC',
+        [driveId]
+      );
+    },
+
+    markSubtreeDeleted(driveId, entryId) {
+      return run(
+        db,
+        `UPDATE entries SET deleted_at = ?, updated_at = ? WHERE drive_id = ? AND id IN (${SUBTREE_CTE} SELECT id FROM subtree)`,
+        [nowIso(), nowIso(), driveId, driveId, entryId, driveId]
+      );
+    },
+
+    clearSubtreeDeleted(driveId, entryId) {
+      return run(
+        db,
+        `UPDATE entries SET deleted_at = NULL, updated_at = ? WHERE drive_id = ? AND id IN (${SUBTREE_CTE} SELECT id FROM subtree)`,
+        [nowIso(), driveId, driveId, entryId, driveId]
+      );
+    },
+
+    // ---- content_blocks ----
+    getBlockByContentHash(driveId, contentHash) {
+      return get(db, 'SELECT * FROM content_blocks WHERE drive_id = ? AND content_hash = ?', [driveId, contentHash]);
+    },
+
+    async insertBlock({ driveId, contentHash, messageId, webhookId, plainSizeBytes, cipherSizeBytes, nonce, authTag, compression }) {
+      const now = nowIso();
       const res = await run(
         db,
-        'INSERT INTO file_chunks (entry_id, ordinal, discord_message_id, plain_size_bytes, cipher_size_bytes, nonce, auth_tag, checksum) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [entryId, ordinal, messageId, plainSizeBytes, cipherSizeBytes, nonce, authTag, checksum]
+        'INSERT INTO content_blocks (drive_id, content_hash, message_id, webhook_id, plain_size_bytes, cipher_size_bytes, nonce, auth_tag, compression, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [driveId, contentHash, messageId, webhookId, plainSizeBytes, cipherSizeBytes, nonce, authTag, compression, now]
       );
+      return get(db, 'SELECT * FROM content_blocks WHERE id = ?', [res.lastID]);
+    },
+
+    /** Blocks in attachment order within one Discord message. */
+    getBlocksByMessageId(messageId) {
+      return all(db, 'SELECT * FROM content_blocks WHERE message_id = ? ORDER BY id ASC', [messageId]);
+    },
+
+    async countLiveBlockRefs(blockId) {
+      const row = await get(db, 'SELECT COUNT(*) AS c FROM file_chunks WHERE block_id = ? AND deleted_at IS NULL', [
+        blockId,
+      ]);
+      return row.c;
+    },
+
+    deleteBlock(id) {
+      return run(db, 'DELETE FROM content_blocks WHERE id = ?', [id]);
+    },
+
+    /** Blocks referencing a webhook — nonzero blocks webhook removal. */
+    async countBlocksForWebhook(webhookId) {
+      const row = await get(db, 'SELECT COUNT(*) AS c FROM content_blocks WHERE webhook_id = ?', [webhookId]);
+      return row.c;
+    },
+
+    // ---- file_chunks ----
+    async insertChunk({ entryId, ordinal, blockId }) {
+      const res = await run(db, 'INSERT INTO file_chunks (entry_id, ordinal, block_id) VALUES (?, ?, ?)', [
+        entryId,
+        ordinal,
+        blockId,
+      ]);
       return { id: res.lastID, entry_id: entryId, ordinal };
     },
 
+    /** Join shape shared by every chunk read: chunk + block + webhook credential. */
     getChunksByEntry(entryId) {
-      return all(db, 'SELECT * FROM file_chunks WHERE entry_id = ? ORDER BY ordinal ASC', [entryId]);
+      return all(
+        db,
+        `SELECT c.id, c.entry_id, c.ordinal, c.deleted_at,
+                b.id AS block_id, b.message_id, b.content_hash AS checksum,
+                b.plain_size_bytes, b.cipher_size_bytes, b.nonce, b.auth_tag, b.compression,
+                w.id AS webhook_id, w.webhook_ciphertext, w.webhook_nonce, w.webhook_auth_tag
+         FROM file_chunks c
+         JOIN content_blocks b ON b.id = c.block_id
+         JOIN webhooks w ON w.id = b.webhook_id
+         WHERE c.entry_id = ?
+         ORDER BY c.ordinal ASC`,
+        [entryId]
+      );
     },
 
     getPendingChunks(entryId) {
       return all(
         db,
-        'SELECT * FROM file_chunks WHERE entry_id = ? AND deleted_at IS NULL ORDER BY ordinal ASC',
+        `SELECT c.id, c.entry_id, c.ordinal, c.deleted_at,
+                b.id AS block_id, b.message_id, b.content_hash AS checksum,
+                b.plain_size_bytes, b.cipher_size_bytes, b.nonce, b.auth_tag, b.compression,
+                w.id AS webhook_id, w.webhook_ciphertext, w.webhook_nonce, w.webhook_auth_tag
+         FROM file_chunks c
+         JOIN content_blocks b ON b.id = c.block_id
+         JOIN webhooks w ON w.id = b.webhook_id
+         WHERE c.entry_id = ? AND c.deleted_at IS NULL
+         ORDER BY c.ordinal ASC`,
         [entryId]
       );
     },

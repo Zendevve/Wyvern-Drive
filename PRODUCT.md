@@ -17,14 +17,15 @@ interviewed.]
 ## Product Purpose
 
 A self-hostable personal cloud drive backed by Discord: files are split into
-chunks, encrypted at rest with AES-256-GCM, and stored as Discord attachments
-posted through one per-user Discord webhook (Disbox-style). Each user connects
-their own webhook once on the authenticated `/connect` page; the server holds
-the OAuth2 client secret, validates and encrypts the webhook URL at rest, and
-performs all webhook and Discord-CDN I/O server-side. The browser never sees
-webhook URLs, raw attachment URLs, message IDs, or any secret value. Success
-= the user trusts it with real files and finds the cloud-drive flows (upload,
-browse, search, share) comfortable.
+chunks, compressed and encrypted at rest with AES-256-GCM, and stored as
+Discord attachments posted through the drive's Discord webhooks (Disbox-style;
+a drive may register several webhooks and uploads round-robin across them).
+Each user connects their own webhook once on the authenticated `/connect`
+page; the server holds the OAuth2 client secret, validates and encrypts the
+webhook URL at rest, and performs all webhook and Discord-CDN I/O server-side.
+The browser never sees webhook URLs, raw attachment URLs, message IDs, or any
+secret value. Success = the user trusts it with real files and finds the
+cloud-drive flows (upload, browse, search, share) comfortable.
 
 ## Positioning
 
@@ -47,12 +48,15 @@ fills `server/.env` and restarts. No browser form writes secrets.
 ## Capabilities and Constraints
 
 MVP (from README): OAuth2 sign-in with server-side sessions and CSRF; one drive
-per user; parallel packed and resumable uploads with per-file progress, retry,
-and server-side progress polling; HTTP Range downloads and inline previews;
-folder ZIP archives; folders, rename, move, permanent recursive delete;
-server-backed search and sort; anonymous read-only share links with optional
-expiry and revocation; rate limiting on OAuth, mutations, and public share
-downloads; responsive cloud-service-style UI (desktop table/grid, mobile
+per user with multi-webhook scaling (uploads round-robin across up to
+`WYVERN_MAX_WEBHOOKS_PER_DRIVE` webhooks); content dedup and per-chunk
+compression; parallel packed and resumable uploads with per-file progress,
+retry, and server-side progress polling; HTTP Range downloads and inline
+previews; folder ZIP archives; folders, rename, move, instant copy, folder
+upload, and a recycle bin (soft delete, restore, delete-forever, retention
+sweep); server-backed search and sort; anonymous read-only share links with
+optional expiry and revocation; rate limiting on OAuth, mutations, and public
+share downloads; responsive cloud-service-style UI (desktop table/grid, mobile
 cards, drag-drop upload, floating upload progress manager).
 
 Constraints: encryption is server-side, not end-to-end (Discord and the browser
@@ -82,10 +86,10 @@ never auto-migrated.
 ## Evidence on Hand
 
 - `README.md` — features, architecture, security model, config, testing.
-- `server/README.md` — manual smoke path (116 server tests; encrypted
+- `server/README.md` — manual smoke path (125 server tests; encrypted
   round-trip fixture verified against SHA-256; setup-mode coverage).
-- `web/` — 75 tests pinning accessible names, testids, quota/share text, and
-  the setup gate/page.
+- `web/` — 91 tests pinning accessible names, testids, quota/share text, trash
+  and webhook surfaces, and the setup gate/page.
 - `refs/` — vendored prior art (Disbox et al.), read-only.
 
 ## Product Principles

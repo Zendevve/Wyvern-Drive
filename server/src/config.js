@@ -8,6 +8,8 @@ const CHUNK_SIZE_MAX_BYTES = 8 * 1024 * 1024; // 8 MiB
 const DEFAULT_CHUNKS_PER_MESSAGE = 10;
 const DEFAULT_UPLOAD_CONCURRENCY = 4;
 const DEFAULT_DOWNLOAD_CONCURRENCY = 6;
+const DEFAULT_TRASH_RETENTION_DAYS = 30;
+const DEFAULT_MAX_WEBHOOKS_PER_DRIVE = 8;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 const REQUIRED_VARS = [
@@ -146,6 +148,34 @@ function validateEnv(env = process.env) {
     invalid
   );
 
+  let compressChunks = true;
+  if (env.WYVERN_COMPRESS_CHUNKS !== undefined && env.WYVERN_COMPRESS_CHUNKS !== '') {
+    const raw = String(env.WYVERN_COMPRESS_CHUNKS).toLowerCase();
+    if (raw === '1' || raw === 'true') {
+      compressChunks = true;
+    } else if (raw === '0' || raw === 'false') {
+      compressChunks = false;
+    } else {
+      invalid.push({ key: 'WYVERN_COMPRESS_CHUNKS', message: "must be '1'/'true' (on) or '0'/'false' (off)" });
+    }
+  }
+  const trashRetentionDays = boundedIntEnv(
+    env.WYVERN_TRASH_RETENTION_DAYS,
+    'WYVERN_TRASH_RETENTION_DAYS',
+    1,
+    365,
+    DEFAULT_TRASH_RETENTION_DAYS,
+    invalid
+  );
+  const maxWebhooksPerDrive = boundedIntEnv(
+    env.WYVERN_MAX_WEBHOOKS_PER_DRIVE,
+    'WYVERN_MAX_WEBHOOKS_PER_DRIVE',
+    1,
+    32,
+    DEFAULT_MAX_WEBHOOKS_PER_DRIVE,
+    invalid
+  );
+
   return {
     missing,
     invalid,
@@ -159,6 +189,9 @@ function validateEnv(env = process.env) {
     chunksPerMessage,
     uploadConcurrency,
     downloadConcurrency,
+    compressChunks,
+    trashRetentionDays,
+    maxWebhooksPerDrive,
     nodeEnv,
     isProduction: nodeEnv === 'production',
     isTest: nodeEnv === 'test',
@@ -200,6 +233,9 @@ function loadConfig(env = process.env) {
     chunksPerMessage: v.chunksPerMessage,
     uploadConcurrency: v.uploadConcurrency,
     downloadConcurrency: v.downloadConcurrency,
+    compressChunks: v.compressChunks,
+    trashRetentionDays: v.trashRetentionDays,
+    maxWebhooksPerDrive: v.maxWebhooksPerDrive,
     nodeEnv: v.nodeEnv,
     isProduction: v.isProduction,
     isTest: v.isTest,
@@ -243,5 +279,7 @@ module.exports = {
   DEFAULT_CHUNKS_PER_MESSAGE,
   DEFAULT_UPLOAD_CONCURRENCY,
   DEFAULT_DOWNLOAD_CONCURRENCY,
+  DEFAULT_TRASH_RETENTION_DAYS,
+  DEFAULT_MAX_WEBHOOKS_PER_DRIVE,
   SESSION_TTL_MS,
 };

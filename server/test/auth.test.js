@@ -56,12 +56,17 @@ test('callback happy path creates user and session, redirects to /connect, and w
   assert.strictEqual(cfg.json.id, 1);
   assert.strictEqual(cfg.json.quotaBytes, ctx.config.defaultQuotaBytes);
   assert.strictEqual(cfg.json.usedBytes, 0);
+  assert.strictEqual(cfg.json.webhooks.length, 1);
 
   const drive = await ctx.repositories.getDriveByOwner(1);
   assert.ok(drive, 'drive should be provisioned by webhook setup');
   assert.strictEqual(drive.legacy_discord_channel_id, null);
-  assert.ok(Buffer.isBuffer(drive.webhook_ciphertext) && drive.webhook_ciphertext.length > 0);
-  assert.strictEqual(drive.webhook_nonce.length, 'nonce:https://discord.com/api/webhooks/123/test-token'.length);
+  // Credentials live in the webhooks table; the legacy drive columns stay NULL.
+  assert.strictEqual(drive.webhook_ciphertext, null);
+  const webhooks = await ctx.repositories.listWebhooks(1);
+  assert.strictEqual(webhooks.length, 1);
+  assert.ok(Buffer.isBuffer(webhooks[0].webhook_ciphertext) && webhooks[0].webhook_ciphertext.length > 0);
+  assert.strictEqual(webhooks[0].webhook_nonce.length, 'nonce:https://discord.com/api/webhooks/123/test-token'.length);
   assert.strictEqual(drive.quota_bytes, ctx.config.defaultQuotaBytes);
 
   // session row stores only the hash, never the token
@@ -112,7 +117,7 @@ test('callback without a code redirects to an error', async (t) => {
   assert.strictEqual(res.headers.get('location'), `${ORIGIN}/login?error=invalid_state`);
 });
 
-test('webhook validation failure leaves no drive and surfaces INVALID_WEBHOOK', async (t) => {
+test('webhook validation failure leaves a drive with no webhooks and surfaces INVALID_WEBHOOK', async (t) => {
   const { ctx, client } = await setup(t);
   await performOAuth(client);
 
@@ -124,11 +129,14 @@ test('webhook validation failure leaves no drive and surfaces INVALID_WEBHOOK', 
   });
   assert.strictEqual(res.status, 400);
   assert.strictEqual(res.json.error.code, 'INVALID_WEBHOOK');
-  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 0, 'no partial drive');
+  // The drive row is created before validation (unified route), but a failed
+  // validation must never persist a webhook credential.
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 1);
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM webhooks'))[0].c, 0, 'no webhook row on failure');
   assert.strictEqual(ctx.discordStorage.webhookValidationCalls, 1);
 });
 
-test('Discord unavailability during webhook validation returns STORAGE_UNAVAILABLE and no drive', async (t) => {
+test('Discord unavailability during webhook validation returns STORAGE_UNAVAILABLE and no webhook', async (t) => {
   const { ctx, client } = await setup(t);
   await performOAuth(client);
   ctx.discordStorage.failNextWebhookValidations = 1;
@@ -141,18 +149,20 @@ test('Discord unavailability during webhook validation returns STORAGE_UNAVAILAB
   });
   assert.strictEqual(res.status, 502);
   assert.strictEqual(res.json.error.code, 'STORAGE_UNAVAILABLE');
-  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 0);
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 1);
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM webhooks'))[0].c, 0);
 
-  // A later, successful validation provisions the drive.
+  // A later, successful validation adds the webhook to the existing drive (200).
   const ok = await client.request('/api/storage/webhook', {
     method: 'POST',
     body: JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/123/test-token' }),
     headers: { 'content-type': 'application/json' },
     csrf: true,
-    expect: 201,
+    expect: 200,
   });
   assert.strictEqual(ok.json.id, 1);
   assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 1);
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM webhooks'))[0].c, 1);
 });
 
 test('configured drive redirects to /drive on repeat logins', async (t) => {
@@ -166,7 +176,7 @@ test('configured drive redirects to /drive on repeat logins', async (t) => {
   assert.strictEqual(ctx.discordStorage.webhookValidationCalls, 1, 'no re-validation');
 });
 
-test('POST /api/storage/webhook: first-time 201, same-user unconfigured drive 200, configured drive 409', async (t) => {
+test('POST /api/storage/webhook: first-time 201 with the webhook listed, later adds 200', async (t) => {
   const { ctx, client } = await setup(t);
   await performOAuth(client);
 
@@ -178,17 +188,26 @@ test('POST /api/storage/webhook: first-time 201, same-user unconfigured drive 20
     csrf: true,
     expect: 201,
   });
-  assert.deepStrictEqual(created.json, { id: 1, quotaBytes: ctx.config.defaultQuotaBytes, usedBytes: 0 });
+  assert.deepStrictEqual(Object.keys(created.json).sort(), ['id', 'quotaBytes', 'usedBytes', 'webhooks']);
+  assert.strictEqual(created.json.id, 1);
+  assert.strictEqual(created.json.webhooks.length, 1);
 
-  // A configured drive rejects rotation.
-  const again = await client.request('/api/storage/webhook', {
+  // Appending a second webhook to the same drive returns 200 and lists both.
+  ctx.discordStorage.validWebhooks.add('https://discord.com/api/webhooks/456/other-token');
+  const appended = await client.request('/api/storage/webhook', {
     method: 'POST',
-    body: JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/123/test-token' }),
+    body: JSON.stringify({ webhookUrl: 'https://discord.com/api/webhooks/456/other-token' }),
     headers: { 'content-type': 'application/json' },
     csrf: true,
+    expect: 200,
   });
-  assert.strictEqual(again.status, 409);
-  assert.strictEqual(again.json.error.code, 'STORAGE_ALREADY_CONFIGURED');
+  assert.strictEqual(appended.json.id, 1);
+  assert.strictEqual(appended.json.webhooks.length, 2);
+  assert.deepStrictEqual(
+    appended.json.webhooks.map((w) => w.id),
+    [1, 2]
+  );
+  assert.strictEqual((await dbAll(ctx.db, 'SELECT COUNT(*) AS c FROM drives'))[0].c, 1, 'no duplicate drive');
 
   // A legacy bot-era drive returns STORAGE_MIGRATION_REQUIRED and keeps its value.
   await login(client, ctx, { as: { id: '2002', username: 'bob', avatar: null }, noWebhook: true });

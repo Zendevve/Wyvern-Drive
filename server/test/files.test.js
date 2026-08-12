@@ -2,6 +2,7 @@
 
 const { test, before, after } = require('node:test');
 const assert = require('node:assert');
+const zlib = require('node:zlib');
 const { startTestServer, makeClient, login, uploadFile, makeFixture, sha256hex, dbAll } = require('./helpers');
 
 let ctx;
@@ -36,24 +37,29 @@ test('24-byte upload splits into exactly 3 x 8-byte encrypted chunks packed in o
   assert.strictEqual(entry.name, 'fixture.bin');
   assert.strictEqual(entry.mimeType, 'application/octet-stream');
 
+  // Chunk rows are pure joins onto content_blocks: message id, sizes, nonce,
+  // auth tag and checksum all live on the block.
   const chunks = await ctx.repositories.getChunksByEntry(entry.id);
   assert.strictEqual(chunks.length, 3, '24 bytes / 8-byte chunks = 3 chunks');
   chunks.forEach((chunk, i) => {
     assert.strictEqual(chunk.ordinal, i);
     assert.strictEqual(chunk.plain_size_bytes, 8);
-    // AES-256-GCM ciphertext length equals plaintext length; the 16-byte auth
-    // tag is stored separately in auth_tag.
-    assert.strictEqual(chunk.cipher_size_bytes, 8);
-    assert.strictEqual(chunk.checksum, sha256hex(fixture.subarray(i * 8, i * 8 + 8)));
+    // Chunks are deflated (compression default on) then AES-GCM encrypted;
+    // ciphertext length equals the deflated length.
+    const stored = zlib.deflateSync(fixture.subarray(i * 8, i * 8 + 8));
+    assert.strictEqual(chunk.compression, 'deflate');
+    assert.strictEqual(chunk.cipher_size_bytes, stored.length);
+    assert.strictEqual(chunk.checksum, sha256hex(stored), 'hash covers the pre-encryption stored bytes');
     assert.strictEqual(chunk.nonce.length, 12);
     assert.strictEqual(chunk.auth_tag.length, 16);
     assert.strictEqual(chunk.deleted_at, null);
   });
 
-  // Discord storage holds one packed message with three attachments; the
-  // stored bytes are ciphertext, never plaintext. Drive id 1 is the first
-  // (and only) user's configured drive.
-  const stored = ctx.discordStorage.getMessages(1);
+  // Discord storage holds one packed message with three attachments per the
+  // drive's webhook; the stored bytes are ciphertext, never plaintext.
+  const webhookId = (await ctx.repositories.listWebhooks(1))[0].id;
+  const stored = ctx.discordStorage.messagesForWebhook(webhookId);
+  assert.ok(stored, 'messages stored per webhook');
   assert.strictEqual(stored.size, 1, '3 chunks -> 1 packed message');
   const attachments = [...stored.values()][0];
   assert.strictEqual(attachments.length, 3, 'one attachment per chunk');
@@ -246,7 +252,7 @@ test('failed mid-upload keeps completed batches: entry failed, partial chunks re
   assert.strictEqual(ok.json.status, 'ready');
 });
 
-test('retryable recursive delete: failure hides the subtree, retry completes it', async (t) => {
+test('retryable recursive purge: failure keeps the subtree in trash, retry completes it', async (t) => {
   const { ctx, client: c2 } = await freshContext(t, { chunkSizeBytes: 8 });
   const { json: folder } = await c2.request('/api/folders', {
     method: 'POST',
@@ -259,22 +265,24 @@ test('retryable recursive delete: failure hides the subtree, retry completes it'
   const before = ctx.discordStorage.countMessages();
   assert.strictEqual(before, 1, '3 chunks packed into one message');
 
-  // first delete: the single deleteChunk call (one per packed message) fails
+  // Soft delete moves the subtree to the trash without touching Discord.
+  await c2.request(`/api/entries/${folder.id}`, { method: 'DELETE', csrf: true, expect: 204 });
+  assert.strictEqual(ctx.discordStorage.countMessages(), before, 'soft delete keeps Discord messages');
+
+  // First purge: the single deleteChunk call (one per packed message) fails,
+  // leaving the subtree marked 'deleting' but fully retryable.
   ctx.discordStorage.failDeleteChunkOnCall = 1;
-  let res = await c2.request(`/api/entries/${folder.id}`, { method: 'DELETE', csrf: true });
+  let res = await c2.request(`/api/trash/${folder.id}`, { method: 'DELETE', csrf: true });
   assert.strictEqual(res.status, 502);
   assert.strictEqual(res.json.error.code, 'STORAGE_UNAVAILABLE');
 
-  // subtree hidden but retryable, with partial progress
-  const rootList = await c2.request('/api/entries');
-  assert.ok(!rootList.json.entries.some((e) => e.id === folder.id), 'deleting subtree must not be listable');
   assert.strictEqual((await ctx.repositories.getEntryById(fileEntry.id)).status, 'deleting');
-  assert.strictEqual(ctx.discordStorage.countMessages(), before, 'packed message retained after failed delete');
+  assert.strictEqual(ctx.discordStorage.countMessages(), before, 'packed message retained after failed purge');
   const pending = await ctx.repositories.getPendingChunks(fileEntry.id);
   assert.strictEqual(pending.length, 3, 'all 3 chunk rows still pending (one packed message)');
 
-  // retry succeeds and removes everything
-  res = await c2.request(`/api/entries/${folder.id}`, { method: 'DELETE', csrf: true, expect: 204 });
+  // Retry succeeds and removes everything.
+  res = await c2.request(`/api/trash/${folder.id}`, { method: 'DELETE', csrf: true, expect: 204 });
   void res;
   assert.strictEqual(await ctx.repositories.getEntryById(folder.id), undefined);
   assert.strictEqual(await ctx.repositories.getEntryById(fileEntry.id), undefined);

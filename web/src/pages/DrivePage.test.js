@@ -17,6 +17,17 @@ jest.mock('../api/client', () => ({
   api: {
     me: jest.fn(),
     drive: jest.fn(),
+    webhooks: {
+      list: jest.fn(),
+      add: jest.fn(),
+      remove: jest.fn(),
+    },
+    trash: {
+      list: jest.fn(),
+      restore: jest.fn(),
+      purge: jest.fn(),
+    },
+    copyEntry: jest.fn(),
     entries: jest.fn(),
     createFolder: jest.fn(),
     updateEntry: jest.fn(),
@@ -437,6 +448,59 @@ describe('archive and preview actions', () => {
     // The download link is still there.
     expect(
       screen.getByRole('link', { name: /download archive\.tar\.gz/i })
+    ).toBeInTheDocument();
+  });
+});
+
+describe('copy and folder upload', () => {
+  it('copies an entry into the current folder', async () => {
+    client.api.entries.mockResolvedValue({ entries: [fileEntry()] });
+    client.api.copyEntry.mockResolvedValue(
+      fileEntry({ id: 10, name: 'notes (1).txt' })
+    );
+    renderDrive();
+    await screen.findByText('notes.txt');
+
+    userEvent.click(screen.getByRole('button', { name: /copy notes\.txt/i }));
+    await waitFor(() =>
+      expect(client.api.copyEntry).toHaveBeenCalledWith(1, null)
+    );
+    await waitFor(() => expect(client.api.entries).toHaveBeenCalledTimes(2));
+  });
+
+  it('copies into the open folder, not the root', async () => {
+    const docs = folderEntry({ id: 2, name: 'Documents' });
+    const report = fileEntry({ id: 3, parentId: 2, name: 'report.pdf' });
+    client.api.entries.mockImplementation((params) => {
+      if (params.parentId === 2) {
+        return Promise.resolve({ entries: [report] });
+      }
+      return Promise.resolve({ entries: [docs] });
+    });
+    client.api.copyEntry.mockResolvedValue(report);
+    renderDrive();
+
+    userEvent.click(await screen.findByRole('button', { name: 'Documents' }));
+    await screen.findByText('report.pdf');
+    userEvent.click(screen.getByRole('button', { name: /copy report\.pdf/i }));
+    await waitFor(() =>
+      expect(client.api.copyEntry).toHaveBeenCalledWith(3, 2)
+    );
+  });
+
+  it('renders the folder-upload input with webkitdirectory', async () => {
+    renderDrive();
+    await screen.findByTestId('empty-state');
+    const input = screen.getByTestId('folder-input');
+    expect(input).toHaveAttribute('webkitdirectory');
+    expect(input).toHaveAttribute('directory');
+  });
+
+  it('shows the folder upload button', async () => {
+    renderDrive();
+    await screen.findByTestId('empty-state');
+    expect(
+      screen.getByRole('button', { name: /upload folder/i })
     ).toBeInTheDocument();
   });
 });

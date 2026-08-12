@@ -10,6 +10,17 @@ jest.mock('./api/client', () => ({
     me: jest.fn(),
     drive: jest.fn(),
     configureWebhook: jest.fn(),
+    webhooks: {
+      list: jest.fn(),
+      add: jest.fn(),
+      remove: jest.fn(),
+    },
+    trash: {
+      list: jest.fn(),
+      restore: jest.fn(),
+      purge: jest.fn(),
+    },
+    copyEntry: jest.fn(),
     entries: jest.fn(),
     createFolder: jest.fn(),
     updateEntry: jest.fn(),
@@ -74,6 +85,14 @@ describe('auth gating', () => {
     window.history.pushState({}, '', '/login');
     render(<App />);
     expect(await screen.findByText('This folder is empty')).toBeInTheDocument();
+  });
+
+  it('renders the trash page at /trash for authenticated users', async () => {
+    client.api.me.mockResolvedValue({ user, drive });
+    client.api.trash.list.mockResolvedValue({ entries: [] });
+    window.history.pushState({}, '', '/trash');
+    render(<App />);
+    expect(await screen.findByTestId('trash-page')).toBeInTheDocument();
   });
 
   it('sends a signed-in user with no storage to /connect from protected routes', async () => {

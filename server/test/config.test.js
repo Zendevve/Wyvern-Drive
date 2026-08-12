@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { loadConfig, diagnoseConfig, REQUIRED_VARS, DEFAULT_PORT, DEFAULT_QUOTA_BYTES, DEFAULT_CHUNK_SIZE_BYTES, DEFAULT_CHUNKS_PER_MESSAGE, DEFAULT_UPLOAD_CONCURRENCY, DEFAULT_DOWNLOAD_CONCURRENCY } = require('../src/config');
+const { loadConfig, diagnoseConfig, REQUIRED_VARS, DEFAULT_PORT, DEFAULT_QUOTA_BYTES, DEFAULT_CHUNK_SIZE_BYTES, DEFAULT_CHUNKS_PER_MESSAGE, DEFAULT_UPLOAD_CONCURRENCY, DEFAULT_DOWNLOAD_CONCURRENCY, DEFAULT_TRASH_RETENTION_DAYS, DEFAULT_MAX_WEBHOOKS_PER_DRIVE } = require('../src/config');
 
 const VALID_ENV = {
   APP_ORIGIN: 'http://localhost:3000',
@@ -27,6 +27,9 @@ test('loadConfig accepts a complete valid environment', () => {
   assert.strictEqual(cfg.chunksPerMessage, DEFAULT_CHUNKS_PER_MESSAGE);
   assert.strictEqual(cfg.uploadConcurrency, DEFAULT_UPLOAD_CONCURRENCY);
   assert.strictEqual(cfg.downloadConcurrency, DEFAULT_DOWNLOAD_CONCURRENCY);
+  assert.strictEqual(cfg.compressChunks, true, 'compression defaults on');
+  assert.strictEqual(cfg.trashRetentionDays, DEFAULT_TRASH_RETENTION_DAYS);
+  assert.strictEqual(cfg.maxWebhooksPerDrive, DEFAULT_MAX_WEBHOOKS_PER_DRIVE);
 });
 
 test('loadConfig strips a trailing slash from APP_ORIGIN', () => {
@@ -133,6 +136,51 @@ test('loadConfig parses and validates the upload packing variables', () => {
   for (const bad of ['0', '17', 'abc', '-1']) {
     assert.throws(() => loadConfig({ ...VALID_ENV, WYVERN_UPLOAD_CONCURRENCY: bad }), /WYVERN_UPLOAD_CONCURRENCY/, bad);
     assert.throws(() => loadConfig({ ...VALID_ENV, WYVERN_DOWNLOAD_CONCURRENCY: bad }), /WYVERN_DOWNLOAD_CONCURRENCY/, bad);
+  }
+});
+
+test('loadConfig parses and validates the roadmap variables (compression, trash retention, webhook cap)', () => {
+  const cfg = loadConfig({
+    ...VALID_ENV,
+    WYVERN_COMPRESS_CHUNKS: '0',
+    WYVERN_TRASH_RETENTION_DAYS: '7',
+    WYVERN_MAX_WEBHOOKS_PER_DRIVE: '3',
+  });
+  assert.strictEqual(cfg.compressChunks, false);
+  assert.strictEqual(cfg.trashRetentionDays, 7);
+  assert.strictEqual(cfg.maxWebhooksPerDrive, 3);
+
+  // Every accepted spelling of the boolean flag.
+  for (const on of ['1', 'true', 'TRUE']) {
+    assert.strictEqual(loadConfig({ ...VALID_ENV, WYVERN_COMPRESS_CHUNKS: on }).compressChunks, true, on);
+  }
+  for (const off of ['0', 'false', 'FALSE']) {
+    assert.strictEqual(loadConfig({ ...VALID_ENV, WYVERN_COMPRESS_CHUNKS: off }).compressChunks, false, off);
+  }
+  // Empty/unset falls back to the default (on).
+  assert.strictEqual(loadConfig({ ...VALID_ENV, WYVERN_COMPRESS_CHUNKS: '' }).compressChunks, true);
+  const noCompress = { ...VALID_ENV };
+  delete noCompress.WYVERN_COMPRESS_CHUNKS;
+  assert.strictEqual(loadConfig(noCompress).compressChunks, true);
+
+  // Invalid boolean spelling is rejected.
+  assert.throws(() => loadConfig({ ...VALID_ENV, WYVERN_COMPRESS_CHUNKS: 'yes' }), /WYVERN_COMPRESS_CHUNKS/);
+  assert.throws(() => loadConfig({ ...VALID_ENV, WYVERN_COMPRESS_CHUNKS: '2' }), /WYVERN_COMPRESS_CHUNKS/);
+
+  // Bounded integers: defaults, valid edges, and out-of-range rejection.
+  const defaults = loadConfig({ ...VALID_ENV });
+  assert.strictEqual(defaults.trashRetentionDays, DEFAULT_TRASH_RETENTION_DAYS);
+  assert.strictEqual(defaults.maxWebhooksPerDrive, DEFAULT_MAX_WEBHOOKS_PER_DRIVE);
+  assert.strictEqual(loadConfig({ ...VALID_ENV, WYVERN_TRASH_RETENTION_DAYS: '1' }).trashRetentionDays, 1);
+  assert.strictEqual(loadConfig({ ...VALID_ENV, WYVERN_TRASH_RETENTION_DAYS: '365' }).trashRetentionDays, 365);
+  assert.strictEqual(loadConfig({ ...VALID_ENV, WYVERN_MAX_WEBHOOKS_PER_DRIVE: '1' }).maxWebhooksPerDrive, 1);
+  assert.strictEqual(loadConfig({ ...VALID_ENV, WYVERN_MAX_WEBHOOKS_PER_DRIVE: '32' }).maxWebhooksPerDrive, 32);
+
+  for (const bad of ['0', '366', '-1', 'abc']) {
+    assert.throws(() => loadConfig({ ...VALID_ENV, WYVERN_TRASH_RETENTION_DAYS: bad }), /WYVERN_TRASH_RETENTION_DAYS/, bad);
+  }
+  for (const bad of ['0', '33', '-2', 'abc']) {
+    assert.throws(() => loadConfig({ ...VALID_ENV, WYVERN_MAX_WEBHOOKS_PER_DRIVE: bad }), /WYVERN_MAX_WEBHOOKS_PER_DRIVE/, bad);
   }
 });
 

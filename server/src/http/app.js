@@ -7,6 +7,7 @@ const { createRateLimiter } = require('./middleware');
 const { createAuthRoutes } = require('./auth-routes');
 const { createSetupStatusRoutes } = require('./setup-status');
 const { createStorageRoutes } = require('./storage-routes');
+const { createTrashRoutes } = require('./trash-routes');
 const { createDriveRoutes } = require('./drive-routes');
 const { createEntryRoutes, createFolderRoutes } = require('./entry-routes');
 const { createFileRoutes, createUploadRoutes } = require('./file-routes');
@@ -59,6 +60,7 @@ function createApp(deps) {
 
   const authRoutes = createAuthRoutes(deps);
   const storageRoutes = createStorageRoutes(deps);
+  const trashRoutes = createTrashRoutes(deps);
   const driveRoutes = createDriveRoutes(deps);
   const entryRoutes = createEntryRoutes(deps);
   const folderRoutes = createFolderRoutes(deps);
@@ -72,6 +74,7 @@ function createApp(deps) {
   app.use('/api/setup', createSetupStatusRoutes({ missing: [], invalid: [] }));
   app.use('/api/auth', authRoutes);
   app.use('/api/storage', storageRoutes);
+  app.use('/api/trash', trashRoutes);
   app.use('/api/drive', driveRoutes);
   app.use('/api/entries', entryRoutes);
   app.use('/api/folders', folderRoutes);

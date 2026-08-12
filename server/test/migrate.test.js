@@ -19,7 +19,7 @@ test('migrate creates all tables, indexes, and the migrations ledger', async () 
   await migrate(db, MIGRATIONS_DIR);
 
   const tables = (await all(db, "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")).map((r) => r.name);
-  for (const expected of ['users', 'drives', 'entries', 'file_chunks', 'shares', 'sessions', 'schema_migrations']) {
+  for (const expected of ['users', 'drives', 'entries', 'file_chunks', 'content_blocks', 'webhooks', 'shares', 'sessions', 'schema_migrations']) {
     assert.ok(tables.includes(expected), `missing table ${expected}`);
   }
 
@@ -27,15 +27,19 @@ test('migrate creates all tables, indexes, and the migrations ledger', async () 
   for (const expected of [
     'idx_entries_drive_parent_status',
     'idx_entries_drive_updated',
-    'idx_file_chunks_entry_ordinal',
-    'idx_shares_token_hash',
     'idx_entries_drive_upload_token',
+    'idx_entries_unique_live',
+    'idx_entries_deleted',
+    'idx_webhooks_drive_id',
+    'idx_file_chunks_entry_ordinal',
+    'idx_file_chunks_block_id',
+    'idx_shares_token_hash',
   ]) {
     assert.ok(indexes.includes(expected), `missing index ${expected}`);
   }
 
   const versions = await all(db, 'SELECT version FROM schema_migrations');
-  assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3]);
+  assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3, 4]);
 
   const driveColumns = (await all(db, 'PRAGMA table_info(drives)')).map((c) => c.name);
   for (const expected of ['id', 'owner_id', 'legacy_discord_channel_id', 'webhook_ciphertext', 'webhook_nonce', 'webhook_auth_tag', 'quota_bytes', 'created_at']) {
@@ -43,7 +47,7 @@ test('migrate creates all tables, indexes, and the migrations ledger', async () 
   }
 
   const entryColumns = (await all(db, 'PRAGMA table_info(entries)')).map((c) => c.name);
-  for (const expected of ['upload_token', 'expected_size_bytes']) {
+  for (const expected of ['upload_token', 'expected_size_bytes', 'deleted_at']) {
     assert.ok(entryColumns.includes(expected), `missing entries column ${expected}`);
   }
 
@@ -55,7 +59,7 @@ test('migrate is idempotent', async () => {
   await migrate(db, MIGRATIONS_DIR);
   await migrate(db, MIGRATIONS_DIR);
   const versions = await all(db, 'SELECT version FROM schema_migrations');
-  assert.strictEqual(versions.length, 3);
+  assert.strictEqual(versions.length, 4);
   await closeDatabase(db);
 });
 
@@ -68,7 +72,9 @@ test('foreign keys are enabled and enforced', async () => {
   const now = new Date().toISOString();
   const userRes = await run(db, 'INSERT INTO users (discord_id, username, created_at, updated_at) VALUES (?, ?, ?, ?)', ['d1', 'alice', now, now]);
   const driveRes = await run(db, 'INSERT INTO drives (owner_id, quota_bytes, created_at) VALUES (?, ?, ?)', [userRes.lastID, 100, now]);
+  const webhookRes = await run(db, 'INSERT INTO webhooks (drive_id, webhook_ciphertext, webhook_nonce, webhook_auth_tag, created_at) VALUES (?, ?, ?, ?, ?)', [driveRes.lastID, Buffer.from('c'), Buffer.from('n'), Buffer.from('t'), now]);
   const entryRes = await run(db, "INSERT INTO entries (drive_id, kind, name, status, created_at, updated_at) VALUES (?, 'folder', 'f', 'ready', ?, ?)", [driveRes.lastID, now, now]);
+  const blockRes = await run(db, "INSERT INTO content_blocks (drive_id, content_hash, message_id, webhook_id, plain_size_bytes, cipher_size_bytes, nonce, auth_tag, compression, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'none', ?)", [driveRes.lastID, 'aa', 'm1', webhookRes.lastID, 8, 8, Buffer.alloc(12), Buffer.alloc(16), now]);
 
   await assert.rejects(
     run(db, 'INSERT INTO entries (drive_id, kind, name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [999, 'file', 'x', 'ready', now, now]),
@@ -78,8 +84,21 @@ test('foreign keys are enabled and enforced', async () => {
     run(db, 'INSERT INTO drives (owner_id, quota_bytes, created_at) VALUES (?, ?, ?)', [999, 100, now]),
     /FOREIGN KEY/
   );
+  await assert.rejects(
+    run(db, 'INSERT INTO webhooks (drive_id, webhook_ciphertext, webhook_nonce, webhook_auth_tag, created_at) VALUES (?, ?, ?, ?, ?)', [999, Buffer.from('c'), Buffer.from('n'), Buffer.from('t'), now]),
+    /FOREIGN KEY/
+  );
+  // Chunk rows are pure joins; an entry_id or block_id without a parent row fails.
+  await assert.rejects(
+    run(db, 'INSERT INTO file_chunks (entry_id, ordinal, block_id) VALUES (?, ?, ?)', [999, 0, blockRes.lastID]),
+    /FOREIGN KEY/
+  );
+  await assert.rejects(
+    run(db, 'INSERT INTO file_chunks (entry_id, ordinal, block_id) VALUES (?, ?, ?)', [entryRes.lastID, 0, 999]),
+    /FOREIGN KEY/
+  );
   // ON DELETE CASCADE from entries -> file_chunks
-  await run(db, 'INSERT INTO file_chunks (entry_id, ordinal, discord_message_id, plain_size_bytes, cipher_size_bytes, nonce, auth_tag, checksum) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [entryRes.lastID, 0, 'm1', 8, 8, Buffer.alloc(12), Buffer.alloc(16), 'aa']);
+  await run(db, 'INSERT INTO file_chunks (entry_id, ordinal, block_id) VALUES (?, ?, ?)', [entryRes.lastID, 0, blockRes.lastID]);
   await run(db, 'DELETE FROM entries WHERE id = ?', [entryRes.lastID]);
   const chunks = await all(db, 'SELECT * FROM file_chunks WHERE entry_id = ?', [entryRes.lastID]);
   assert.strictEqual(chunks.length, 0);
@@ -119,7 +138,7 @@ test('a failed migration aborts and rolls back cleanly', async () => {
 
 test('migrations directory contains only the numbered migrations', () => {
   const files = fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
-  assert.deepStrictEqual(files, ['001_initial.sql', '002_webhook_storage.sql', '003_add_upload_resume.sql']);
+  assert.deepStrictEqual(files, ['001_initial.sql', '002_webhook_storage.sql', '003_add_upload_resume.sql', '004_block_store_trash.sql']);
 });
 
 test('migration 002 rebuilds drives: legacy channel preserved, webhook columns added, foreign keys intact', async () => {
@@ -138,7 +157,7 @@ test('migration 002 rebuilds drives: legacy channel preserved, webhook columns a
     await migrate(db, MIGRATIONS_DIR);
 
     const versions = await all(db, 'SELECT version FROM schema_migrations');
-    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3]);
+    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3, 4]);
 
     const drive = await get(db, 'SELECT * FROM drives WHERE id = ?', [driveRes.lastID]);
     assert.strictEqual(drive.legacy_discord_channel_id, 'ch-legacy-1', 'old channel value must be preserved');
@@ -188,7 +207,7 @@ test('migration 003 adds upload-resume columns and the partial index without dat
     await migrate(db, MIGRATIONS_DIR);
 
     const versions = await all(db, 'SELECT version FROM schema_migrations');
-    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3]);
+    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3, 4]);
 
     // New columns exist and existing rows keep their data.
     const entry = await get(db, 'SELECT * FROM entries WHERE id = ?', [entryRes.lastID]);
@@ -226,4 +245,77 @@ test('schema constrains kind/status values', async () => {
     /CHECK/
   );
   await closeDatabase(db);
+});
+
+test('migration 004 backfills webhooks, dedups blocks, and rebuilds chunk rows', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wyvern-migrate-v3-'));
+  const db = await freshDb();
+  try {
+    // Apply 001 + 002 + 003, then seed a drive with legacy credential columns
+    // and two files sharing one content chunk (plus one unique chunk).
+    fs.copyFileSync(path.join(MIGRATIONS_DIR, '001_initial.sql'), path.join(dir, '001_initial.sql'));
+    fs.copyFileSync(path.join(MIGRATIONS_DIR, '002_webhook_storage.sql'), path.join(dir, '002_webhook_storage.sql'));
+    fs.copyFileSync(path.join(MIGRATIONS_DIR, '003_add_upload_resume.sql'), path.join(dir, '003_add_upload_resume.sql'));
+    await migrate(db, dir);
+    const now = new Date().toISOString();
+    const userRes = await run(db, 'INSERT INTO users (discord_id, username, created_at, updated_at) VALUES (?, ?, ?, ?)', ['d1', 'alice', now, now]);
+    const driveRes = await run(db, 'INSERT INTO drives (owner_id, webhook_ciphertext, webhook_nonce, webhook_auth_tag, quota_bytes, created_at) VALUES (?, ?, ?, ?, ?, ?)', [userRes.lastID, Buffer.from('cipher'), Buffer.from('nonce'), Buffer.from('tag'), 100, now]);
+    const aRes = await run(db, "INSERT INTO entries (drive_id, kind, name, status, created_at, updated_at) VALUES (?, 'file', 'a.bin', 'ready', ?, ?)", [driveRes.lastID, now, now]);
+    const bRes = await run(db, "INSERT INTO entries (drive_id, kind, name, status, created_at, updated_at) VALUES (?, 'file', 'b.bin', 'ready', ?, ?)", [driveRes.lastID, now, now]);
+    // a.bin: two chunks (shared hash + unique hash); b.bin: one chunk sharing
+    // the first hash. The old schema stored per-chunk message/ciphertext.
+    await run(db, "INSERT INTO file_chunks (entry_id, ordinal, discord_message_id, plain_size_bytes, cipher_size_bytes, nonce, auth_tag, checksum) VALUES (?, ?, 'm-shared', 8, 8, ?, ?, 'hash-shared')", [aRes.lastID, 0, Buffer.alloc(12), Buffer.alloc(16)]);
+    await run(db, "INSERT INTO file_chunks (entry_id, ordinal, discord_message_id, plain_size_bytes, cipher_size_bytes, nonce, auth_tag, checksum) VALUES (?, ?, 'm-uniq', 8, 8, ?, ?, 'hash-uniq')", [aRes.lastID, 1, Buffer.alloc(12), Buffer.alloc(16)]);
+    await run(db, "INSERT INTO file_chunks (entry_id, ordinal, discord_message_id, plain_size_bytes, cipher_size_bytes, nonce, auth_tag, checksum) VALUES (?, ?, 'm-shared2', 8, 8, ?, ?, 'hash-shared')", [bRes.lastID, 0, Buffer.alloc(12), Buffer.alloc(16)]);
+
+    // Apply the real migration set (001-003 skipped, 004 runs).
+    await migrate(db, MIGRATIONS_DIR);
+
+    const versions = await all(db, 'SELECT version FROM schema_migrations');
+    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3, 4]);
+
+    // Webhook row backfilled 1:1 from the drive credential columns.
+    const webhooks = await all(db, 'SELECT * FROM webhooks');
+    assert.strictEqual(webhooks.length, 1);
+    assert.deepStrictEqual(webhooks[0].webhook_ciphertext, Buffer.from('cipher'));
+    assert.strictEqual(webhooks[0].drive_id, driveRes.lastID);
+
+    // Blocks dedup by (drive_id, content_hash): two distinct hashes only.
+    const blocks = await all(db, 'SELECT * FROM content_blocks ORDER BY content_hash');
+    assert.strictEqual(blocks.length, 2);
+    const byHash = new Map(blocks.map((b) => [b.content_hash, b]));
+    assert.ok(byHash.has('hash-shared'));
+    assert.ok(byHash.has('hash-uniq'));
+    const shared = byHash.get('hash-shared');
+    assert.strictEqual(shared.compression, 'none', 'backfilled blocks are uncompressed');
+    assert.strictEqual(shared.webhook_id, webhooks[0].id);
+    assert.strictEqual(shared.plain_size_bytes, 8);
+
+    // Chunk rows are pure joins onto the deduped blocks: the shared-hash
+    // chunk of both files points at the SAME block row.
+    const aChunks = await all(db, 'SELECT entry_id, ordinal, block_id FROM file_chunks WHERE entry_id = ? ORDER BY ordinal', [aRes.lastID]);
+    assert.deepStrictEqual(
+      aChunks.map((c) => c.block_id),
+      [shared.id, byHash.get('hash-uniq').id]
+    );
+    const bChunks = await all(db, 'SELECT entry_id, ordinal, block_id FROM file_chunks WHERE entry_id = ?', [bRes.lastID]);
+    assert.strictEqual(bChunks[0].block_id, shared.id, 'same block shared by both files');
+
+    // The partial unique index lets a trashed entry share a name with a live one.
+    await run(db, "INSERT INTO entries (drive_id, parent_id, kind, name, status, deleted_at, created_at, updated_at) VALUES (?, NULL, 'file', 'same', 'ready', ?, ?, ?)", [driveRes.lastID, now, now, now]);
+    await run(db, "INSERT INTO entries (drive_id, parent_id, kind, name, status, deleted_at, created_at, updated_at) VALUES (?, NULL, 'file', 'same', 'ready', NULL, ?, ?)", [driveRes.lastID, now, now]);
+    // Two LIVE siblings under one folder still conflict (the index is over
+    // live rows; a real parent id, since NULLs are distinct in SQLite).
+    const folderRes = await run(db, "INSERT INTO entries (drive_id, kind, name, status, created_at, updated_at) VALUES (?, 'folder', 'f', 'ready', ?, ?)", [driveRes.lastID, now, now]);
+    await run(db, "INSERT INTO entries (drive_id, parent_id, kind, name, status, deleted_at, created_at, updated_at) VALUES (?, ?, 'file', 'dup', 'ready', NULL, ?, ?)", [driveRes.lastID, folderRes.lastID, now, now]);
+    await assert.rejects(
+      run(db, "INSERT INTO entries (drive_id, parent_id, kind, name, status, deleted_at, created_at, updated_at) VALUES (?, ?, 'file', 'dup', 'ready', NULL, ?, ?)", [driveRes.lastID, folderRes.lastID, now, now]),
+      /UNIQUE/
+    );
+    // A trashed sibling under the same folder does NOT conflict.
+    await run(db, "INSERT INTO entries (drive_id, parent_id, kind, name, status, deleted_at, created_at, updated_at) VALUES (?, ?, 'file', 'dup', 'ready', ?, ?, ?)", [driveRes.lastID, folderRes.lastID, now, now, now]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    await closeDatabase(db);
+  }
 });

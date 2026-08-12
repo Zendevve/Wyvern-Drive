@@ -83,8 +83,24 @@ function createEntryRoutes({ config, repositories, sessionStore, fileService }) 
     asyncHandler(async (req, res) => {
       const entryId = Number(req.params.id);
       if (!Number.isInteger(entryId)) throw httpError('NOT_FOUND');
+      // Soft delete: the entry moves to the trash (deleted_at set) and stays
+      // addressable via /api/trash until purged.
       await fileService.deleteEntry({ drive: req.drive, entryId });
       res.status(204).end();
+    })
+  );
+
+  router.post(
+    '/:id/copy',
+    csrfProtect(config),
+    auth,
+    asyncHandler(async (req, res) => {
+      const entryId = Number(req.params.id);
+      if (!Number.isInteger(entryId)) throw httpError('NOT_FOUND');
+      const body = req.body || {};
+      const parentId = parseParentId(body.parentId);
+      const entry = await fileService.copyEntry({ drive: req.drive, entryId, parentId });
+      res.status(201).json(entry);
     })
   );
 

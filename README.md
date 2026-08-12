@@ -1,12 +1,13 @@
 # Wyvern Drive
 
 A self-hostable, Discord-backed personal cloud drive. Files are split into
-chunks, encrypted at rest with AES-256-GCM, and stored as Discord attachments
-posted through one per-user Discord webhook (Disbox-style). Each user connects
-their own webhook once on the `/connect` page; the server validates it,
-encrypts it at rest under the master key, and performs all Discord I/O. The
-server owns all credentials and metadata (SQLite); the browser never sees
-webhook URLs, Discord message IDs, or raw attachment URLs.
+chunks, compressed and encrypted at rest with AES-256-GCM, and stored as
+Discord attachments posted through the drive's Discord webhooks (Disbox-style;
+a drive can register several webhooks and uploads round-robin across them).
+Each user connects their own webhook once on the `/connect` page; the server
+validates it, encrypts it at rest under the master key, and performs all
+Discord I/O. The server owns all credentials and metadata (SQLite); the
+browser never sees webhook URLs, Discord message IDs, or raw attachment URLs.
 
 **No Discord bot is used.** Identity is Discord OAuth2 and storage is a
 per-user webhook; files are encrypted server-side before upload. The bot-era
@@ -17,18 +18,32 @@ The `refs/` directories remain read-only prior art, not runtime behavior.
 **License:** proprietary — see [LICENSE](LICENSE). Vendored references under
 `refs/` retain their own licenses.
 
-## Features (MVP)
+## Features
 
 - Discord OAuth2 sign-in with server-side sessions and CSRF protection
 - One personal drive per user; configurable quota (default 10 GiB)
-- Parallel packed uploads: files are cut into plaintext chunks, each encrypted
-  with AES-256-GCM (fresh 12-byte nonce + auth tag), and up to 10 chunks are
-  posted per Discord message as attachments, with concurrent batches in flight
+- **Multi-webhook scaling**: a drive registers up to `WYVERN_MAX_WEBHOOKS_PER_DRIVE`
+  (default 8) Discord webhooks and uploads round-robin across them, raising
+  parallel upload throughput; webhooks that still store content cannot be removed
+- **Content dedup**: identical content within a drive is stored once — later
+  uploads of the same bytes reference the existing block with no Discord I/O
+- **Per-chunk compression**: each chunk is zlib-deflated before AES-GCM
+  encryption (`WYVERN_COMPRESS_CHUNKS`, default on), shrinking stored bytes;
+  the content hash covers the stored form so dedup survives compression
+- Parallel packed uploads: files are cut into plaintext chunks, each compressed
+  and encrypted with AES-256-GCM (fresh 12-byte nonce + auth tag), and up to 10
+  chunks are posted per Discord message as attachments, with concurrent batches
+  in flight
 - Resumable uploads: a client upload token reuses the entry after an
   interruption and skips already-posted chunks; server-side progress polling
 - HTTP Range downloads (206 partial content) and inline file previews
 - Folder ZIP download: any subtree streams as an archive
-- Folders; rename, move, and permanent recursive delete
+- Folders; rename, move, and **instant copy** (copies share blocks — no
+  Discord I/O); **folder upload** (picker and drag-and-drop both preserve the
+  folder tree)
+- **Recycle bin**: delete moves entries to trash (no Discord I/O); restore,
+  delete-forever, and a lazy retention sweep (`WYVERN_TRASH_RETENTION_DAYS`,
+  default 30) purge expired trash automatically
 - Server-backed search and sort
 - Anonymous read-only share links with optional expiry and revocation
 - Cloud-service-style UI (Google Drive / Dropbox / Mega flow): desktop list + grid views, row/card selection with bulk actions, hover-revealed actions, drag-and-drop upload, floating upload progress manager; responsive (desktop table/grid, mobile cards)
@@ -45,9 +60,12 @@ The `refs/` directories remain read-only prior art, not runtime behavior.
 Security model: server-side encryption, not end-to-end. Discord and the
 browser never receive plaintext chunks, storage internals, or encryption keys;
 the server decrypts only for authorized downloads and shares. Chunks are
-encrypted per chunk and packed up to `WYVERN_CHUNKS_PER_MESSAGE` (default 10)
-per Discord message; uploads run `WYVERN_UPLOAD_CONCURRENCY` batches in
-parallel and downloads prefetch `WYVERN_DOWNLOAD_CONCURRENCY` chunks ahead.
+deflated (optional) and encrypted per chunk, then packed up to
+`WYVERN_CHUNKS_PER_MESSAGE` (default 10) per Discord message; uploads run
+`WYVERN_UPLOAD_CONCURRENCY` batches in parallel and downloads prefetch
+`WYVERN_DOWNLOAD_CONCURRENCY` chunks ahead. Each unique chunk is stored once
+per drive (`content_blocks`, keyed by the hash of its stored bytes), so
+identical files and copies share Discord messages instead of duplicating them.
 
 ## Quick start (development)
 
@@ -96,6 +114,9 @@ Required environment variables (full list in `server/.env.example`):
 | `WYVERN_CHUNKS_PER_MESSAGE` | Max encrypted chunks packed per Discord message (default 10; 1..10) |
 | `WYVERN_UPLOAD_CONCURRENCY` | Max chunk batches uploaded concurrently (default 4; 1..16) |
 | `WYVERN_DOWNLOAD_CONCURRENCY` | Max chunks fetched concurrently when downloading (default 6; 1..16) |
+| `WYVERN_COMPRESS_CHUNKS` | zlib-deflate each chunk before encryption (default `1`/on; `0`/`false` stores raw plaintext) |
+| `WYVERN_TRASH_RETENTION_DAYS` | Days a trashed entry stays before the lazy sweep purges it (default 30; 1..365) |
+| `WYVERN_MAX_WEBHOOKS_PER_DRIVE` | Max webhooks a drive may register (default 8; 1..32) |
 
 There is no global webhook variable: each authenticated user connects their
 own Discord webhook on `/connect`, and the server seals it with
@@ -122,18 +143,20 @@ server behind your reverse proxy with HTTPS.
 ## Testing
 
 ```sh
-cd server && npm test   # 116 tests: in-memory SQLite + fake Discord adapters
-cd web && npm test      # 75 tests: mocked API client
+cd server && npm test   # 125 tests: in-memory SQLite + fake Discord adapters
+cd web && npm test      # 91 tests: mocked API client
 ```
 
 Server tests never contact Discord: OAuth fetch is stubbed and the storage
 adapters are in-memory fakes (one integration file drives the real webhook
 adapter against an injected fake Discord REST surface). Coverage includes the
 encrypted round-trip fixture verified byte-for-byte against its SHA-256
-digest, 10-per-message chunk packing, resumable uploads, HTTP Range slicing,
-upload progress, folder ZIP archives, and setup-mode diagnostics (status
-contract, no-secret-leak assertions, hidden protected routes, file-backed
-`DB_URL` parent creation).
+digest, 10-per-message chunk packing, content dedup, instant copy, multi-webhook
+round-robin, per-chunk compression, the full trash lifecycle (delete, restore,
+retention sweep, purge with block refcounting), resumable uploads, HTTP Range
+slicing, upload progress, folder ZIP archives, webhook cap enforcement, and
+setup-mode diagnostics (status contract, no-secret-leak assertions, hidden
+protected routes, file-backed `DB_URL` parent creation).
 
 ## Manual smoke path (configured Discord)
 

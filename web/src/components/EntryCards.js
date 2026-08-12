@@ -12,6 +12,7 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowRightArrowLeft,
+  faCopy,
   faDownload,
   faEye,
   faPen,
@@ -143,6 +144,13 @@ export default function EntryCards({ entries, actions, onPreview }) {
                   onClick={() => actions.onMove(entry)}
                 >
                   <FontAwesomeIcon icon={faArrowRightArrowLeft} />
+                </IconButton>
+                <IconButton
+                  aria-label={`Copy ${entry.name}`}
+                  title="Copy"
+                  onClick={() => actions.onCopy(entry)}
+                >
+                  <FontAwesomeIcon icon={faCopy} />
                 </IconButton>
                 <IconButton
                   aria-label={`Delete ${entry.name}`}

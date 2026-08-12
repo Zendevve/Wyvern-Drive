@@ -33,7 +33,7 @@ async function createFolder(client, name, parentId = null, { expect = 201 } = {}
 test('folder creation returns a 201 entry with the exact JSON shape', async () => {
   const folder = await createFolder(client, 'alpha');
   assert.deepStrictEqual(Object.keys(folder).sort(), [
-    'createdAt', 'id', 'kind', 'mimeType', 'name', 'parentId', 'sizeBytes', 'status', 'updatedAt',
+    'createdAt', 'deletedAt', 'id', 'kind', 'mimeType', 'name', 'parentId', 'sizeBytes', 'status', 'updatedAt',
   ]);
   assert.strictEqual(folder.kind, 'folder');
   assert.strictEqual(folder.name, 'alpha');
@@ -41,6 +41,7 @@ test('folder creation returns a 201 entry with the exact JSON shape', async () =
   assert.strictEqual(folder.status, 'ready');
   assert.strictEqual(folder.sizeBytes, 0);
   assert.strictEqual(folder.mimeType, null);
+  assert.strictEqual(folder.deletedAt, null);
 });
 
 test('duplicate sibling names conflict with 409 NAME_CONFLICT', async () => {
@@ -166,20 +167,20 @@ test('empty parent lists return []', async () => {
   assert.deepStrictEqual(res.json.entries, []);
 });
 
-test('listing under a deleting parent is rejected, then 404 after completion', async () => {
+test('listing under a trashed parent is empty, then 404 after purge', async () => {
   const folder = await createFolder(client, 'toBeDeleted');
   await uploadFile(client, { parentId: folder.id, name: 'occupant.bin', data: Buffer.from('12345678') });
 
-  // first delete fails remotely -> subtree stays 'deleting'
-  ctx.discordStorage.failNextDeleteChunks = 1;
-  await client.request(`/api/entries/${folder.id}`, { method: 'DELETE', csrf: true, expect: 502 });
-
-  let res = await client.request(`/api/entries?parentId=${folder.id}`);
-  assert.strictEqual(res.status, 400);
-  assert.strictEqual(res.json.error.code, 'INVALID_PARENT');
-
-  // retry completes -> folder row is gone -> NOT_FOUND
+  // Soft delete: the subtree moves to the trash (status stays 'ready').
   await client.request(`/api/entries/${folder.id}`, { method: 'DELETE', csrf: true, expect: 204 });
+
+  // Children are trashed too, so listing under the folder is empty.
+  let res = await client.request(`/api/entries?parentId=${folder.id}`);
+  assert.strictEqual(res.status, 200);
+  assert.deepStrictEqual(res.json.entries, []);
+
+  // Purging removes the folder row -> NOT_FOUND.
+  await client.request(`/api/trash/${folder.id}`, { method: 'DELETE', csrf: true, expect: 204 });
   res = await client.request(`/api/entries?parentId=${folder.id}`);
   assert.strictEqual(res.status, 404);
   assert.strictEqual(res.json.error.code, 'NOT_FOUND');
@@ -315,15 +316,26 @@ test('foreign entry operations return 404', async () => {
   }
 });
 
-test('recursive delete removes a folder tree and its chunks', async () => {
+test('recursive delete trashes a folder tree; purge removes it and its chunks', async () => {
   const folder = await createFolder(client, 'tree');
   const { json: inner } = await uploadFile(client, { parentId: folder.id, name: 'inner.bin', data: Buffer.from('12345678') });
   const sub = await createFolder(client, 'sub', folder.id);
   const { json: deep } = await uploadFile(client, { parentId: sub.id, name: 'deep.bin', data: Buffer.from('abcdefghij') });
 
   const before = ctx.discordStorage.countMessages();
+  // Soft delete: the whole subtree lands in the trash, Discord untouched.
   await client.request(`/api/entries/${folder.id}`, { method: 'DELETE', csrf: true, expect: 204 });
 
+  const trash = await client.request('/api/trash');
+  const trashedIds = trash.json.entries.map((e) => e.id);
+  assert.ok(trashedIds.includes(folder.id), 'folder appears in trash');
+  assert.ok(trashedIds.includes(inner.id), 'file appears in trash');
+  assert.ok(trashedIds.includes(sub.id), 'subfolder appears in trash');
+  assert.ok(trashedIds.includes(deep.id), 'nested file appears in trash');
+  assert.strictEqual(ctx.discordStorage.countMessages(), before, 'no Discord I/O on soft delete');
+
+  // Purging the root removes the tree and reclaims its messages.
+  await client.request(`/api/trash/${folder.id}`, { method: 'DELETE', csrf: true, expect: 204 });
   assert.strictEqual(await ctx.repositories.getEntryById(folder.id), undefined);
   assert.strictEqual(await ctx.repositories.getEntryById(inner.id), undefined);
   assert.strictEqual(await ctx.repositories.getEntryById(sub.id), undefined);

@@ -24,9 +24,11 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowRightArrowLeft,
+  faCopy,
   faDownload,
   faFolderOpen,
   faFolderPlus,
+  faFolderTree,
   faMagnifyingGlass,
   faPen,
   faShareNodes,
@@ -38,7 +40,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import AppShell from '../components/AppShell';
 import Breadcrumbs from '../components/Breadcrumbs';
-import DropOverlay from '../components/DropOverlay';
+import DropOverlay, { collectDroppedFiles } from '../components/DropOverlay';
 import EntryCards from '../components/EntryCards';
 import EntryGrid from '../components/EntryGrid';
 import EntryTable from '../components/EntryTable';
@@ -71,6 +73,42 @@ function newUploadToken() {
     : `u-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+/**
+ * Materialize an <input webkitdirectory> selection into upload pairs. The
+ * picker returns a flat FileList where each file carries its position in
+ * webkitRelativePath ("folder/sub/file.txt"); this creates the folder chain
+ * on the server (once per folder, via a path cache) and resolves each file
+ * to the folder id it belongs in.
+ */
+async function materializeFolderPicker(files, rootParentId) {
+  const folderIds = new Map(); // relative dir path -> created folder id
+  const pairs = [];
+  for (const file of files) {
+    const relativePath = String(file.webkitRelativePath || file.name);
+    const parts = relativePath.split('/').filter(Boolean);
+    const dirParts = parts.slice(0, -1);
+    let parentId = rootParentId;
+    if (dirParts.length > 0) {
+      const fullKey = dirParts.join('/');
+      if (!folderIds.has(fullKey)) {
+        let currentParent = rootParentId;
+        let currentKey = '';
+        for (const part of dirParts) {
+          currentKey = currentKey ? `${currentKey}/${part}` : part;
+          if (!folderIds.has(currentKey)) {
+            const folder = await api.createFolder(currentParent, part);
+            folderIds.set(currentKey, folder.id);
+          }
+          currentParent = folderIds.get(currentKey);
+        }
+      }
+      parentId = folderIds.get(fullKey);
+    }
+    pairs.push({ file, parentId });
+  }
+  return pairs;
+}
+
 export default function DrivePage() {
   const { user, drive, loading, refresh } = useAuth();
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -88,6 +126,7 @@ export default function DrivePage() {
 
   const [uploads, setUploads] = useState([]);
   const fileInputRef = useRef(null);
+  const folderInputRef = useRef(null);
 
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [renameEntry, setRenameEntry] = useState(null);
@@ -288,9 +327,12 @@ export default function DrivePage() {
     async (job) => {
       const jobId = job.id;
       const uploadToken = job.uploadToken;
+      // Folder-upload jobs carry an explicit parentId; plain uploads target
+      // the folder the user is currently viewing.
+      const parentId = job.parentId == null ? currentParentId : job.parentId;
       try {
         const entry = await uploadFile({
-          parentId: currentParentId,
+          parentId,
           file: job.file,
           uploadToken,
           fileSize: job.file.size,
@@ -332,14 +374,17 @@ export default function DrivePage() {
     ]
   );
 
-  const enqueueFiles = useCallback(
-    (files) => {
-      if (!files || files.length === 0) {
+  // `pairs` are { file, parentId } uploads; a null/undefined parentId means
+  // "the folder the user is currently viewing" at upload time.
+  const enqueueJobPairs = useCallback(
+    (pairs) => {
+      if (!pairs || pairs.length === 0) {
         return;
       }
-      const jobs = files.map((file) => ({
+      const jobs = pairs.map(({ file, parentId }) => ({
         id: nextJobId++,
         file,
+        parentId: parentId == null ? undefined : parentId,
         uploadToken: newUploadToken(),
         status: 'uploading',
         progress: 0,
@@ -356,12 +401,41 @@ export default function DrivePage() {
     [runUpload]
   );
 
+  const enqueueFiles = useCallback(
+    (files) => {
+      if (!files || files.length === 0) {
+        return;
+      }
+      enqueueJobPairs(
+        Array.from(files).map((file) => ({ file, parentId: undefined }))
+      );
+    },
+    [enqueueJobPairs]
+  );
+
   const handleFilesSelected = useCallback(
     (event) => {
       enqueueFiles(Array.from(event.target.files || []));
       event.target.value = '';
     },
     [enqueueFiles]
+  );
+
+  const handleFolderSelected = useCallback(
+    async (event) => {
+      const files = Array.from(event.target.files || []);
+      event.target.value = '';
+      if (files.length === 0) {
+        return;
+      }
+      try {
+        const pairs = await materializeFolderPicker(files, currentParentId);
+        enqueueJobPairs(pairs);
+      } catch (err) {
+        setNotice(err);
+      }
+    },
+    [currentParentId, enqueueJobPairs]
   );
 
   const retryUpload = useCallback(
@@ -451,6 +525,22 @@ export default function DrivePage() {
     [runMutation, reload]
   );
 
+  // Copy is instant server-side (chunk rows reference existing blocks), so
+  // the duplicate appears immediately and quota grows by the copied bytes.
+  const handleCopy = useCallback(
+    async (entry) => {
+      const ok = await runMutation(() =>
+        api.copyEntry(entry.id, currentParentId)
+      );
+      if (ok) {
+        await reload();
+        await refreshQuota();
+      }
+      return ok;
+    },
+    [runMutation, currentParentId, reload, refreshQuota]
+  );
+
   const confirmDelete = useCallback(async () => {
     if (!deleteEntry) {
       return;
@@ -471,10 +561,11 @@ export default function DrivePage() {
       onShare: setShareEntry,
       onRename: setRenameEntry,
       onMove: setMoveEntry,
+      onCopy: handleCopy,
       onDelete: setDeleteEntry,
       onPreview: setPreviewEntry,
     }),
-    [openFolder]
+    [openFolder, handleCopy]
   );
 
   // Exactly one selected entry (if any) — the object the single-item
@@ -526,15 +617,26 @@ export default function DrivePage() {
   }, []);
 
   const handleDrop = useCallback(
-    (event) => {
+    async (event) => {
       event.preventDefault();
       setDragging(false);
-      if (event.dataTransfer && event.dataTransfer.files) {
-        enqueueFiles(Array.from(event.dataTransfer.files));
-        setDropCount((c) => c + 1);
+      try {
+        // Folder drops are walked as trees (folders created server-side as
+        // the walk descends); plain file drops fall back to the flat list.
+        const pairs = await collectDroppedFiles(
+          event.dataTransfer,
+          api.createFolder,
+          currentParentId
+        );
+        if (pairs.length > 0) {
+          enqueueJobPairs(pairs);
+          setDropCount((c) => c + 1);
+        }
+      } catch (err) {
+        setNotice(err);
       }
     },
-    [enqueueFiles]
+    [currentParentId, enqueueJobPairs]
   );
 
   if (loading) {
@@ -597,6 +699,14 @@ export default function DrivePage() {
         </Button>
         <Button
           variant="outlined"
+          startIcon={<FontAwesomeIcon icon={faFolderTree} />}
+          onClick={() => folderInputRef.current && folderInputRef.current.click()}
+          disabled={entriesLoading}
+        >
+          Upload folder
+        </Button>
+        <Button
+          variant="outlined"
           startIcon={<FontAwesomeIcon icon={faFolderPlus} />}
           onClick={() => setFolderDialogOpen(true)}
         >
@@ -646,6 +756,16 @@ export default function DrivePage() {
           hidden
           data-testid="file-input"
           onChange={handleFilesSelected}
+        />
+        <input
+          ref={folderInputRef}
+          type="file"
+          multiple
+          webkitdirectory=""
+          directory=""
+          hidden
+          data-testid="folder-input"
+          onChange={handleFolderSelected}
         />
       </Box>
 
@@ -867,8 +987,8 @@ export default function DrivePage() {
         <DialogContent>
           <DialogContentText>
             {deleteEntry && deleteEntry.kind === 'folder'
-              ? 'This folder and everything inside it will be permanently deleted. This cannot be undone.'
-              : 'This file will be permanently deleted. This cannot be undone.'}
+              ? 'This folder and everything inside it will be moved to trash. You can restore it from the Trash page.'
+              : 'This file will be moved to trash. You can restore it from the Trash page.'}
           </DialogContentText>
         </DialogContent>
         <DialogActions>

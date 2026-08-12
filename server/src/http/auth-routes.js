@@ -75,9 +75,10 @@ function createAuthRoutes({ config, repositories, sessionStore, oauth }) {
         maxAge: SESSION_TTL_MS,
         secure: config.isProduction,
       });
-      // Storage is per-user: a drive with a sealed webhook goes straight to
-      // the drive; a fresh (or bot-era) user lands on /connect first.
-      const destination = drive && drive.webhook_ciphertext ? '/drive' : '/connect';
+      // Storage is per-user: a drive with at least one webhook row goes
+      // straight to the drive; a fresh (or bot-era) user lands on /connect.
+      const destination =
+        drive && (await repositories.countWebhooks(drive.id)) > 0 ? '/drive' : '/connect';
       res.redirect(`${config.appOrigin}${destination}`);
     })
   );
@@ -110,7 +111,7 @@ function createAuthRoutes({ config, repositories, sessionStore, oauth }) {
       }
       const drive = await repositories.getDriveByUser(user.id);
       let driveJson = null;
-      if (drive && drive.webhook_ciphertext) {
+      if (drive && (await repositories.countWebhooks(drive.id)) > 0) {
         const usedBytes = await repositories.sumUsedBytes(drive.id);
         driveJson = { id: drive.id, quotaBytes: drive.quota_bytes, usedBytes };
       }

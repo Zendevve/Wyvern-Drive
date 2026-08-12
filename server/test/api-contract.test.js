@@ -77,8 +77,9 @@ test('entry JSON never serializes driveId, chunks, or Discord internals', async 
   for (const entry of res.json.entries) {
     assert.deepStrictEqual(
       Object.keys(entry).sort(),
-      ['createdAt', 'id', 'kind', 'mimeType', 'name', 'parentId', 'sizeBytes', 'status', 'updatedAt']
+      ['createdAt', 'deletedAt', 'id', 'kind', 'mimeType', 'name', 'parentId', 'sizeBytes', 'status', 'updatedAt']
     );
+    assert.strictEqual(entry.deletedAt, null, 'live entries carry deletedAt: null');
   }
   const serialized = JSON.stringify(res.json);
   assert.ok(!serialized.includes('driveId'));
