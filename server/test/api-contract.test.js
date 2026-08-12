@@ -95,6 +95,7 @@ test('upload and download honor the contract headers and shapes', async () => {
   assert.strictEqual(dl.status, 200);
   assert.strictEqual(dl.headers.get('content-type'), 'application/octet-stream');
   assert.strictEqual(dl.headers.get('content-length'), '24');
+  assert.strictEqual(dl.headers.get('accept-ranges'), 'bytes');
   assert.match(dl.headers.get('content-disposition'), /^attachment; /);
   assert.match(dl.headers.get('content-disposition'), /filename\*=UTF-8''contract\.bin/);
 });

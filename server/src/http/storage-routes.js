@@ -40,7 +40,7 @@ function createStorageRoutes({ config, repositories, sessionStore, discordStorag
 
       if (drive) {
         await repositories.updateDriveWebhook(drive.id, sealed);
-        const usedBytes = await repositories.sumReadyBytes(drive.id);
+        const usedBytes = await repositories.sumUsedBytes(drive.id);
         res.status(200).json({ id: drive.id, quotaBytes: drive.quota_bytes, usedBytes });
         return;
       }

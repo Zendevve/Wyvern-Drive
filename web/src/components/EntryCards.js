@@ -13,11 +13,16 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowRightArrowLeft,
   faDownload,
+  faEye,
   faPen,
   faShareNodes,
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
-import { downloadUrl } from '../api/client';
+import {
+  archiveUrl,
+  downloadUrl,
+  isPreviewableMime,
+} from '../api/client';
 import { formatBytes } from './QuotaMeter';
 import { entryIcon, fileTypeLabel } from './entryIcons';
 
@@ -30,11 +35,13 @@ function formatDate(value) {
  * row/action model as EntryTable so mobile and desktop behave identically.
  * Action buttons stay always visible here — touch has no hover state.
  */
-export default function EntryCards({ entries, actions }) {
+export default function EntryCards({ entries, actions, onPreview }) {
+  const handlePreview = onPreview || (actions && actions.onPreview);
   return (
     <List data-testid="entry-cards" aria-label="Files and folders" disablePadding>
       {entries.map((entry) => {
         const isFolder = entry.kind === 'folder';
+        const previewable = !isFolder && isPreviewableMime(entry.mimeType);
         const { icon, color } = entryIcon(entry);
         const meta = isFolder
           ? fileTypeLabel(entry)
@@ -43,6 +50,13 @@ export default function EntryCards({ entries, actions }) {
           <ListItem key={entry.id} disableGutters disablePadding sx={{ mb: 1 }}>
             <Card
               variant="outlined"
+              onDoubleClick={() => {
+                if (isFolder) {
+                  actions.onOpenFolder(entry);
+                } else if (previewable && handlePreview) {
+                  handlePreview(entry);
+                }
+              }}
               sx={{ width: '100%', borderRadius: '15px', bgcolor: 'surface1' }}
             >
               <CardContent
@@ -79,24 +93,42 @@ export default function EntryCards({ entries, actions }) {
                     {meta}
                   </Typography>
                 </Box>
-                {!isFolder && (
+                {isFolder ? (
                   <IconButton
                     component="a"
-                    href={downloadUrl(entry.id)}
+                    href={archiveUrl(entry.id)}
                     aria-label={`Download ${entry.name}`}
                     title="Download"
                   >
                     <FontAwesomeIcon icon={faDownload} />
                   </IconButton>
-                )}
-                {!isFolder && (
-                  <IconButton
-                    aria-label={`Share ${entry.name}`}
-                    title="Share"
-                    onClick={() => actions.onShare(entry)}
-                  >
-                    <FontAwesomeIcon icon={faShareNodes} />
-                  </IconButton>
+                ) : (
+                  <>
+                    {previewable && (
+                      <IconButton
+                        aria-label={`Preview ${entry.name}`}
+                        title="Preview"
+                        onClick={() => handlePreview && handlePreview(entry)}
+                      >
+                        <FontAwesomeIcon icon={faEye} />
+                      </IconButton>
+                    )}
+                    <IconButton
+                      component="a"
+                      href={downloadUrl(entry.id)}
+                      aria-label={`Download ${entry.name}`}
+                      title="Download"
+                    >
+                      <FontAwesomeIcon icon={faDownload} />
+                    </IconButton>
+                    <IconButton
+                      aria-label={`Share ${entry.name}`}
+                      title="Share"
+                      onClick={() => actions.onShare(entry)}
+                    >
+                      <FontAwesomeIcon icon={faShareNodes} />
+                    </IconButton>
+                  </>
                 )}
                 <IconButton
                   aria-label={`Rename ${entry.name}`}

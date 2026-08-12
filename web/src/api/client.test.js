@@ -1,4 +1,4 @@
-import { ApiError, apiFetch, api, uploadFile } from './client';
+import { ApiError, apiFetch, api, uploadFile, uploadProgress, archiveUrl, downloadUrl, isPreviewableMime } from './client';
 
 describe('api client', () => {
   afterEach(() => {
@@ -143,5 +143,71 @@ describe('api client', () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(502);
     expect(err.code).toBe('STORAGE_UNAVAILABLE');
+  });
+
+  it('sends uploadToken and fileSize on uploads that provide them', async () => {
+    let seen = null;
+    class FakeXHR {
+      constructor() {
+        this.upload = {};
+      }
+      open() {}
+      setRequestHeader() {}
+      send(formData) {
+        seen = formData;
+        this.status = 201;
+        this.responseText = JSON.stringify({ id: 8, name: 'a.txt' });
+        this.onload();
+      }
+    }
+    global.XMLHttpRequest = FakeXHR;
+
+    const entry = await uploadFile({
+      parentId: 3,
+      file: new File(['hello world'], 'a.txt', { type: 'text/plain' }),
+      uploadToken: 'tok-abc',
+      fileSize: 11,
+    });
+    expect(entry.id).toBe(8);
+    expect(seen.get('uploadToken')).toBe('tok-abc');
+    expect(seen.get('fileSize')).toBe('11');
+    expect(seen.get('parentId')).toBe('3');
+  });
+
+  it('builds download and archive URLs for inline previews and folder zips', () => {
+    expect(downloadUrl(7)).toBe('/api/files/7/download');
+    expect(downloadUrl(7, { inline: true })).toBe(
+      '/api/files/7/download?inline=1'
+    );
+    expect(archiveUrl(9)).toBe('/api/entries/9/archive');
+  });
+
+  it('queries upload progress by token', async () => {
+    document.cookie = 'wyvern_csrf=csrf-token-789';
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      text: async () =>
+        JSON.stringify({ status: 'ready', postedBytes: 24, expectedBytes: 24 }),
+    });
+
+    const progress = await uploadProgress('tok%20with%20space/and-slash');
+
+    expect(fetch.mock.calls[0][0]).toBe(
+      '/api/uploads/tok%2520with%2520space%2Fand-slash'
+    );
+    expect(progress).toEqual({ status: 'ready', postedBytes: 24, expectedBytes: 24 });
+  });
+
+  it('classifies previewable MIME types', () => {
+    expect(isPreviewableMime('image/png')).toBe(true);
+    expect(isPreviewableMime('video/mp4')).toBe(true);
+    expect(isPreviewableMime('audio/ogg')).toBe(true);
+    expect(isPreviewableMime('text/plain')).toBe(true);
+    expect(isPreviewableMime('application/json')).toBe(true);
+    expect(isPreviewableMime('application/pdf')).toBe(true);
+    expect(isPreviewableMime('application/zip')).toBe(false);
+    expect(isPreviewableMime('')).toBe(false);
+    expect(isPreviewableMime(null)).toBe(false);
   });
 });

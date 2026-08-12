@@ -22,6 +22,9 @@ jest.mock('./api/client', () => ({
   },
   uploadFile: jest.fn(),
   downloadUrl: jest.fn(),
+  archiveUrl: jest.fn(),
+  uploadProgress: jest.fn(),
+  isPreviewableMime: jest.fn(),
   shareDownloadUrl: jest.fn(),
 }));
 

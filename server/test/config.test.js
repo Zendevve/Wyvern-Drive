@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { loadConfig, diagnoseConfig, REQUIRED_VARS, DEFAULT_PORT, DEFAULT_QUOTA_BYTES, PRODUCTION_CHUNK_SIZE_BYTES } = require('../src/config');
+const { loadConfig, diagnoseConfig, REQUIRED_VARS, DEFAULT_PORT, DEFAULT_QUOTA_BYTES, DEFAULT_CHUNK_SIZE_BYTES, DEFAULT_CHUNKS_PER_MESSAGE, DEFAULT_UPLOAD_CONCURRENCY, DEFAULT_DOWNLOAD_CONCURRENCY } = require('../src/config');
 
 const VALID_ENV = {
   APP_ORIGIN: 'http://localhost:3000',
@@ -11,7 +11,7 @@ const VALID_ENV = {
   DISCORD_CLIENT_SECRET: 'csecret',
   DISCORD_REDIRECT_URI: 'http://localhost:3000/api/auth/discord/callback',
   WYVERN_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString('base64'),
-  WYVERN_CHUNK_SIZE_BYTES: '8',
+  WYVERN_CHUNK_SIZE_BYTES: '1048576', // 1 MiB — valid in every environment
   NODE_ENV: 'test',
 };
 
@@ -23,7 +23,10 @@ test('loadConfig accepts a complete valid environment', () => {
   assert.strictEqual(cfg.encryptionKey.length, 32);
   assert.strictEqual(cfg.defaultQuotaBytes, DEFAULT_QUOTA_BYTES);
   assert.strictEqual(cfg.port, DEFAULT_PORT);
-  assert.strictEqual(cfg.chunkSizeBytes, 8); // WYVERN_CHUNK_SIZE_BYTES honored in test env
+  assert.strictEqual(cfg.chunkSizeBytes, 1048576);
+  assert.strictEqual(cfg.chunksPerMessage, DEFAULT_CHUNKS_PER_MESSAGE);
+  assert.strictEqual(cfg.uploadConcurrency, DEFAULT_UPLOAD_CONCURRENCY);
+  assert.strictEqual(cfg.downloadConcurrency, DEFAULT_DOWNLOAD_CONCURRENCY);
 });
 
 test('loadConfig strips a trailing slash from APP_ORIGIN', () => {
@@ -81,20 +84,56 @@ test('loadConfig accepts a 32-byte key in any base64 form', () => {
   assert.strictEqual(cfg.encryptionKey.length, 32);
 });
 
-test('chunk size override only applies in test env', () => {
-  const testCfg = loadConfig({ ...VALID_ENV, NODE_ENV: 'test', WYVERN_CHUNK_SIZE_BYTES: '8' });
-  assert.strictEqual(testCfg.chunkSizeBytes, 8);
+test('WYVERN_CHUNK_SIZE_BYTES is honored in every environment', () => {
+  assert.strictEqual(loadConfig({ ...VALID_ENV, NODE_ENV: 'test' }).chunkSizeBytes, 1048576);
+  assert.strictEqual(loadConfig({ ...VALID_ENV, NODE_ENV: 'production' }).chunkSizeBytes, 1048576);
+  assert.strictEqual(loadConfig({ ...VALID_ENV, NODE_ENV: 'development' }).chunkSizeBytes, 1048576);
 
-  const prodCfg = loadConfig({ ...VALID_ENV, NODE_ENV: 'production', WYVERN_CHUNK_SIZE_BYTES: '8' });
-  assert.strictEqual(prodCfg.chunkSizeBytes, PRODUCTION_CHUNK_SIZE_BYTES);
-
-  const defaultCfg = loadConfig({ ...VALID_ENV, NODE_ENV: 'development' });
-  assert.strictEqual(defaultCfg.chunkSizeBytes, PRODUCTION_CHUNK_SIZE_BYTES);
+  // Unset -> the default (2 MiB) in every environment.
+  const env = { ...VALID_ENV };
+  delete env.WYVERN_CHUNK_SIZE_BYTES;
+  assert.strictEqual(loadConfig({ ...env, NODE_ENV: 'production' }).chunkSizeBytes, DEFAULT_CHUNK_SIZE_BYTES);
+  assert.strictEqual(loadConfig({ ...env, NODE_ENV: 'test' }).chunkSizeBytes, DEFAULT_CHUNK_SIZE_BYTES);
 });
 
-test('loadConfig rejects an invalid chunk size in test env', () => {
-  assert.throws(() => loadConfig({ ...VALID_ENV, NODE_ENV: 'test', WYVERN_CHUNK_SIZE_BYTES: '0' }), /WYVERN_CHUNK_SIZE_BYTES/);
-  assert.throws(() => loadConfig({ ...VALID_ENV, NODE_ENV: 'test', WYVERN_CHUNK_SIZE_BYTES: 'abc' }), /WYVERN_CHUNK_SIZE_BYTES/);
+test('loadConfig rejects an out-of-range chunk size in every environment', () => {
+  for (const bad of ['0', '8', '65535', '8388609', '99999999', 'abc', '-1']) {
+    assert.throws(
+      () => loadConfig({ ...VALID_ENV, NODE_ENV: 'production', WYVERN_CHUNK_SIZE_BYTES: bad }),
+      /WYVERN_CHUNK_SIZE_BYTES/,
+      `production ${bad}`
+    );
+    assert.throws(
+      () => loadConfig({ ...VALID_ENV, NODE_ENV: 'test', WYVERN_CHUNK_SIZE_BYTES: bad }),
+      /WYVERN_CHUNK_SIZE_BYTES/,
+      `test ${bad}`
+    );
+  }
+});
+
+test('loadConfig parses and validates the upload packing variables', () => {
+  const cfg = loadConfig({
+    ...VALID_ENV,
+    WYVERN_CHUNKS_PER_MESSAGE: '7',
+    WYVERN_UPLOAD_CONCURRENCY: '3',
+    WYVERN_DOWNLOAD_CONCURRENCY: '5',
+  });
+  assert.strictEqual(cfg.chunksPerMessage, 7);
+  assert.strictEqual(cfg.uploadConcurrency, 3);
+  assert.strictEqual(cfg.downloadConcurrency, 5);
+
+  const defaults = loadConfig({ ...VALID_ENV });
+  assert.strictEqual(defaults.chunksPerMessage, DEFAULT_CHUNKS_PER_MESSAGE);
+  assert.strictEqual(defaults.uploadConcurrency, DEFAULT_UPLOAD_CONCURRENCY);
+  assert.strictEqual(defaults.downloadConcurrency, DEFAULT_DOWNLOAD_CONCURRENCY);
+
+  for (const bad of ['0', '11', 'abc', '-2']) {
+    assert.throws(() => loadConfig({ ...VALID_ENV, WYVERN_CHUNKS_PER_MESSAGE: bad }), /WYVERN_CHUNKS_PER_MESSAGE/, bad);
+  }
+  for (const bad of ['0', '17', 'abc', '-1']) {
+    assert.throws(() => loadConfig({ ...VALID_ENV, WYVERN_UPLOAD_CONCURRENCY: bad }), /WYVERN_UPLOAD_CONCURRENCY/, bad);
+    assert.throws(() => loadConfig({ ...VALID_ENV, WYVERN_DOWNLOAD_CONCURRENCY: bad }), /WYVERN_DOWNLOAD_CONCURRENCY/, bad);
+  }
 });
 
 test('loadConfig validates PORT', () => {

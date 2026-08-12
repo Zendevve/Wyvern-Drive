@@ -27,7 +27,10 @@ process.env.DISCORD_CLIENT_ID = 'test-client-id';
 process.env.DISCORD_CLIENT_SECRET = 'test-client-secret';
 process.env.DISCORD_REDIRECT_URI = `${ORIGIN}/api/auth/discord/callback`;
 process.env.WYVERN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
-process.env.WYVERN_CHUNK_SIZE_BYTES = '8';
+// Smallest config-valid chunk size (64 KiB). Individual tests that need
+// per-byte chunk granularity opt into `chunkSizeBytes: 8` via startTestServer
+// overrides; config validation itself is pinned in config.test.js.
+process.env.WYVERN_CHUNK_SIZE_BYTES = '65536';
 process.env.DEFAULT_QUOTA_BYTES = '1048576';
 
 function sha256hex(buffer) {
@@ -73,9 +76,17 @@ function createFakeOAuthFetch() {
  * storage, with failure injection: failNextWebhookValidations,
  * failNextPutChunks, failPutChunkOnCall, failNextGetChunks,
  * failNextDeleteChunks, failDeleteChunkOnCall.
+ *
+ * Messages hold 1..10 attachments (packed uploads). Counting and failure
+ * injection are PER-CHUNK — putCalls increments once per chunk, and
+ * failNextPutChunks / failPutChunkOnCall trip on the matching chunk inside a
+ * putChunks batch — so "the second chunk fails" tests keep working with
+ * batched uploads. A failing batch is atomic: nothing of it is stored
+ * (mirrors the real adapter, which posts each batch as one message). delete
+ * is idempotent, matching the real adapter's 404-as-success contract.
  */
 function createFakeDiscordStorage() {
-  const drives = new Map(); // driveId -> Map(messageId -> Buffer)
+  const drives = new Map(); // driveId -> Map(messageId -> [{ filename, buffer }])
   const deletedMessages = [];
   const storage = {
     failNextWebhookValidations: 0,
@@ -113,14 +124,24 @@ function createFakeDiscordStorage() {
       };
     },
 
-    async putChunk(drive, filename, encryptedBuffer) {
-      storage.putCalls += 1;
-      if (storage.failPutChunkOnCall > 0 && storage.putCalls === storage.failPutChunkOnCall) {
-        throw storageError('fake: putChunk failed');
-      }
-      if (storage.failNextPutChunks > 0) {
-        storage.failNextPutChunks -= 1;
-        throw storageError('fake: putChunk failed');
+    /**
+     * Store one batch of chunks as a single message (one attachment per
+     * chunk). Resolves [{ ordinal, messageId }] in input order. The counter
+     * loop is synchronous so concurrent batches consume putCalls in
+     * invocation order; a tripped counter aborts the whole batch.
+     */
+    async putChunks(drive, chunks) {
+      const attachments = [];
+      for (const chunk of chunks) {
+        storage.putCalls += 1;
+        if (storage.failPutChunkOnCall > 0 && storage.putCalls === storage.failPutChunkOnCall) {
+          throw storageError('fake: putChunk failed');
+        }
+        if (storage.failNextPutChunks > 0) {
+          storage.failNextPutChunks -= 1;
+          throw storageError('fake: putChunk failed');
+        }
+        attachments.push({ filename: chunk.filename, buffer: Buffer.from(chunk.encryptedBuffer) });
       }
       let msgs = drives.get(drive.id);
       if (!msgs) {
@@ -129,19 +150,25 @@ function createFakeDiscordStorage() {
       }
       storage.msgSeq += 1;
       const messageId = `msg-${storage.msgSeq}`;
-      msgs.set(messageId, Buffer.from(encryptedBuffer));
-      return messageId;
+      msgs.set(messageId, attachments);
+      return chunks.map((chunk) => ({ ordinal: chunk.ordinal, messageId }));
     },
 
-    async getChunk(drive, messageId) {
+    async putChunk(drive, filename, encryptedBuffer) {
+      const results = await storage.putChunks(drive, [{ filename, encryptedBuffer, ordinal: 0 }]);
+      return results[0].messageId;
+    },
+
+    async getChunk(drive, messageId, attachmentIndex = 0) {
       if (storage.failNextGetChunks > 0) {
         storage.failNextGetChunks -= 1;
         throw storageError('fake: getChunk failed');
       }
       const msgs = drives.get(drive.id);
-      const buf = msgs && msgs.get(messageId);
-      if (!buf) throw storageError('fake: chunk not found');
-      return Buffer.from(buf);
+      const attachments = msgs && msgs.get(messageId);
+      const attachment = attachments && attachments[attachmentIndex];
+      if (!attachment) throw storageError('fake: chunk not found');
+      return Buffer.from(attachment.buffer);
     },
 
     async deleteChunk(drive, messageId) {
@@ -158,11 +185,22 @@ function createFakeDiscordStorage() {
         msgs.delete(messageId);
         deletedMessages.push({ driveId: drive.id, messageId });
       }
+      // Missing message: idempotent success (mirrors the real adapter).
     },
 
+    /** Unique Discord message ids across all drives (packed chunks share one). */
     countMessages() {
       let n = 0;
       for (const msgs of drives.values()) n += msgs.size;
+      return n;
+    },
+
+    /** Total attachment count across all drives (one per chunk). */
+    countAttachments() {
+      let n = 0;
+      for (const msgs of drives.values()) {
+        for (const attachments of msgs.values()) n += attachments.length;
+      }
       return n;
     },
 
@@ -182,6 +220,10 @@ async function startTestServer(overrides = {}) {
   const env = { ...process.env };
   if (overrides.quotaBytes != null) env.DEFAULT_QUOTA_BYTES = String(overrides.quotaBytes);
   const config = loadConfig(env);
+  // Test-only fixture control: config validation (64 KiB..8 MiB) is pinned in
+  // config.test.js; service-level tests may shrink chunks so multi-chunk
+  // fixtures stay tiny (e.g. 8 bytes for the classic 24-byte / 3-chunk case).
+  if (overrides.chunkSizeBytes != null) config.chunkSizeBytes = overrides.chunkSizeBytes;
 
   const db = await openDatabase(config.dbUrl);
   await migrate(db, MIGRATIONS_DIR);
@@ -321,10 +363,18 @@ async function uploadFile(client, opts = {}) {
     name = 'fixture.bin',
     data,
     type = 'application/octet-stream',
+    uploadToken,
+    fileSize,
     expect,
   } = opts;
   const fd = new FormData();
   fd.append('parentId', String(parentId));
+  if (uploadToken) {
+    fd.append('uploadToken', uploadToken);
+  }
+  if (fileSize != null) {
+    fd.append('fileSize', String(fileSize));
+  }
   fd.append('file', new Blob([data], type ? { type } : undefined), name);
   return client.request('/api/files/upload', { method: 'POST', body: fd, csrf: true, expect });
 }

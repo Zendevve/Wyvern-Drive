@@ -328,6 +328,27 @@ test('recursive delete removes a folder tree and its chunks', async () => {
   assert.strictEqual(await ctx.repositories.getEntryById(inner.id), undefined);
   assert.strictEqual(await ctx.repositories.getEntryById(sub.id), undefined);
   assert.strictEqual(await ctx.repositories.getEntryById(deep.id), undefined);
-  // inner.bin = 1 chunk, deep.bin = 2 chunks
-  assert.strictEqual(before - ctx.discordStorage.countMessages(), 3);
+  // inner.bin = 1 chunk, deep.bin = 1 chunk (both smaller than one 64 KiB chunk)
+  assert.strictEqual(before - ctx.discordStorage.countMessages(), 2);
+});
+
+test('folder archive streams a ZIP of the subtree', async () => {
+  const folder = await createFolder(client, 'archive-root');
+  const sub = await createFolder(client, 'archive-sub', folder.id);
+  await uploadFile(client, { parentId: folder.id, name: 'root.txt', data: Buffer.from('hello root') });
+  await uploadFile(client, { parentId: sub.id, name: 'deep.txt', data: Buffer.from('hello deep') });
+
+  const res = await client.request(`/api/entries/${folder.id}/archive`);
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.headers.get('content-type'), 'application/zip');
+  assert.match(res.headers.get('content-disposition'), /^attachment; filename="archive-root\.zip"/);
+
+  const buf = Buffer.from(await res.raw.arrayBuffer());
+  assert.strictEqual(buf.subarray(0, 2).toString('ascii'), 'PK', 'body must start with the ZIP magic');
+  assert.ok(buf.length > 100, 'archive contains real entries');
+
+  // Unknown entries 404 like every other entry route.
+  const missing = await client.request('/api/entries/999999/archive');
+  assert.strictEqual(missing.status, 404);
+  assert.strictEqual(missing.json.error.code, 'NOT_FOUND');
 });

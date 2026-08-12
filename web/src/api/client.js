@@ -74,12 +74,22 @@ export async function apiFetch(path, options = {}) {
 /**
  * Upload a single file as multipart/form-data over XMLHttpRequest so the
  * browser can report upload progress. Resolves to the ready entry JSON.
+ *
+ * `uploadToken` (client-generated UUID) lets the server resume a previous
+ * upload attempt; `fileSize` seeds the entry's expected size so the upload
+ * queue can report post-upload server progress while chunks are stored.
  */
-export function uploadFile({ parentId, file, onProgress }) {
+export function uploadFile({ parentId, file, uploadToken, fileSize, onProgress }) {
   return new Promise((resolve, reject) => {
     const formData = new FormData();
     formData.append('parentId', parentId == null ? '' : String(parentId));
     formData.append('file', file, file.name);
+    if (uploadToken) {
+      formData.append('uploadToken', uploadToken);
+    }
+    if (fileSize != null) {
+      formData.append('fileSize', String(fileSize));
+    }
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/files/upload');
@@ -120,8 +130,37 @@ export function uploadFile({ parentId, file, onProgress }) {
   });
 }
 
-export function downloadUrl(entryId) {
-  return `/api/files/${entryId}/download`;
+export function downloadUrl(entryId, { inline } = {}) {
+  return `/api/files/${entryId}/download${inline ? '?inline=1' : ''}`;
+}
+
+/** Server-side upload progress for a resume token ({ status, postedBytes, expectedBytes }). */
+export function uploadProgress(uploadToken) {
+  return apiFetch(`/api/uploads/${encodeURIComponent(uploadToken)}`);
+}
+
+/** Streaming ZIP of a folder (or single file) subtree. */
+export function archiveUrl(entryId) {
+  return `/api/entries/${entryId}/archive`;
+}
+
+/**
+ * MIME types the preview dialog can render inline: image, video, audio,
+ * plain text/JSON, and PDF.
+ */
+export function isPreviewableMime(mime) {
+  if (!mime) {
+    return false;
+  }
+  const type = String(mime).toLowerCase();
+  return (
+    type.startsWith('image/') ||
+    type.startsWith('video/') ||
+    type.startsWith('audio/') ||
+    type.startsWith('text/') ||
+    type === 'application/json' ||
+    type === 'application/pdf'
+  );
 }
 
 export function shareDownloadUrl(token) {

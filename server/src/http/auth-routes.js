@@ -111,7 +111,7 @@ function createAuthRoutes({ config, repositories, sessionStore, oauth }) {
       const drive = await repositories.getDriveByUser(user.id);
       let driveJson = null;
       if (drive && drive.webhook_ciphertext) {
-        const usedBytes = await repositories.sumReadyBytes(drive.id);
+        const usedBytes = await repositories.sumUsedBytes(drive.id);
         driveJson = { id: drive.id, quotaBytes: drive.quota_bytes, usedBytes };
       }
       res.json({

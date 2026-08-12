@@ -9,7 +9,7 @@ const { createSetupStatusRoutes } = require('./setup-status');
 const { createStorageRoutes } = require('./storage-routes');
 const { createDriveRoutes } = require('./drive-routes');
 const { createEntryRoutes, createFolderRoutes } = require('./entry-routes');
-const { createFileRoutes } = require('./file-routes');
+const { createFileRoutes, createUploadRoutes } = require('./file-routes');
 const { createShareRoutes } = require('./share-routes');
 const { mountStatic } = require('./static');
 
@@ -63,6 +63,7 @@ function createApp(deps) {
   const entryRoutes = createEntryRoutes(deps);
   const folderRoutes = createFolderRoutes(deps);
   const fileRoutes = createFileRoutes(deps);
+  const uploadRoutes = createUploadRoutes(deps);
   const { apiRouter: shareApiRouter, sRouter } = createShareRoutes(deps);
 
   // First-run status: read-only, mounted before auth/protected routes. In a
@@ -75,6 +76,7 @@ function createApp(deps) {
   app.use('/api/entries', entryRoutes);
   app.use('/api/folders', folderRoutes);
   app.use('/api/files', fileRoutes);
+  app.use('/api/uploads', uploadRoutes);
   app.use('/api/shares', shareApiRouter);
   app.use('/s', sRouter);
 

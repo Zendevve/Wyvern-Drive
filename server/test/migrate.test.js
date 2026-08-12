@@ -29,16 +29,22 @@ test('migrate creates all tables, indexes, and the migrations ledger', async () 
     'idx_entries_drive_updated',
     'idx_file_chunks_entry_ordinal',
     'idx_shares_token_hash',
+    'idx_entries_drive_upload_token',
   ]) {
     assert.ok(indexes.includes(expected), `missing index ${expected}`);
   }
 
   const versions = await all(db, 'SELECT version FROM schema_migrations');
-  assert.deepStrictEqual(versions.map((r) => r.version), [1, 2]);
+  assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3]);
 
   const driveColumns = (await all(db, 'PRAGMA table_info(drives)')).map((c) => c.name);
   for (const expected of ['id', 'owner_id', 'legacy_discord_channel_id', 'webhook_ciphertext', 'webhook_nonce', 'webhook_auth_tag', 'quota_bytes', 'created_at']) {
     assert.ok(driveColumns.includes(expected), `missing drives column ${expected}`);
+  }
+
+  const entryColumns = (await all(db, 'PRAGMA table_info(entries)')).map((c) => c.name);
+  for (const expected of ['upload_token', 'expected_size_bytes']) {
+    assert.ok(entryColumns.includes(expected), `missing entries column ${expected}`);
   }
 
   await closeDatabase(db);
@@ -49,7 +55,7 @@ test('migrate is idempotent', async () => {
   await migrate(db, MIGRATIONS_DIR);
   await migrate(db, MIGRATIONS_DIR);
   const versions = await all(db, 'SELECT version FROM schema_migrations');
-  assert.strictEqual(versions.length, 2);
+  assert.strictEqual(versions.length, 3);
   await closeDatabase(db);
 });
 
@@ -113,7 +119,7 @@ test('a failed migration aborts and rolls back cleanly', async () => {
 
 test('migrations directory contains only the numbered migrations', () => {
   const files = fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
-  assert.deepStrictEqual(files, ['001_initial.sql', '002_webhook_storage.sql']);
+  assert.deepStrictEqual(files, ['001_initial.sql', '002_webhook_storage.sql', '003_add_upload_resume.sql']);
 });
 
 test('migration 002 rebuilds drives: legacy channel preserved, webhook columns added, foreign keys intact', async () => {
@@ -128,11 +134,11 @@ test('migration 002 rebuilds drives: legacy channel preserved, webhook columns a
     const driveRes = await run(db, 'INSERT INTO drives (owner_id, discord_channel_id, quota_bytes, created_at) VALUES (?, ?, ?, ?)', [userRes.lastID, 'ch-legacy-1', 100, now]);
     await run(db, "INSERT INTO entries (drive_id, kind, name, status, created_at, updated_at) VALUES (?, 'file', 'old.bin', 'ready', ?, ?)", [driveRes.lastID, now, now]);
 
-    // Apply the real migration set (001 skipped, 002 runs).
+    // Apply the real migration set (001 skipped, 002 and 003 run).
     await migrate(db, MIGRATIONS_DIR);
 
     const versions = await all(db, 'SELECT version FROM schema_migrations');
-    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2]);
+    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3]);
 
     const drive = await get(db, 'SELECT * FROM drives WHERE id = ?', [driveRes.lastID]);
     assert.strictEqual(drive.legacy_discord_channel_id, 'ch-legacy-1', 'old channel value must be preserved');
@@ -159,6 +165,46 @@ test('migration 002 rebuilds drives: legacy channel preserved, webhook columns a
       run(db, 'INSERT INTO drives (owner_id, quota_bytes, created_at) VALUES (?, ?, ?)', [999, 100, now]),
       /FOREIGN KEY/
     );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    await closeDatabase(db);
+  }
+});
+
+test('migration 003 adds upload-resume columns and the partial index without data loss', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wyvern-migrate-v2-'));
+  const db = await freshDb();
+  try {
+    // Apply 001 + 002 only, then seed a drive and a file row.
+    fs.copyFileSync(path.join(MIGRATIONS_DIR, '001_initial.sql'), path.join(dir, '001_initial.sql'));
+    fs.copyFileSync(path.join(MIGRATIONS_DIR, '002_webhook_storage.sql'), path.join(dir, '002_webhook_storage.sql'));
+    await migrate(db, dir);
+    const now = new Date().toISOString();
+    const userRes = await run(db, 'INSERT INTO users (discord_id, username, created_at, updated_at) VALUES (?, ?, ?, ?)', ['d1', 'alice', now, now]);
+    const driveRes = await run(db, 'INSERT INTO drives (owner_id, quota_bytes, created_at) VALUES (?, ?, ?)', [userRes.lastID, 100, now]);
+    const entryRes = await run(db, "INSERT INTO entries (drive_id, kind, name, size_bytes, mime_type, status, created_at, updated_at) VALUES (?, 'file', 'old.bin', 8, 'application/octet-stream', 'ready', ?, ?)", [driveRes.lastID, now, now]);
+
+    // Apply the real migration set (001/002 skipped, 003 runs).
+    await migrate(db, MIGRATIONS_DIR);
+
+    const versions = await all(db, 'SELECT version FROM schema_migrations');
+    assert.deepStrictEqual(versions.map((r) => r.version), [1, 2, 3]);
+
+    // New columns exist and existing rows keep their data.
+    const entry = await get(db, 'SELECT * FROM entries WHERE id = ?', [entryRes.lastID]);
+    assert.strictEqual(entry.name, 'old.bin', 'existing rows survive migration 003');
+    assert.strictEqual(entry.upload_token, null);
+    assert.strictEqual(entry.expected_size_bytes, null);
+
+    // Token lookups are indexed.
+    const idx = await all(db, "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_entries_drive_upload_token'");
+    assert.strictEqual(idx.length, 1, 'partial upload_token index must exist');
+
+    // Writing and querying a token round-trips.
+    await run(db, 'UPDATE entries SET upload_token = ?, expected_size_bytes = ? WHERE id = ?', ['tok-1', 1024, entryRes.lastID]);
+    const byToken = await get(db, 'SELECT * FROM entries WHERE drive_id = ? AND upload_token = ?', [driveRes.lastID, 'tok-1']);
+    assert.strictEqual(byToken.id, entryRes.lastID);
+    assert.strictEqual(byToken.expected_size_bytes, 1024);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
     await closeDatabase(db);

@@ -1,6 +1,8 @@
 'use strict';
 
+const { Readable } = require('node:stream');
 const express = require('express');
+const yazl = require('yazl');
 const { httpError } = require('../errors');
 const { asyncHandler, requireSession, loadDrive, csrfProtect } = require('./middleware');
 
@@ -9,6 +11,11 @@ function parseParentId(raw) {
   const n = Number(raw);
   if (!Number.isInteger(n)) throw httpError('INVALID_PARENT');
   return n;
+}
+
+function archiveDisposition(name) {
+  const fallback = String(name).replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  return `attachment; filename="${fallback}.zip"; filename*=UTF-8''${encodeURIComponent(name)}.zip`;
 }
 
 function createEntryRoutes({ config, repositories, sessionStore, fileService }) {
@@ -78,6 +85,54 @@ function createEntryRoutes({ config, repositories, sessionStore, fileService }) 
       if (!Number.isInteger(entryId)) throw httpError('NOT_FOUND');
       await fileService.deleteEntry({ drive: req.drive, entryId });
       res.status(204).end();
+    })
+  );
+
+  router.get(
+    '/:id/archive',
+    auth,
+    asyncHandler(async (req, res) => {
+      const entryId = Number(req.params.id);
+      if (!Number.isInteger(entryId)) throw httpError('NOT_FOUND');
+
+      // Pre-order list (parents before children, root first): walk once,
+      // remembering each entry's relative path so children can join theirs.
+      // All downloadFile calls happen before any bytes are written, so a 404
+      // here still reaches the error middleware as a clean JSON response.
+      const subtree = await fileService.getSubtreeEntries(req.drive, entryId);
+      if (subtree.length === 0) throw httpError('NOT_FOUND');
+
+      const zip = new yazl.ZipFile();
+      const relPathByEntryId = new Map();
+      let rootName = '';
+      for (const entry of subtree) {
+        const parentRel = entry.parentId == null ? '' : relPathByEntryId.get(entry.parentId);
+        const relPath = parentRel === '' ? entry.name : `${parentRel}/${entry.name}`;
+        relPathByEntryId.set(entry.id, relPath);
+        if (entry.kind === 'folder') {
+          zip.addEmptyDirectory(relPath);
+        } else {
+          const result = await fileService.downloadFile({ drive: req.drive, entryId: entry.id, range: null });
+          // yazl's addReadStream pipes the source without forwarding its
+          // errors, so an async-generator failure would be unhandled. Forward
+          // them into the zip, whose error listener aborts the response.
+          const readable = Readable.from(result.stream());
+          readable.on('error', (err) => zip.emit('error', err));
+          zip.addReadStream(readable, relPath, { size: result.sizeBytes });
+        }
+        if (entry.parentId == null) rootName = entry.name;
+      }
+
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', archiveDisposition(rootName));
+      zip.on('error', (err) => {
+        if (res.writableEnded) return;
+        // Abort the connection: the client sees a truncated zip instead of a
+        // hanging response. Emitted when a chunk fetch fails mid-stream.
+        res.destroy(err instanceof Error ? err : new Error('Archive stream error'));
+      });
+      zip.outputStream.pipe(res);
+      zip.end();
     })
   );
 

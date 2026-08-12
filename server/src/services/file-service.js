@@ -95,28 +95,108 @@ function parseShareToken(key, token) {
 function createFileService({ db, repositories, discordStorage, config }) {
   const chunkSizeBytes = config.chunkSizeBytes;
   const encryptionKey = config.encryptionKey;
+  const downloadConcurrency = config.downloadConcurrency;
+  // One Discord message holds up to ~24.5 MiB of attachment bytes; cap each
+  // packed batch so a batch of chunkSizeBytes chunks always fits.
+  const effectiveChunksPerMessage = Math.max(
+    1,
+    Math.min(config.chunksPerMessage, Math.floor((24.5 * 1024 * 1024) / chunkSizeBytes))
+  );
 
-  function streamChunks(entry, drive) {
+  /** Fetch, decrypt, verify, and range-slice one chunk. */
+  async function fetchDecryptSlice(row, from, to, drive, attachmentIndex) {
+    let encrypted;
+    try {
+      encrypted = await discordStorage.getChunk(drive, row.discord_message_id, attachmentIndex);
+    } catch (err) {
+      if (err && err.code === 'STORAGE_UNAVAILABLE') throw err;
+      throw new WyvernError('STORAGE_UNAVAILABLE', 'Chunk fetch failed');
+    }
+    let plain;
+    try {
+      plain = decryptChunk(encrypted, encryptionKey, row.nonce, row.auth_tag);
+    } catch (err) {
+      throw new WyvernError('CHECKSUM_MISMATCH', 'Chunk decryption failed');
+    }
+    if (sha256hex(plain) !== row.checksum) {
+      throw new WyvernError('CHECKSUM_MISMATCH', 'Chunk checksum mismatch');
+    }
+    if (from === 0 && to === plain.length - 1) return plain;
+    return plain.subarray(from, to + 1);
+  }
+
+  /**
+   * Parallel bounded-prefetch chunk stream: up to `downloadConcurrency` chunks
+   * are fetched ahead of the yield cursor (never more than concurrency x chunk
+   * size held in memory), yielded in ordinal order, each decrypted and
+   * sha256-verified before it is yielded. With `range` { start, end } (inclusive
+   * byte offsets) only the covering ordinals are fetched and the first/last
+   * buffers are sliced.
+   */
+  function streamChunks(entry, drive, range) {
     return async function* stream() {
       const chunks = await repositories.getChunksByEntry(entry.id);
-      for (const chunk of chunks) {
-        let encrypted;
-        try {
-          encrypted = await discordStorage.getChunk(drive, chunk.discord_message_id);
-        } catch (err) {
-          if (err && err.code === 'STORAGE_UNAVAILABLE') throw err;
-          throw new WyvernError('STORAGE_UNAVAILABLE', 'Chunk fetch failed');
+
+      // Packed uploads share one message id across a batch; the attachment
+      // order within a message matches the ordinal order of the chunks that
+      // were posted together, so a chunk's position inside its message group
+      // selects the right attachment.
+      const attachmentIndexByRowId = new Map();
+      {
+        const seenByMessage = new Map();
+        for (const row of chunks) {
+          const index = seenByMessage.get(row.discord_message_id) || 0;
+          attachmentIndexByRowId.set(row.id, index);
+          seenByMessage.set(row.discord_message_id, index + 1);
         }
-        let plain;
-        try {
-          plain = decryptChunk(encrypted, encryptionKey, chunk.nonce, chunk.auth_tag);
-        } catch (err) {
-          throw new WyvernError('CHECKSUM_MISMATCH', 'Chunk decryption failed');
+      }
+
+      const plan = [];
+      if (range) {
+        let cursor = 0;
+        for (const row of chunks) {
+          const chunkStart = cursor;
+          const chunkEnd = cursor + row.plain_size_bytes - 1;
+          cursor = chunkEnd + 1;
+          if (chunkEnd < range.start || chunkStart > range.end) continue;
+          plan.push({
+            row,
+            from: Math.max(0, range.start - chunkStart),
+            to: Math.min(row.plain_size_bytes - 1, range.end - chunkStart),
+          });
         }
-        if (sha256hex(plain) !== chunk.checksum) {
-          throw new WyvernError('CHECKSUM_MISMATCH', 'Chunk checksum mismatch');
+      } else {
+        for (const row of chunks) plan.push({ row, from: 0, to: row.plain_size_bytes - 1 });
+      }
+
+      const pending = new Map(); // plan index -> promise of the decrypted/sliced buffer
+      let fetchIndex = 0;
+      let yieldIndex = 0;
+      try {
+        while (yieldIndex < plan.length) {
+          while (fetchIndex < plan.length && pending.size < downloadConcurrency) {
+            const item = plan[fetchIndex];
+            const promise = fetchDecryptSlice(item.row, item.from, item.to, drive, attachmentIndexByRowId.get(item.row.id));
+            // Mark handled immediately so a rejection while this promise is
+            // still in the prefetch map (waiting on an earlier chunk) never
+            // surfaces as an unhandled rejection; the error still reaches the
+            // consumer through await/allSettled below.
+            promise.catch(() => {});
+            pending.set(fetchIndex, promise);
+            fetchIndex += 1;
+          }
+          const buffer = await pending.get(yieldIndex);
+          pending.delete(yieldIndex);
+          yieldIndex += 1;
+          yield buffer;
         }
-        yield plain;
+      } finally {
+        // Observe any prefetched-but-unconsumed promises (a consumer may stop
+        // early or an earlier chunk may fail) so their rejections never become
+        // unhandled.
+        const leftover = [...pending.values()];
+        pending.clear();
+        if (leftover.length > 0) await Promise.allSettled(leftover);
       }
     };
   }
@@ -155,32 +235,106 @@ function createFileService({ db, repositories, discordStorage, config }) {
       return toEntryJson(row);
     },
 
-    async uploadFile({ drive, parentId, fileStream, filename, mimeType }) {
+    async uploadFile({ drive, parentId, fileStream, filename, mimeType, uploadToken, expectedSizeBytes }) {
       validateName(filename);
       await resolveParent(repositories, drive, parentId);
 
-      const usedBytes = await repositories.sumReadyBytes(drive.id);
-      const finalName = await this.uniqueSiblingName(drive.id, parentId, filename);
+      const token = typeof uploadToken === 'string' && uploadToken.length > 0 ? uploadToken : null;
 
-      let entry;
-      try {
-        entry = await repositories.insertEntry({
-          driveId: drive.id,
-          parentId,
-          kind: 'file',
-          name: finalName,
-          sizeBytes: 0,
-          mimeType: mimeType || 'application/octet-stream',
-          status: 'uploading',
-        });
-      } catch (err) {
-        if (err && err.code) throw err;
-        throw new WyvernError('UPLOAD_FAILED', 'Failed to create upload record');
+      // A client upload token resumes the owning uploading/failed entry: the
+      // row and its name are reused and only missing ordinals are posted. A
+      // token bound to a ready entry (or no token at all) is a fresh upload.
+      let entry = null;
+      let resume = false;
+      if (token) {
+        const existing = await repositories.getEntryByUploadToken(drive.id, token);
+        if (existing && existing.kind === 'file' && (existing.status === 'uploading' || existing.status === 'failed')) {
+          entry = existing;
+          resume = true;
+        }
       }
 
-      let bytesRead = 0;
+      const usedBytes = await repositories.sumUsedBytes(drive.id);
+      const finalName = resume ? entry.name : await this.uniqueSiblingName(drive.id, parentId, filename);
+
+      const expectedSize =
+        expectedSizeBytes !== undefined && expectedSizeBytes !== null && expectedSizeBytes !== ''
+          ? Number(expectedSizeBytes)
+          : NaN;
+      const normalizedExpectedSize = Number.isInteger(expectedSize) && expectedSize >= 0 ? expectedSize : null;
+
+      if (!resume) {
+        try {
+          entry = await repositories.insertEntry({
+            driveId: drive.id,
+            parentId,
+            kind: 'file',
+            name: finalName,
+            sizeBytes: 0,
+            mimeType: mimeType || 'application/octet-stream',
+            status: 'uploading',
+            uploadToken: token,
+            expectedSizeBytes: normalizedExpectedSize,
+          });
+        } catch (err) {
+          if (err && err.code) throw err;
+          throw new WyvernError('UPLOAD_FAILED', 'Failed to create upload record');
+        }
+      }
+
+      const skipOrdinals = new Set();
+      if (resume) {
+        const posted = await repositories.getPendingChunks(entry.id);
+        for (const row of posted) skipOrdinals.add(row.ordinal);
+      }
+
+      let bytesRead = 0; // plaintext consumed from the stream (final size_bytes)
+      let newBytes = 0; // plaintext newly posted this run (quota)
       let ordinal = 0;
-      const sentMessageIds = [];
+      let batch = [];
+      const inFlight = [];
+
+      // Push the assembled batch to Discord, insert its chunk rows only after
+      // the post succeeds, and apply upload backpressure: once `uploadConcurrency`
+      // batches are in flight, wait for the oldest before reading more stream.
+      const flush = () => {
+        if (batch.length === 0) return Promise.resolve();
+        const toPost = batch;
+        batch = [];
+        const promise = (async () => {
+          const results = await discordStorage.putChunks(
+            drive,
+            toPost.map((chunk) => ({
+              filename: `chunk-${chunk.ordinal}.bin`,
+              encryptedBuffer: chunk.cipher,
+              ordinal: chunk.ordinal,
+            }))
+          );
+          const messageIdByOrdinal = new Map(results.map((r) => [r.ordinal, r.messageId]));
+          for (const chunk of toPost) {
+            await repositories.insertChunk({
+              entryId: entry.id,
+              ordinal: chunk.ordinal,
+              messageId: messageIdByOrdinal.get(chunk.ordinal),
+              plainSizeBytes: chunk.plain.length,
+              cipherSizeBytes: chunk.cipher.length,
+              nonce: chunk.nonce,
+              authTag: chunk.authTag,
+              checksum: chunk.checksum,
+            });
+          }
+        })();
+        // Mark handled immediately: a batch that rejects while other batches
+        // are still draining must not surface as an unhandled rejection; the
+        // error still propagates through the awaited oldest batch / final
+        // Promise.all below.
+        promise.catch(() => {});
+        inFlight.push(promise);
+        if (inFlight.length >= config.uploadConcurrency) {
+          return inFlight.shift();
+        }
+        return Promise.resolve();
+      };
 
       try {
         let pending = Buffer.alloc(0);
@@ -190,32 +344,40 @@ function createFileService({ db, repositories, discordStorage, config }) {
             const chunk = pending.subarray(0, chunkSizeBytes);
             pending = pending.subarray(chunkSizeBytes);
             bytesRead += chunk.length;
-            this.assertQuota(usedBytes, bytesRead, drive.quota_bytes);
-            const messageId = await this.putEncryptedChunk(entry.id, drive, chunk, ordinal);
-            sentMessageIds.push(messageId);
+            if (!skipOrdinals.has(ordinal)) {
+              const { cipher, nonce, authTag } = encryptChunk(chunk, encryptionKey);
+              newBytes += chunk.length;
+              this.assertQuota(usedBytes, newBytes, drive.quota_bytes);
+              batch.push({ plain: chunk, cipher, nonce, authTag, checksum: sha256hex(chunk), ordinal });
+            }
             ordinal += 1;
+            if (batch.length >= effectiveChunksPerMessage) await flush();
           }
         }
         if (pending.length > 0) {
           bytesRead += pending.length;
-          this.assertQuota(usedBytes, bytesRead, drive.quotaBytes);
-          const messageId = await this.putEncryptedChunk(entry.id, drive, pending, ordinal);
-          sentMessageIds.push(messageId);
+          if (!skipOrdinals.has(ordinal)) {
+            const { cipher, nonce, authTag } = encryptChunk(pending, encryptionKey);
+            newBytes += pending.length;
+            this.assertQuota(usedBytes, newBytes, drive.quota_bytes);
+            batch.push({ plain: pending, cipher, nonce, authTag, checksum: sha256hex(pending), ordinal });
+          }
           ordinal += 1;
         }
+        await flush();
+        await Promise.all(inFlight);
 
         const ready = await repositories.updateEntry(entry.id, { size_bytes: bytesRead, status: 'ready' });
         return toEntryJson(ready);
       } catch (err) {
+        // Keep the entry row and every posted chunk so the upload can resume;
+        // just mark the entry failed. Drain in-flight batches so no promise
+        // is left unobserved.
+        await Promise.allSettled(inFlight);
         try {
-          for (const messageId of sentMessageIds) {
-            await discordStorage.deleteChunk(drive, messageId);
-          }
-          await repositories.deleteEntryById(entry.id);
-        } catch (cleanupErr) {
-          // Remote cleanup itself failed: keep the row for operator/retry
-          // cleanup and make sure it is never listable.
           await repositories.updateEntry(entry.id, { status: 'failed' });
+        } catch (updateErr) {
+          // Row vanished mid-upload; nothing left to mark.
         }
         if (err && err.code) throw err;
         throw new WyvernError('UPLOAD_FAILED', 'Upload failed');
@@ -237,33 +399,52 @@ function createFileService({ db, repositories, discordStorage, config }) {
       return conflictSuffixName(name, n);
     },
 
-    async putEncryptedChunk(entryId, drive, plain, ordinal) {
-      const { cipher, nonce, authTag } = encryptChunk(plain, encryptionKey);
-      const checksum = sha256hex(plain);
-      const messageId = await discordStorage.putChunk(drive, `chunk-${ordinal}.bin`, cipher);
-      await repositories.insertChunk({
-        entryId,
-        ordinal,
-        messageId,
-        plainSizeBytes: plain.length,
-        cipherSizeBytes: cipher.length,
-        nonce,
-        authTag,
-        checksum,
-      });
-      return messageId;
-    },
-
-    async downloadFile({ drive, entryId }) {
+    async downloadFile({ drive, entryId, range }) {
       const entry = await repositories.getEntryById(entryId);
       if (!entry || entry.drive_id !== drive.id || entry.kind !== 'file' || entry.status !== 'ready') {
         throw httpError('NOT_FOUND');
       }
+      const size = entry.size_bytes;
+      if (!range) {
+        return {
+          name: entry.name,
+          mimeType: entry.mime_type || 'application/octet-stream',
+          sizeBytes: size,
+          status: 200,
+          stream: streamChunks(entry, drive),
+        };
+      }
+      // Clamp inclusive byte offsets to the file; an unsatisfiable range (start
+      // past EOF, end before start, or an empty file) falls back to a full 200.
+      const start = Math.max(0, range.start);
+      if (size === 0 || start >= size) {
+        return {
+          name: entry.name,
+          mimeType: entry.mime_type || 'application/octet-stream',
+          sizeBytes: size,
+          status: 200,
+          stream: streamChunks(entry, drive),
+        };
+      }
+      const end = Math.min(size - 1, range.end);
+      if (start > end) {
+        return {
+          name: entry.name,
+          mimeType: entry.mime_type || 'application/octet-stream',
+          sizeBytes: size,
+          status: 200,
+          stream: streamChunks(entry, drive),
+        };
+      }
       return {
         name: entry.name,
         mimeType: entry.mime_type || 'application/octet-stream',
-        sizeBytes: entry.size_bytes,
-        stream: streamChunks(entry, drive),
+        sizeBytes: size,
+        status: 206,
+        start,
+        end,
+        contentLength: end - start + 1,
+        stream: streamChunks(entry, drive, { start, end }),
       };
     },
 
@@ -312,9 +493,22 @@ function createFileService({ db, repositories, discordStorage, config }) {
       try {
         for (const fileRow of fileRows) {
           const chunks = await repositories.getPendingChunks(fileRow.id);
+          // Chunks packed into one Discord message share its id; delete each
+          // message once, then mark every chunk row it backed as deleted.
+          const byMessageId = new Map();
           for (const chunk of chunks) {
-            await discordStorage.deleteChunk(drive, chunk.discord_message_id);
-            await repositories.markChunkDeleted(chunk.id);
+            let group = byMessageId.get(chunk.discord_message_id);
+            if (!group) {
+              group = [];
+              byMessageId.set(chunk.discord_message_id, group);
+            }
+            group.push(chunk);
+          }
+          for (const [messageId, group] of byMessageId) {
+            await discordStorage.deleteChunk(drive, messageId);
+            for (const chunk of group) {
+              await repositories.markChunkDeleted(chunk.id);
+            }
           }
         }
       } catch (err) {
@@ -323,6 +517,39 @@ function createFileService({ db, repositories, discordStorage, config }) {
         throw new WyvernError('STORAGE_UNAVAILABLE', 'Remote chunk deletion failed');
       }
       await repositories.deleteRecursive(drive.id, entryId);
+    },
+
+    /** Upload progress for a resumable upload: status, bytes posted so far, declared total. */
+    async getUploadProgress({ drive, entryId }) {
+      const entry = await repositories.getEntryById(entryId);
+      if (!entry || entry.drive_id !== drive.id) throw httpError('NOT_FOUND');
+      const postedBytes = await repositories.sumPlainBytesByEntry(entry.id);
+      return {
+        status: entry.status,
+        postedBytes,
+        expectedBytes: entry.expected_size_bytes != null ? entry.expected_size_bytes : null,
+      };
+    },
+
+    /** Resolve an upload token to its entry's progress; NOT_FOUND when no entry matches. */
+    async getUploadProgressByToken({ drive, uploadToken }) {
+      const entry = await repositories.getEntryByUploadToken(drive.id, uploadToken);
+      if (!entry) throw httpError('NOT_FOUND');
+      return this.getUploadProgress({ drive, entryId: entry.id });
+    },
+
+    /** Flat pre-order subtree rows (parents before children, root first). */
+    async getSubtreeEntries(drive, entryId) {
+      const entry = await repositories.getEntryById(entryId);
+      if (!entry || entry.drive_id !== drive.id) throw httpError('NOT_FOUND');
+      const rows = await repositories.getSubtreeEntries(drive.id, entryId);
+      return rows.map((row) => ({
+        id: row.id,
+        parentId: row.parent_id,
+        kind: row.kind,
+        name: row.name,
+        sizeBytes: row.size_bytes,
+      }));
     },
 
     async createShare({ drive, entryId, expiresAt }) {

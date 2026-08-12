@@ -11,7 +11,7 @@ function createDriveRoutes({ repositories, sessionStore }) {
     '/',
     auth,
     asyncHandler(async (req, res) => {
-      const usedBytes = await repositories.sumReadyBytes(req.drive.id);
+      const usedBytes = await repositories.sumUsedBytes(req.drive.id);
       res.json({ id: req.drive.id, quotaBytes: req.drive.quota_bytes, usedBytes });
     })
   );

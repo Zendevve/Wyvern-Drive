@@ -106,7 +106,19 @@ export default function UploadQueue({ jobs, onRetry, onRemove }) {
 function QueueJobItem({ job, removing, onRequestRemove, onRetry, onRemove }) {
   const enter = useSpring(1, { initial: 0, response: 0.4 });
   const exit = useSpring(removing ? 0 : 1, { response: 0.25 });
-  const progress = useSpring(job.status === 'done' ? 100 : job.progress, {
+  // After the browser reaches 100% the server may still be storing chunks to
+  // Discord; DrivePage polls that phase and surfaces it via serverPhase /
+  // serverProgress. Never let the bar move backwards — the stored value is
+  // the max of browser and server progress.
+  const storing =
+    job.serverPhase === 'storing' && typeof job.serverProgress === 'number';
+  const barTarget =
+    job.status === 'done'
+      ? 100
+      : storing
+        ? Math.max(job.progress || 0, job.serverProgress)
+        : job.progress;
+  const progress = useSpring(barTarget, {
     response: 0.3,
   });
   const [pulseTarget, setPulseTarget] = useState(1);
@@ -171,7 +183,11 @@ function QueueJobItem({ job, removing, onRequestRemove, onRetry, onRemove }) {
         primaryTypographyProps={{ variant: 'body2' }}
         secondary={
           job.status === 'uploading'
-            ? `Uploading ${job.progress}%`
+            ? job.serverPhase === 'storing'
+              ? typeof job.serverProgress === 'number'
+                ? `Storing to Discord ${job.serverProgress}%`
+                : 'Storing to Discord'
+              : `Uploading ${job.progress}%`
             : job.status === 'failed'
               ? (job.error && job.error.message) || 'Upload failed'
               : 'Uploaded'

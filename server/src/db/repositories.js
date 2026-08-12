@@ -6,14 +6,16 @@ const { run, get, all } = require('./connection');
 function createRepositories(db) {
   const nowIso = () => new Date().toISOString();
 
+  // Zero-padded id segments make path ordering equal to numeric pre-order
+  // (parents before children, root first, siblings by id) for getSubtreeEntries.
   const SUBTREE_CTE = `
     WITH RECURSIVE subtree(id, path) AS (
-      SELECT id, ',' || id || ',' FROM entries WHERE drive_id = ? AND id = ?
+      SELECT id, printf(',%012d,', id) FROM entries WHERE drive_id = ? AND id = ?
       UNION ALL
-      SELECT e.id, s.path || e.id || ','
+      SELECT e.id, s.path || printf(',%012d,', e.id)
       FROM entries e
       JOIN subtree s ON e.parent_id = s.id AND e.drive_id = ?
-      WHERE instr(s.path, ',' || e.id || ',') = 0
+      WHERE instr(s.path, printf(',%012d,', e.id)) = 0
     )
   `;
 
@@ -122,12 +124,12 @@ function createRepositories(db) {
       return all(db, sql, params);
     },
 
-    async insertEntry({ driveId, parentId, kind, name, sizeBytes, mimeType, status }) {
+    async insertEntry({ driveId, parentId, kind, name, sizeBytes, mimeType, status, uploadToken, expectedSizeBytes }) {
       const now = nowIso();
       const res = await run(
         db,
-        'INSERT INTO entries (drive_id, parent_id, kind, name, size_bytes, mime_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [driveId, parentId, kind, name, sizeBytes, mimeType, status, now, now]
+        'INSERT INTO entries (drive_id, parent_id, kind, name, size_bytes, mime_type, status, upload_token, expected_size_bytes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [driveId, parentId, kind, name, sizeBytes, mimeType, status, uploadToken ?? null, expectedSizeBytes ?? null, now, now]
       );
       return get(db, 'SELECT * FROM entries WHERE id = ?', [res.lastID]);
     },
@@ -178,13 +180,40 @@ function createRepositories(db) {
       ]);
     },
 
-    async sumReadyBytes(driveId) {
+    async sumUsedBytes(driveId) {
       const row = await get(
         db,
-        "SELECT COALESCE(SUM(size_bytes), 0) AS total FROM entries WHERE drive_id = ? AND kind = 'file' AND status = 'ready'",
+        "SELECT COALESCE(SUM(size_bytes), 0) AS total FROM entries WHERE drive_id = ? AND kind = 'file' AND status IN ('ready','uploading','failed')",
         [driveId]
       );
       return row.total;
+    },
+
+    /** Resume target: the entry (if any) already bound to a client upload token. */
+    getEntryByUploadToken(driveId, uploadToken) {
+      return get(db, 'SELECT * FROM entries WHERE drive_id = ? AND upload_token = ? ORDER BY id DESC LIMIT 1', [
+        driveId,
+        uploadToken,
+      ]);
+    },
+
+    /** Plaintext bytes currently posted for an entry (deleted chunks excluded). */
+    async sumPlainBytesByEntry(entryId) {
+      const row = await get(
+        db,
+        'SELECT COALESCE(SUM(plain_size_bytes), 0) AS total FROM file_chunks WHERE entry_id = ? AND deleted_at IS NULL',
+        [entryId]
+      );
+      return row.total;
+    },
+
+    /** Flat subtree rows (parents before children, root first) for archive/progress use. */
+    getSubtreeEntries(driveId, entryId) {
+      return all(
+        db,
+        `${SUBTREE_CTE} SELECT e.id, e.parent_id, e.kind, e.name, e.size_bytes FROM entries e JOIN subtree s ON e.id = s.id ORDER BY s.path ASC`,
+        [driveId, entryId, driveId]
+      );
     },
 
     async siblingCount(driveId, parentId, name) {

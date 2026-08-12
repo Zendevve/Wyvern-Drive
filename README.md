@@ -21,7 +21,13 @@ The `refs/` directories remain read-only prior art, not runtime behavior.
 
 - Discord OAuth2 sign-in with server-side sessions and CSRF protection
 - One personal drive per user; configurable quota (default 10 GiB)
-- Upload/download with per-file progress and retry; streaming multipart uploads
+- Parallel packed uploads: files are cut into plaintext chunks, each encrypted
+  with AES-256-GCM (fresh 12-byte nonce + auth tag), and up to 10 chunks are
+  posted per Discord message as attachments, with concurrent batches in flight
+- Resumable uploads: a client upload token reuses the entry after an
+  interruption and skips already-posted chunks; server-side progress polling
+- HTTP Range downloads (206 partial content) and inline file previews
+- Folder ZIP download: any subtree streams as an archive
 - Folders; rename, move, and permanent recursive delete
 - Server-backed search and sort
 - Anonymous read-only share links with optional expiry and revocation
@@ -38,7 +44,10 @@ The `refs/` directories remain read-only prior art, not runtime behavior.
 
 Security model: server-side encryption, not end-to-end. Discord and the
 browser never receive plaintext chunks, storage internals, or encryption keys;
-the server decrypts only for authorized downloads and shares.
+the server decrypts only for authorized downloads and shares. Chunks are
+encrypted per chunk and packed up to `WYVERN_CHUNKS_PER_MESSAGE` (default 10)
+per Discord message; uploads run `WYVERN_UPLOAD_CONCURRENCY` batches in
+parallel and downloads prefetch `WYVERN_DOWNLOAD_CONCURRENCY` chunks ahead.
 
 ## Quick start (development)
 
@@ -83,6 +92,10 @@ Required environment variables (full list in `server/.env.example`):
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` / `DISCORD_REDIRECT_URI` | Discord OAuth2 application (no bot) |
 | `WYVERN_ENCRYPTION_KEY` | Base64 of a 32-byte AES-256 key; never commit it |
 | `DEFAULT_QUOTA_BYTES` | Per-user quota (default 10 GiB) |
+| `WYVERN_CHUNK_SIZE_BYTES` | Plaintext chunk size (default 2 MiB; valid 64 KiB..8 MiB) |
+| `WYVERN_CHUNKS_PER_MESSAGE` | Max encrypted chunks packed per Discord message (default 10; 1..10) |
+| `WYVERN_UPLOAD_CONCURRENCY` | Max chunk batches uploaded concurrently (default 4; 1..16) |
+| `WYVERN_DOWNLOAD_CONCURRENCY` | Max chunks fetched concurrently when downloading (default 6; 1..16) |
 
 There is no global webhook variable: each authenticated user connects their
 own Discord webhook on `/connect`, and the server seals it with
@@ -109,23 +122,24 @@ server behind your reverse proxy with HTTPS.
 ## Testing
 
 ```sh
-cd server && npm test   # 107 tests: in-memory SQLite + fake Discord adapters
-cd web && npm test      # 62 tests: mocked API client
+cd server && npm test   # 116 tests: in-memory SQLite + fake Discord adapters
+cd web && npm test      # 75 tests: mocked API client
 ```
 
 Server tests never contact Discord: OAuth fetch is stubbed and the storage
 adapters are in-memory fakes (one integration file drives the real webhook
-adapter against an injected fake Discord REST surface). The encrypted
-round-trip fixture (24 bytes in three 8-byte chunks) is verified byte-for-byte
-against its SHA-256 digest. Setup-mode coverage includes the status contract,
-missing/malformed-variable diagnostics (with a no-secret-leak assertion),
-hidden protected routes, and file-backed `DB_URL` parent creation.
+adapter against an injected fake Discord REST surface). Coverage includes the
+encrypted round-trip fixture verified byte-for-byte against its SHA-256
+digest, 10-per-message chunk packing, resumable uploads, HTTP Range slicing,
+upload progress, folder ZIP archives, and setup-mode diagnostics (status
+contract, no-secret-leak assertions, hidden protected routes, file-backed
+`DB_URL` parent creation).
 
 ## Manual smoke path (configured Discord)
 
-A real end-to-end check (sign-in, `/connect` webhook setup, >24 MiB upload,
-refresh, search, download with SHA-256 comparison, rename/move, share in a
-private window, revoke, 404s) is documented step by step in
+A real end-to-end check (sign-in, `/connect` webhook setup, multi-chunk
+upload, refresh, search, download with SHA-256 comparison, rename/move, share
+in a private window, revoke, 404s) is documented step by step in
 `server/README.md`.
 
 ## Repo layout notes

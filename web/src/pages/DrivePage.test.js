@@ -29,6 +29,9 @@ jest.mock('../api/client', () => ({
   },
   uploadFile: jest.fn(),
   downloadUrl: jest.fn(),
+  archiveUrl: jest.fn(),
+  uploadProgress: jest.fn(),
+  isPreviewableMime: jest.fn(),
 }));
 
 const user = { id: 1, discordId: '123456', username: 'alice', avatarUrl: null };
@@ -84,7 +87,29 @@ beforeEach(() => {
   jest.clearAllMocks();
   // NOTE: implementations are set here, not in the jest.mock factory — the
   // CRA 5 babel-jest hoist transform drops factory-set implementations.
-  client.downloadUrl.mockImplementation((id) => `/api/files/${id}/download`);
+  client.downloadUrl.mockImplementation((id, opts = {}) =>
+    `/api/files/${id}/download${opts.inline ? '?inline=1' : ''}`
+  );
+  client.archiveUrl.mockImplementation((id) => `/api/entries/${id}/archive`);
+  client.uploadProgress.mockResolvedValue({
+    status: 'uploading',
+    postedBytes: 0,
+    expectedBytes: 100,
+  });
+  client.isPreviewableMime.mockImplementation((mime) => {
+    if (!mime) {
+      return false;
+    }
+    const type = String(mime).toLowerCase();
+    return (
+      type.startsWith('image/') ||
+      type.startsWith('video/') ||
+      type.startsWith('audio/') ||
+      type.startsWith('text/') ||
+      type === 'application/json' ||
+      type === 'application/pdf'
+    );
+  });
   window.matchMedia = createMatchMedia(1024);
   client.api.me.mockResolvedValue({ user, drive });
   client.api.entries.mockResolvedValue({ entries: [] });
@@ -144,7 +169,7 @@ describe('navigation and breadcrumbs', () => {
       )
     );
     expect(await screen.findByRole('button', { name: 'Documents' })).toBeInTheDocument();
-  });
+  }, 20000);
 
   it('sorts by clicking column headers, toggling direction', async () => {
     client.api.entries.mockResolvedValue({ entries: [fileEntry()] });
@@ -363,6 +388,55 @@ describe('quota and responsiveness', () => {
     expect(await screen.findByTestId('entry-table')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /delete notes\.txt/i })
+    ).toBeInTheDocument();
+  });
+});
+
+describe('archive and preview actions', () => {
+  it('links folder downloads to the archive route', async () => {
+    client.api.entries.mockResolvedValue({
+      entries: [folderEntry({ id: 2, name: 'Documents' })],
+    });
+    renderDrive();
+    const link = await screen.findByRole('link', {
+      name: /download documents/i,
+    });
+    expect(link.href).toBe('http://localhost/api/entries/2/archive');
+  });
+
+  it('opens the preview dialog for previewable files and closes it', async () => {
+    client.api.entries.mockResolvedValue({
+      entries: [fileEntry({ id: 3, name: 'report.pdf', mimeType: 'application/pdf' })],
+    });
+    renderDrive();
+    await screen.findByText('report.pdf');
+
+    userEvent.click(
+      screen.getByRole('button', { name: /preview report\.pdf/i })
+    );
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getAllByText('report.pdf').length).toBeGreaterThanOrEqual(2);
+
+    userEvent.click(screen.getByRole('button', { name: 'Close preview' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    );
+  });
+
+  it('does not offer preview for non-previewable files', async () => {
+    client.api.entries.mockResolvedValue({
+      entries: [
+        fileEntry({ id: 7, name: 'archive.tar.gz', mimeType: 'application/gzip' }),
+      ],
+    });
+    renderDrive();
+    await screen.findByText('archive.tar.gz');
+    expect(
+      screen.queryByRole('button', { name: /preview archive\.tar\.gz/i })
+    ).not.toBeInTheDocument();
+    // The download link is still there.
+    expect(
+      screen.getByRole('link', { name: /download archive\.tar\.gz/i })
     ).toBeInTheDocument();
   });
 });

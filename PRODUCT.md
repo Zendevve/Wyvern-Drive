@@ -36,9 +36,9 @@ third-party file host touches the data.
 ## Operating Context
 
 Web app (React 17 + MUI 5, CRA) talking to same-origin `/api`; Node 20 +
-Express + discord.js 14 + SQLite server; Discord OAuth2 sign-in; desktop
-list/grid views, mobile cards; drag-and-drop upload; anonymous read-only share
-links; quota (default 10 GiB). Server serves the built SPA in production.
+Express + SQLite server; Discord OAuth2 sign-in; desktop list/grid views,
+mobile cards; drag-and-drop upload; anonymous read-only share links; quota
+(default 10 GiB). Server serves the built SPA in production.
 First-run onboarding is operator-managed: with incomplete configuration the
 server boots a read-only setup mode serving `GET /api/setup/status` and a
 guided `/setup` page (missing-variable names only, never values); the operator
@@ -47,20 +47,21 @@ fills `server/.env` and restarts. No browser form writes secrets.
 ## Capabilities and Constraints
 
 MVP (from README): OAuth2 sign-in with server-side sessions and CSRF; one drive
-per user; upload/download with per-file progress and retry, streaming multipart;
-folders, rename, move, permanent recursive delete; server-backed search and
-sort; anonymous read-only share links with optional expiry and revocation; rate
-limiting on OAuth, mutations, and public share downloads; responsive
-cloud-service-style UI (desktop table/grid, mobile cards, drag-drop upload,
-floating upload progress manager).
+per user; parallel packed and resumable uploads with per-file progress, retry,
+and server-side progress polling; HTTP Range downloads and inline previews;
+folder ZIP archives; folders, rename, move, permanent recursive delete;
+server-backed search and sort; anonymous read-only share links with optional
+expiry and revocation; rate limiting on OAuth, mutations, and public share
+downloads; responsive cloud-service-style UI (desktop table/grid, mobile
+cards, drag-drop upload, floating upload progress manager).
 
 Constraints: encryption is server-side, not end-to-end (Discord and the browser
 never receive plaintext chunks, storage internals, or keys); Discord rate
 limits bound storage throughput; runtime must stay self-hostable — no external
-font/CDN dependencies; `refs/` is read-only vendored prior art; the current
-storage adapter is bot-based (`discord-storage.js`), and a
-`legacy-webhook-version` branch preserves the previous webhook-based v1 as
-prior art — webhooks are not current runtime behavior.
+font/CDN dependencies; `refs/` is read-only vendored prior art; storage is the
+per-user webhook adapter (`src/storage/discord-webhook-storage.js`) — no bot —
+and bot-era drives are preserved via `drives.legacy_discord_channel_id`,
+never auto-migrated.
 
 ## Brand Commitments
 
@@ -81,9 +82,9 @@ prior art — webhooks are not current runtime behavior.
 ## Evidence on Hand
 
 - `README.md` — features, architecture, security model, config, testing.
-- `server/README.md` — manual smoke path (96 server tests; encrypted
+- `server/README.md` — manual smoke path (116 server tests; encrypted
   round-trip fixture verified against SHA-256; setup-mode coverage).
-- `web/` — 44 tests pinning accessible names, testids, quota/share text, and
+- `web/` — 75 tests pinning accessible names, testids, quota/share text, and
   the setup gate/page.
 - `refs/` — vendored prior art (Disbox et al.), read-only.
 

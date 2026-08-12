@@ -17,13 +17,18 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowRightArrowLeft,
   faDownload,
+  faEye,
   faPen,
   faShareNodes,
   faSortDown,
   faSortUp,
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
-import { downloadUrl } from '../api/client';
+import {
+  archiveUrl,
+  downloadUrl,
+  isPreviewableMime,
+} from '../api/client';
 import { formatBytes } from './QuotaMeter';
 import { entryIcon } from './entryIcons';
 
@@ -140,6 +145,7 @@ export default function EntryTable({
 
 function EntryRow({ entry, actions, selected, onToggleSelect }) {
   const isFolder = entry.kind === 'folder';
+  const previewable = !isFolder && isPreviewableMime(entry.mimeType);
   const { icon, color } = entryIcon(entry);
 
   // Every interactive control stops propagation so the row's click only
@@ -151,11 +157,20 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
     }
   };
 
+  const handleDoubleClick = () => {
+    if (isFolder) {
+      actions.onOpenFolder(entry);
+    } else if (previewable && actions.onPreview) {
+      actions.onPreview(entry);
+    }
+  };
+
   return (
     <TableRow
       hover
       selected={selected}
       onClick={() => onToggleSelect && onToggleSelect(entry.id)}
+      onDoubleClick={handleDoubleClick}
       sx={{
         cursor: 'pointer',
         bgcolor: 'canvas',
@@ -218,10 +233,10 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
           transition: 'opacity 120ms ease',
         }}
       >
-        {!isFolder && (
+        {isFolder ? (
           <IconButton
             component="a"
-            href={downloadUrl(entry.id)}
+            href={archiveUrl(entry.id)}
             size="small"
             aria-label={`Download ${entry.name}`}
             title="Download"
@@ -229,16 +244,37 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
           >
             <FontAwesomeIcon icon={faDownload} />
           </IconButton>
-        )}
-        {!isFolder && (
-          <IconButton
-            size="small"
-            aria-label={`Share ${entry.name}`}
-            title="Share"
-            onClick={stop(() => actions.onShare(entry))}
-          >
-            <FontAwesomeIcon icon={faShareNodes} />
-          </IconButton>
+        ) : (
+          <>
+            {previewable && (
+              <IconButton
+                size="small"
+                aria-label={`Preview ${entry.name}`}
+                title="Preview"
+                onClick={stop(() => actions.onPreview && actions.onPreview(entry))}
+              >
+                <FontAwesomeIcon icon={faEye} />
+              </IconButton>
+            )}
+            <IconButton
+              component="a"
+              href={downloadUrl(entry.id)}
+              size="small"
+              aria-label={`Download ${entry.name}`}
+              title="Download"
+              onClick={stop()}
+            >
+              <FontAwesomeIcon icon={faDownload} />
+            </IconButton>
+            <IconButton
+              size="small"
+              aria-label={`Share ${entry.name}`}
+              title="Share"
+              onClick={stop(() => actions.onShare(entry))}
+            >
+              <FontAwesomeIcon icon={faShareNodes} />
+            </IconButton>
+          </>
         )}
         <IconButton
           size="small"

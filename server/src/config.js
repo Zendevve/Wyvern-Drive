@@ -2,7 +2,12 @@
 
 const DEFAULT_PORT = 8080;
 const DEFAULT_QUOTA_BYTES = 10 * 1024 * 1024 * 1024; // 10 GiB
-const PRODUCTION_CHUNK_SIZE_BYTES = 24 * 1024 * 1024; // stays below Discord's 25 MiB free upload limit
+const DEFAULT_CHUNK_SIZE_BYTES = 2 * 1024 * 1024; // 2 MiB
+const CHUNK_SIZE_MIN_BYTES = 64 * 1024; // 64 KiB
+const CHUNK_SIZE_MAX_BYTES = 8 * 1024 * 1024; // 8 MiB
+const DEFAULT_CHUNKS_PER_MESSAGE = 10;
+const DEFAULT_UPLOAD_CONCURRENCY = 4;
+const DEFAULT_DOWNLOAD_CONCURRENCY = 6;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 const REQUIRED_VARS = [
@@ -13,6 +18,17 @@ const REQUIRED_VARS = [
   'DISCORD_REDIRECT_URI',
   'WYVERN_ENCRYPTION_KEY',
 ];
+
+/** Parse an optional bounded integer env var; on invalid input record a diagnostic and fall back. */
+function boundedIntEnv(value, key, min, max, fallback, invalid) {
+  if (value === undefined || value === '') return fallback;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    invalid.push({ key, message: `must be an integer between ${min} and ${max}` });
+    return fallback;
+  }
+  return n;
+}
 
 /**
  * Shared environment validation used by both loadConfig (strict) and
@@ -93,19 +109,42 @@ function validateEnv(env = process.env) {
 
   const nodeEnv = env.NODE_ENV || 'development';
 
-  let chunkSizeBytes = PRODUCTION_CHUNK_SIZE_BYTES;
-  if (
-    nodeEnv === 'test' &&
-    env.WYVERN_CHUNK_SIZE_BYTES !== undefined &&
-    env.WYVERN_CHUNK_SIZE_BYTES !== ''
-  ) {
+  let chunkSizeBytes = DEFAULT_CHUNK_SIZE_BYTES;
+  if (env.WYVERN_CHUNK_SIZE_BYTES !== undefined && env.WYVERN_CHUNK_SIZE_BYTES !== '') {
     const n = Number(env.WYVERN_CHUNK_SIZE_BYTES);
-    if (!Number.isInteger(n) || n <= 0) {
-      invalid.push({ key: 'WYVERN_CHUNK_SIZE_BYTES', message: 'must be a positive integer' });
+    if (!Number.isInteger(n) || n < CHUNK_SIZE_MIN_BYTES || n > CHUNK_SIZE_MAX_BYTES) {
+      invalid.push({
+        key: 'WYVERN_CHUNK_SIZE_BYTES',
+        message: `must be an integer between ${CHUNK_SIZE_MIN_BYTES} and ${CHUNK_SIZE_MAX_BYTES}`,
+      });
     } else {
       chunkSizeBytes = n;
     }
   }
+  const chunksPerMessage = boundedIntEnv(
+    env.WYVERN_CHUNKS_PER_MESSAGE,
+    'WYVERN_CHUNKS_PER_MESSAGE',
+    1,
+    10,
+    DEFAULT_CHUNKS_PER_MESSAGE,
+    invalid
+  );
+  const uploadConcurrency = boundedIntEnv(
+    env.WYVERN_UPLOAD_CONCURRENCY,
+    'WYVERN_UPLOAD_CONCURRENCY',
+    1,
+    16,
+    DEFAULT_UPLOAD_CONCURRENCY,
+    invalid
+  );
+  const downloadConcurrency = boundedIntEnv(
+    env.WYVERN_DOWNLOAD_CONCURRENCY,
+    'WYVERN_DOWNLOAD_CONCURRENCY',
+    1,
+    16,
+    DEFAULT_DOWNLOAD_CONCURRENCY,
+    invalid
+  );
 
   return {
     missing,
@@ -117,6 +156,9 @@ function validateEnv(env = process.env) {
     encryptionKey,
     defaultQuotaBytes,
     chunkSizeBytes,
+    chunksPerMessage,
+    uploadConcurrency,
+    downloadConcurrency,
     nodeEnv,
     isProduction: nodeEnv === 'production',
     isTest: nodeEnv === 'test',
@@ -155,6 +197,9 @@ function loadConfig(env = process.env) {
     encryptionKey: v.encryptionKey,
     defaultQuotaBytes: v.defaultQuotaBytes,
     chunkSizeBytes: v.chunkSizeBytes,
+    chunksPerMessage: v.chunksPerMessage,
+    uploadConcurrency: v.uploadConcurrency,
+    downloadConcurrency: v.downloadConcurrency,
     nodeEnv: v.nodeEnv,
     isProduction: v.isProduction,
     isTest: v.isTest,
@@ -194,6 +239,9 @@ module.exports = {
   REQUIRED_VARS,
   DEFAULT_PORT,
   DEFAULT_QUOTA_BYTES,
-  PRODUCTION_CHUNK_SIZE_BYTES,
+  DEFAULT_CHUNK_SIZE_BYTES,
+  DEFAULT_CHUNKS_PER_MESSAGE,
+  DEFAULT_UPLOAD_CONCURRENCY,
+  DEFAULT_DOWNLOAD_CONCURRENCY,
   SESSION_TTL_MS,
 };

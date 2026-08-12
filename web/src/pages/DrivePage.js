@@ -45,15 +45,31 @@ import EntryTable from '../components/EntryTable';
 import ErrorNotice from '../components/ErrorNotice';
 import FolderDialog from '../components/FolderDialog';
 import MoveDialog from '../components/MoveDialog';
+import PreviewDialog from '../components/PreviewDialog';
 import ShareDialog from '../components/ShareDialog';
 import QuotaMeter from '../components/QuotaMeter';
 import UploadQueue from '../components/UploadQueue';
-import { api, downloadUrl, uploadFile } from '../api/client';
+import {
+  api,
+  archiveUrl,
+  downloadUrl,
+  uploadFile,
+  uploadProgress,
+} from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
 import DialogTransition from '../motion/DialogTransition';
 import { gradients } from '../theme';
 
 let nextJobId = 1;
+
+// Client-generated resume token: a UUID when the platform provides one,
+// otherwise a unique-enough timestamp/random fallback. Retrying an upload
+// reuses the token so the server can resume the same entry.
+function newUploadToken() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `u-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 export default function DrivePage() {
   const { user, drive, loading, refresh } = useAuth();
@@ -78,6 +94,7 @@ export default function DrivePage() {
   const [moveEntry, setMoveEntry] = useState(null);
   const [deleteEntry, setDeleteEntry] = useState(null);
   const [shareEntry, setShareEntry] = useState(null);
+  const [previewEntry, setPreviewEntry] = useState(null);
 
   const [view, setView] = useState(() => {
     try {
@@ -201,39 +218,118 @@ export default function DrivePage() {
     });
   }, []);
 
+  // Server-side "storing to Discord" progress polling. Once the browser has
+  // pushed 100% of the bytes the XHR is still pending while the server posts
+  // chunks to Discord; poll the resume token and surface postedBytes so the
+  // queue can show real storage progress. Display-only: failures are ignored
+  // and the poll never blocks the upload promise.
+  const pollTimersRef = useRef(new Map()); // jobId -> interval id
+  const pollsInFlightRef = useRef(new Set()); // jobIds with a request in flight
+  useEffect(() => {
+    const timers = pollTimersRef.current;
+    return () => {
+      timers.forEach((timer) => clearInterval(timer));
+      timers.clear();
+    };
+  }, []);
+
+  const stopServerPoll = useCallback((jobId) => {
+    const timer = pollTimersRef.current.get(jobId);
+    if (timer) {
+      clearInterval(timer);
+      pollTimersRef.current.delete(jobId);
+    }
+    pollsInFlightRef.current.delete(jobId);
+  }, []);
+
+  const pollServerProgress = useCallback(async (jobId, uploadToken) => {
+    if (pollsInFlightRef.current.has(jobId)) {
+      return;
+    }
+    pollsInFlightRef.current.add(jobId);
+    try {
+      const data = await uploadProgress(uploadToken);
+      const expected = data && data.expectedBytes;
+      const posted = data && data.postedBytes;
+      let pct = null;
+      if (expected && expected > 0 && typeof posted === 'number') {
+        pct = Math.max(0, Math.min(100, Math.round((posted / expected) * 100)));
+      }
+      setUploads((prev) =>
+        prev.map((job) =>
+          job.id === jobId
+            ? { ...job, serverPhase: 'storing', serverProgress: pct }
+            : job
+        )
+      );
+    } catch {
+      // Server progress is display-only; ignore poll failures.
+    } finally {
+      pollsInFlightRef.current.delete(jobId);
+    }
+  }, []);
+
+  const startServerPoll = useCallback(
+    (jobId, uploadToken) => {
+      if (!uploadToken || pollTimersRef.current.has(jobId)) {
+        return;
+      }
+      const timer = setInterval(
+        () => pollServerProgress(jobId, uploadToken),
+        1000
+      );
+      pollTimersRef.current.set(jobId, timer);
+      pollServerProgress(jobId, uploadToken);
+    },
+    [pollServerProgress]
+  );
+
   const runUpload = useCallback(
-    async (jobId, file) => {
+    async (job) => {
+      const jobId = job.id;
+      const uploadToken = job.uploadToken;
       try {
         const entry = await uploadFile({
           parentId: currentParentId,
-          file,
+          file: job.file,
+          uploadToken,
+          fileSize: job.file.size,
           onProgress: (loaded, total) => {
             const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
             setUploads((prev) =>
-              prev.map((job) =>
-                job.id === jobId ? { ...job, progress: percent } : job
+              prev.map((j) =>
+                j.id === jobId ? { ...j, progress: percent } : j
               )
             );
+            if (total > 0 && loaded >= total) {
+              startServerPoll(jobId, uploadToken);
+            }
           },
         });
+        stopServerPoll(jobId);
         setUploads((prev) =>
-          prev.map((job) =>
-            job.id === jobId
-              ? { ...job, status: 'done', progress: 100, entry }
-              : job
+          prev.map((j) =>
+            j.id === jobId ? { ...j, status: 'done', progress: 100, entry } : j
           )
         );
         await reload();
         await refreshQuota();
       } catch (err) {
+        stopServerPoll(jobId);
         setUploads((prev) =>
-          prev.map((job) =>
-            job.id === jobId ? { ...job, status: 'failed', error: err } : job
+          prev.map((j) =>
+            j.id === jobId ? { ...j, status: 'failed', error: err } : j
           )
         );
       }
     },
-    [currentParentId, reload, refreshQuota]
+    [
+      currentParentId,
+      reload,
+      refreshQuota,
+      startServerPoll,
+      stopServerPoll,
+    ]
   );
 
   const enqueueFiles = useCallback(
@@ -244,14 +340,17 @@ export default function DrivePage() {
       const jobs = files.map((file) => ({
         id: nextJobId++,
         file,
+        uploadToken: newUploadToken(),
         status: 'uploading',
         progress: 0,
         error: null,
         entry: null,
+        serverPhase: null,
+        serverProgress: null,
       }));
       setUploads((prev) => [...prev, ...jobs]);
       jobs.forEach((job) => {
-        runUpload(job.id, job.file);
+        runUpload(job);
       });
     },
     [runUpload]
@@ -270,18 +369,30 @@ export default function DrivePage() {
       setUploads((prev) =>
         prev.map((j) =>
           j.id === job.id
-            ? { ...j, status: 'uploading', progress: 0, error: null }
+            ? {
+                ...j,
+                status: 'uploading',
+                progress: 0,
+                error: null,
+                serverPhase: null,
+                serverProgress: null,
+              }
             : j
         )
       );
-      runUpload(job.id, job.file);
+      // Reuse the job's original token so the server resumes the same entry.
+      runUpload(job);
     },
     [runUpload]
   );
 
-  const removeUpload = useCallback((jobId) => {
-    setUploads((prev) => prev.filter((job) => job.id !== jobId));
-  }, []);
+  const removeUpload = useCallback(
+    (jobId) => {
+      stopServerPoll(jobId);
+      setUploads((prev) => prev.filter((job) => job.id !== jobId));
+    },
+    [stopServerPoll]
+  );
 
   const runMutation = useCallback(async (fn) => {
     try {
@@ -361,6 +472,7 @@ export default function DrivePage() {
       onRename: setRenameEntry,
       onMove: setMoveEntry,
       onDelete: setDeleteEntry,
+      onPreview: setPreviewEntry,
     }),
     [openFolder]
   );
@@ -377,6 +489,9 @@ export default function DrivePage() {
 
   const singleSelectedFile =
     singleSelected && singleSelected.kind !== 'folder' ? singleSelected : null;
+
+  const singleSelectedFolder =
+    singleSelected && singleSelected.kind === 'folder' ? singleSelected : null;
 
   const handleBulkDelete = useCallback(async () => {
     for (const id of [...selectedIds]) {
@@ -557,9 +672,11 @@ export default function DrivePage() {
             variant="outlined"
             size="small"
             startIcon={<FontAwesomeIcon icon={faDownload} />}
-            disabled={!singleSelectedFile}
+            disabled={!(singleSelectedFile || singleSelectedFolder)}
             onClick={() => {
-              if (singleSelectedFile) {
+              if (singleSelectedFolder) {
+                window.location.href = archiveUrl(singleSelectedFolder.id);
+              } else if (singleSelectedFile) {
                 window.location.href = downloadUrl(singleSelectedFile.id);
               }
             }}
@@ -736,6 +853,10 @@ export default function DrivePage() {
         open={shareEntry !== null}
         entry={shareEntry}
         onClose={() => setShareEntry(null)}
+      />
+      <PreviewDialog
+        entry={previewEntry}
+        onClose={() => setPreviewEntry(null)}
       />
       <Dialog
         open={deleteEntry !== null}
