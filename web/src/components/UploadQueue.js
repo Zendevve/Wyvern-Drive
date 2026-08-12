@@ -15,9 +15,11 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCircleCheck,
   faCircleXmark,
+  faStop,
   faUpload,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
+import { api } from '../api/client';
 import { reducedMotion, useSpring } from '../motion/springs';
 
 /**
@@ -124,6 +126,19 @@ function QueueJobItem({ job, removing, onRequestRemove, onRetry, onRemove }) {
   const [pulseTarget, setPulseTarget] = useState(1);
   const pulse = useSpring(pulseTarget, { response: 0.35, dampingRatio: 0.8 });
 
+  // Cancel stops the in-flight XHR, hard-purges the partial upload server-side
+  // (so nothing leaks into quota or trash), then walks the same removal flow
+  // as the dismiss button: exit animation, then onRemove.
+  const handleCancel = () => {
+    if (job.abort) {
+      job.abort();
+    }
+    if (job.uploadToken) {
+      api.uploadCancel(job.uploadToken).catch(() => {});
+    }
+    onRequestRemove(job.id);
+  };
+
   // Fire the real removal exactly once, after the exit spring has finished.
   // The ref guard keeps it to a single call even if the parent defers the
   // unmount (e.g. a no-op handler in tests).
@@ -202,6 +217,16 @@ function QueueJobItem({ job, removing, onRequestRemove, onRetry, onRemove }) {
             aria-label={`Upload progress for ${job.file.name}`}
           />
         </Box>
+      )}
+      {job.status === 'uploading' && (
+        <IconButton
+          size="small"
+          aria-label={`Cancel upload ${job.file.name}`}
+          title="Cancel upload"
+          onClick={handleCancel}
+        >
+          <FontAwesomeIcon icon={faStop} />
+        </IconButton>
       )}
       {job.status === 'failed' && (
         <Button size="small" onClick={() => onRetry(job)}>

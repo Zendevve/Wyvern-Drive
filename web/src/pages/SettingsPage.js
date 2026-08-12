@@ -15,7 +15,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTriangleExclamation, faTrashCan } from '@fortawesome/free-solid-svg-icons';
 import { useNavigate } from 'react-router-dom';
 import AppShell from '../components/AppShell';
-import QuotaMeter from '../components/QuotaMeter';
+import ErrorNotice from '../components/ErrorNotice';
+import QuotaMeter, { formatBytes } from '../components/QuotaMeter';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
 
@@ -34,6 +35,27 @@ export default function SettingsPage() {
   const [webhookUrl, setWebhookUrl] = useState('');
   const [addingWebhook, setAddingWebhook] = useState(false);
   const [removingWebhookId, setRemovingWebhookId] = useState(null);
+
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(null);
+
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    setStatsError(null);
+    try {
+      const data = await api.driveStats();
+      setStats(data || null);
+    } catch (err) {
+      setStatsError(err);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
 
   const loadWebhooks = useCallback(async () => {
     setWebhooksLoading(true);
@@ -146,6 +168,62 @@ export default function SettingsPage() {
           </Box>
           <Divider sx={{ my: 2 }} />
           <QuotaMeter drive={drive} />
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+            Drive stats
+          </Typography>
+          {statsError ? (
+            <ErrorNotice error={statsError} onRetry={loadStats} />
+          ) : statsLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <CircularProgress size={24} aria-label="Loading drive stats" />
+            </Box>
+          ) : stats ? (
+            <Box
+              data-testid="drive-stats"
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)' },
+                gap: 1.5,
+              }}
+            >
+              {[
+                { label: 'Files', value: stats.files },
+                { label: 'Folders', value: stats.folders },
+                { label: 'Logical size', value: formatBytes(stats.sizeBytes) },
+                {
+                  label: 'Stored on Discord',
+                  value: formatBytes(stats.storedBytes),
+                },
+                ...(stats.compressionRatio != null
+                  ? [
+                      {
+                        label: 'Compression ratio',
+                        value: `${stats.compressionRatio.toFixed(2)}×`,
+                      },
+                    ]
+                  : []),
+                { label: 'Webhooks', value: stats.webhooks },
+              ].map((item) => (
+                <Box
+                  key={item.label}
+                  sx={{
+                    bgcolor: 'surface1',
+                    borderRadius: '10px',
+                    px: 2,
+                    py: 1.5,
+                  }}
+                >
+                  <Typography variant="caption" color="textSecondary" component="p">
+                    {item.label}
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {item.value}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          ) : null}
         </CardContent>
       </Card>
       <Card variant="outlined" elevation={0} sx={{ maxWidth: 560, borderRadius: '20px', mt: 3 }}>

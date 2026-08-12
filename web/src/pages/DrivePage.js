@@ -17,6 +17,7 @@ import {
   IconButton,
   Paper,
   Skeleton,
+  Snackbar,
   TextField,
   Typography,
   useMediaQuery,
@@ -131,6 +132,8 @@ export default function DrivePage() {
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [renameEntry, setRenameEntry] = useState(null);
   const [moveEntry, setMoveEntry] = useState(null);
+  const [copyEntry, setCopyEntry] = useState(null);
+  const [deletedEntries, setDeletedEntries] = useState([]);
   const [deleteEntry, setDeleteEntry] = useState(null);
   const [shareEntry, setShareEntry] = useState(null);
   const [previewEntry, setPreviewEntry] = useState(null);
@@ -331,7 +334,7 @@ export default function DrivePage() {
       // the folder the user is currently viewing.
       const parentId = job.parentId == null ? currentParentId : job.parentId;
       try {
-        const entry = await uploadFile({
+        const upload = uploadFile({
           parentId,
           file: job.file,
           uploadToken,
@@ -348,6 +351,14 @@ export default function DrivePage() {
             }
           },
         });
+        // Expose the XHR abort handle on the queued job so the queue's
+        // Cancel control can stop the request in flight.
+        setUploads((prev) =>
+          prev.map((j) =>
+            j.id === jobId ? { ...j, abort: upload.abort } : j
+          )
+        );
+        const entry = await upload;
         stopServerPoll(jobId);
         setUploads((prev) =>
           prev.map((j) =>
@@ -360,7 +371,11 @@ export default function DrivePage() {
         stopServerPoll(jobId);
         setUploads((prev) =>
           prev.map((j) =>
-            j.id === jobId ? { ...j, status: 'failed', error: err } : j
+            j.id === jobId
+              ? err && err.code === 'ABORTED'
+                ? j // cancelled from the queue; the removal flow cleans up
+                : { ...j, status: 'failed', error: err }
+              : j
           )
         );
       }
@@ -386,6 +401,7 @@ export default function DrivePage() {
         file,
         parentId: parentId == null ? undefined : parentId,
         uploadToken: newUploadToken(),
+        abort: null, // attached by runUpload once the XHR exists
         status: 'uploading',
         progress: 0,
         error: null,
@@ -527,10 +543,12 @@ export default function DrivePage() {
 
   // Copy is instant server-side (chunk rows reference existing blocks), so
   // the duplicate appears immediately and quota grows by the copied bytes.
+  // The target folder comes from the copy dialog (defaults to the current
+  // parent, which reproduces the old one-click duplicate-in-place behavior).
   const handleCopy = useCallback(
-    async (entry) => {
+    async (entry, targetParentId) => {
       const ok = await runMutation(() =>
-        api.copyEntry(entry.id, currentParentId)
+        api.copyEntry(entry.id, targetParentId)
       );
       if (ok) {
         await reload();
@@ -538,7 +556,7 @@ export default function DrivePage() {
       }
       return ok;
     },
-    [runMutation, currentParentId, reload, refreshQuota]
+    [runMutation, reload, refreshQuota]
   );
 
   const confirmDelete = useCallback(async () => {
@@ -552,8 +570,31 @@ export default function DrivePage() {
       await reload();
       await refreshQuota();
       clearSelection();
+      setDeletedEntries((prev) => [...prev, entry]);
     }
   }, [deleteEntry, runMutation, reload, refreshQuota, clearSelection]);
+
+  // Undo from the "Moved to Trash" snackbar: restore every queued entry
+  // straight back to its original parent and refresh. Failures are
+  // swallowed — the Trash page remains the authoritative recovery path.
+  const handleUndoDelete = useCallback(async () => {
+    if (deletedEntries.length === 0) {
+      return;
+    }
+    const entries = deletedEntries;
+    setDeletedEntries([]);
+    await Promise.all(
+      entries.map(async (entry) => {
+        try {
+          await api.trash.restore(entry.id);
+        } catch {
+          // Best-effort restore from the snackbar.
+        }
+      })
+    );
+    await reload();
+    await refreshQuota();
+  }, [deletedEntries, reload, refreshQuota]);
 
   const actions = useMemo(
     () => ({
@@ -561,11 +602,11 @@ export default function DrivePage() {
       onShare: setShareEntry,
       onRename: setRenameEntry,
       onMove: setMoveEntry,
-      onCopy: handleCopy,
+      onCopy: setCopyEntry,
       onDelete: setDeleteEntry,
       onPreview: setPreviewEntry,
     }),
-    [openFolder, handleCopy]
+    [openFolder]
   );
 
   // Exactly one selected entry (if any) — the object the single-item
@@ -856,6 +897,16 @@ export default function DrivePage() {
       >
         <Breadcrumbs trail={trail} onNavigate={navigateTo} />
 
+        {search && (
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 600, mb: 1 }}
+            data-testid="search-results-header"
+          >
+            Search results for &quot;{search}&quot;
+          </Typography>
+        )}
+
         {entriesError && <ErrorNotice error={entriesError} onRetry={reload} />}
 
         {entriesLoading ? (
@@ -965,9 +1016,18 @@ export default function DrivePage() {
       <MoveDialog
         open={moveEntry !== null}
         entry={moveEntry}
+        mode="move"
         currentParentId={moveEntry ? moveEntry.parentId : null}
         onClose={() => setMoveEntry(null)}
         onMove={handleMove}
+      />
+      <MoveDialog
+        open={copyEntry !== null}
+        entry={copyEntry}
+        mode="copy"
+        currentParentId={copyEntry ? currentParentId : null}
+        onClose={() => setCopyEntry(null)}
+        onMove={handleCopy}
       />
       <ShareDialog
         open={shareEntry !== null}
@@ -1003,6 +1063,23 @@ export default function DrivePage() {
           </Button>
         </DialogActions>
       </Dialog>
+      <Snackbar
+        open={deletedEntries.length > 0}
+        autoHideDuration={5000}
+        onClose={() => setDeletedEntries([])}
+        message={`Moved ${deletedEntries.length} item${deletedEntries.length > 1 ? 's' : ''} to Trash`}
+        action={
+          <Button
+            color="secondary"
+            size="small"
+            onClick={handleUndoDelete}
+            data-testid="undo-delete"
+          >
+            Undo
+          </Button>
+        }
+        data-testid="delete-snackbar"
+      />
     </AppShell>
   );
 }

@@ -174,6 +174,84 @@ describe('api client', () => {
     expect(seen.get('parentId')).toBe('3');
   });
 
+  it('exposes an abort handle that rejects the upload with ABORTED', async () => {
+    class FakeXHR {
+      constructor() {
+        this.upload = {};
+      }
+      open() {}
+      setRequestHeader() {}
+      send() {
+        // The browser drops the request when abort() is called.
+        if (this.aborted) {
+          this.onabort();
+        }
+      }
+      abort() {
+        this.aborted = true;
+        this.onabort();
+      }
+    }
+    global.XMLHttpRequest = FakeXHR;
+
+    const upload = uploadFile({
+      parentId: null,
+      file: new File(['hello'], 'a.txt', { type: 'text/plain' }),
+    });
+    expect(typeof upload.abort).toBe('function');
+
+    const errPromise = upload.catch((e) => e);
+    upload.abort();
+    const err = await errPromise;
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(0);
+    expect(err.code).toBe('ABORTED');
+    expect(err.message).toBe('Upload cancelled');
+  });
+
+  it('cancels an upload server-side and fetches drive stats', async () => {
+    document.cookie = 'wyvern_csrf=csrf-token-abc';
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({ status: 204, ok: true, text: async () => '' })
+      .mockResolvedValueOnce({
+        status: 200,
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            files: 2,
+            folders: 1,
+            sizeBytes: 102400,
+            storedBytes: 400,
+            blocks: 2,
+            messages: 1,
+            webhooks: 1,
+            compressionRatio: 256,
+          }),
+      });
+
+    const cancelResult = await api.uploadCancel('tok/with space');
+    expect(fetch.mock.calls[0][0]).toBe(
+      '/api/uploads/tok%2Fwith%20space/cancel'
+    );
+    expect(fetch.mock.calls[0][1].method).toBe('POST');
+    expect(fetch.mock.calls[0][1].headers['X-CSRF-Token']).toBe('csrf-token-abc');
+    expect(cancelResult).toBeNull();
+
+    const stats = await api.driveStats();
+    expect(fetch.mock.calls[1][0]).toBe('/api/drive/stats');
+    expect(stats).toEqual({
+      files: 2,
+      folders: 1,
+      sizeBytes: 102400,
+      storedBytes: 400,
+      blocks: 2,
+      messages: 1,
+      webhooks: 1,
+      compressionRatio: 256,
+    });
+  });
+
   it('builds download and archive URLs for inline previews and folder zips', () => {
     expect(downloadUrl(7)).toBe('/api/files/7/download');
     expect(downloadUrl(7, { inline: true })).toBe(

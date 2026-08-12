@@ -83,10 +83,34 @@ owned by each authenticated user.
 The suite never contacts Discord: tests boot a full app on a random port with an in-memory SQLite database, a stubbed OAuth `fetch`, and fake Discord storage adapters, and exercise the HTTP API with real `fetch` requests (multipart uploads, cookies, CSRF). One integration file runs the real webhook adapter against an injected fake Discord REST surface, covering validation, 429 retry, CDN fetch, packed multi-attachment posts, and cleanup. The encrypted round-trip fixture is verified byte-for-byte against the original SHA-256 digest, including multi-chunk files packed 10-per-message.
 
 ```powershell
-npm test   # 125 tests
+npm test   # 136 tests
 ```
 
 Coverage includes: config validation and setup diagnostics (missing variables, malformed redirect URI, non-32-byte key, no secret leakage, fatal `PORT`, compression/retention/webhook-cap bounds), setup-mode process behavior (status contract, hidden protected routes, DB parent directory creation), migrations (the 002 drives rebuild preserving legacy channels, 003 upload-resume columns, and 004 block store + trash: webhook/content-block tables, backfills, and the live-only partial unique index), OAuth state/session/CSRF, per-user webhook configuration (first-time 201, append 200, invalid and legacy drives, cap 409 `WEBHOOK_LIMIT`), folders/list/search/sort, rename/move/copy rules, content dedup (identical uploads share block rows with no Discord I/O), instant file and folder copy, multi-webhook round-robin fan-out with in-use removal blocked (409 `WEBHOOK_IN_USE`), the trash lifecycle (soft delete, restore, retention sweep, purge with block refcounting), per-chunk compression (deflate ciphertext smaller than plaintext, `none` when disabled), encrypted multi-chunk upload/download round-trip, chunk packing (10/10/5 batches), resumable uploads (token reuse, partial-batch retention, no duplicate messages), HTTP Range downloads (206 slicing, suffix/open-ended ranges, unsatisfiable fallback), upload progress endpoints, folder ZIP archives, quota rejection (413), kept failed uploads and `usedBytes` accounting, share metadata/expiry/revocation with identical 404s, ownership isolation, rate limits, and exact API JSON shapes.
+
+## API notes (polish-wave surface)
+
+- **Global search**: `GET /api/entries?query=…` searches the whole drive.
+  When `query` is a non-empty string the parent scope is dropped entirely
+  (the parent is not resolved, so a stale/unknown `parentId` cannot 404 a
+  search); an empty query keeps the folder scope and its 404-on-unknown-
+  parent behavior.
+- **Upload cancellation**: `POST /api/uploads/:uploadToken/cancel` (CSRF +
+  auth) hard-purges the partial upload — entry, posted chunks, and the now
+  dead Discord messages — and responds 204. Entries whose status is
+  `uploading` or `failed` can be cancelled; a ready entry's token (upload
+  already committed) or an unknown token is 404 `NOT_FOUND`.
+- **Drive stats**: `GET /api/drive/stats` (auth) returns
+  `{ files, folders, sizeBytes, storedBytes, blocks, messages, webhooks,
+  compressionRatio }`. `sizeBytes` is the logical byte count over file
+  entries (ready/uploading/failed, trashed included); `files`/`folders` are
+  live (non-trashed) counts; `storedBytes` is the real Discord footprint
+  over `content_blocks`; `compressionRatio` is null on an empty drive, 0
+  when no blocks are stored, else `sizeBytes / storedBytes`.
+- **Boot retention sweep**: after the server starts listening, expired trash
+  (`deleted_at` older than `WYVERN_TRASH_RETENTION_DAYS`) is purged for every
+  drive, fire-and-forget with per-drive guards so a storage outage never
+  delays boot.
 
 ## Manual smoke path (configured Discord)
 
@@ -97,14 +121,16 @@ Prerequisite: a real Discord application (OAuth2 only) as in Setup.
 3. Create a private Discord server; in Server Settings → Integrations, create a webhook and paste its URL into the connect page. Repeat the webhook setup from Settings → Storage to add a second webhook; uploads now round-robin across both.
 4. Create a folder.
 5. Upload a file larger than `WYVERN_CHUNK_SIZE_BYTES` (default 2 MiB) so it splits into multiple encrypted chunks. Upload the same file again under a different name and confirm it lands instantly (content dedup). Copy a file or folder and confirm the copy is instant (shared blocks).
-6. Refresh — the file must survive; search for it by name.
+6. Refresh — the file must survive; search for it by name from the root and
+   from inside a different folder: a query searches the whole drive.
 7. Download it and compare the SHA-256 digest: `certutil -hashfile downloaded.bin SHA256` must equal the local file's.
 8. Rename it, then move it into the folder.
 9. Create a share URL; open it in a private browser window — the share page shows name/size/MIME and downloads via `/s/<token>`.
 10. Revoke the share and confirm the share URL now returns 404.
 11. Delete a file: it moves to Trash (no Discord I/O — the encrypted message stays in the webhook's channel). Restore it from the Trash page, delete it again, then "Delete forever" and confirm the encrypted message disappears from the Discord channel. Expired trash is swept automatically after `WYVERN_TRASH_RETENTION_DAYS` (default 30).
-12. In Discord, open the webhook's channel: it contains only encrypted chunk messages (no readable plaintext).
-13. In the browser network log, confirm no webhook URL, raw Discord attachment URL, message ID, or encryption key ever appears. No extension installation is required.
+12. Open Settings → Drive stats: files, folders, logical size, stored-on-Discord size, compression ratio, and webhooks reflect the drive's usage.
+13. In Discord, open the webhook's channel: it contains only encrypted chunk messages (no readable plaintext).
+14. In the browser network log, confirm no webhook URL, raw Discord attachment URL, message ID, or encryption key ever appears. No extension installation is required.
 
 ## Layout
 
@@ -122,9 +148,10 @@ src/storage/discord-webhook-storage.js webhook credential adapter (validate/seal
 src/services/file-service.js  transactional file lifecycle + AES-256-GCM chunk crypto (dedup block store, compression, packed uploads, resume, Range streams, trash, copy)
 src/http/                     app composition, middleware, and route modules
 src/http/storage-routes.js    POST /api/storage/webhook (create drive on first use, append), GET /api/storage/webhooks, DELETE /api/storage/webhooks/:id
+src/http/drive-routes.js      GET /api/drive (quota summary), GET /api/drive/stats (usage dashboard)
 src/http/trash-routes.js      GET /api/trash (lazy retention sweep), POST /api/trash/:id/restore, DELETE /api/trash/:id (purge)
-src/http/file-routes.js       POST /api/files/upload (uploadToken/fileSize), GET /api/files/:id/download (Range + ?inline=1), shares
-src/http/entry-routes.js      GET/PATCH/DELETE (soft) /api/entries/:id, POST /api/entries/:id/copy, GET /api/entries/:id/archive (ZIP)
+src/http/file-routes.js       POST /api/files/upload (uploadToken/fileSize), GET /api/files/:id/download (Range + ?inline=1), POST /api/uploads/:uploadToken/cancel (abort purge), GET /api/uploads/:uploadToken (progress), shares
+src/http/entry-routes.js      GET /api/entries (list; `query` searches the whole drive), PATCH/DELETE (soft) /api/entries/:id, POST /api/entries/:id/copy, GET /api/entries/:id/archive (ZIP)
 src/http/setup-status.js      read-only first-run status contract (mounted in full and setup apps)
 src/http/setup-app.js         limited setup-mode app (status + SPA only)
 test/                         node:test suite with fake Discord adapters

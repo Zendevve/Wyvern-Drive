@@ -43,7 +43,17 @@ The `refs/` directories remain read-only prior art, not runtime behavior.
   folder tree)
 - **Recycle bin**: delete moves entries to trash (no Discord I/O); restore,
   delete-forever, and a lazy retention sweep (`WYVERN_TRASH_RETENTION_DAYS`,
-  default 30) purge expired trash automatically
+  default 30) purge expired trash automatically (also run once at boot)
+- **Global search**: a query searches the whole drive, not just the open
+  folder — the folder scope is skipped for searches, so results come from
+  every folder and a stale parent cannot 404 a search; empty queries stay
+  folder-scoped
+- **Upload cancellation**: in-flight uploads can be cancelled from the
+  floating queue — the XHR aborts and the partial upload (entry + posted
+  chunks + now-dead Discord messages) is hard-purged server-side, so nothing
+  leaks into quota or trash
+- **Drive stats**: a usage dashboard in Settings (files, folders, logical
+  size, stored-on-Discord size, compression ratio, webhooks)
 - Server-backed search and sort
 - Anonymous read-only share links with optional expiry and revocation
 - Cloud-service-style UI (Google Drive / Dropbox / Mega flow): desktop list + grid views, row/card selection with bulk actions, hover-revealed actions, drag-and-drop upload, floating upload progress manager; responsive (desktop table/grid, mobile cards)
@@ -143,8 +153,8 @@ server behind your reverse proxy with HTTPS.
 ## Testing
 
 ```sh
-cd server && npm test   # 125 tests: in-memory SQLite + fake Discord adapters
-cd web && npm test      # 91 tests: mocked API client
+cd server && npm test   # 136 tests: in-memory SQLite + fake Discord adapters
+cd web && npm test      # 100 tests: mocked API client
 ```
 
 Server tests never contact Discord: OAuth fetch is stubbed and the storage
@@ -154,9 +164,10 @@ encrypted round-trip fixture verified byte-for-byte against its SHA-256
 digest, 10-per-message chunk packing, content dedup, instant copy, multi-webhook
 round-robin, per-chunk compression, the full trash lifecycle (delete, restore,
 retention sweep, purge with block refcounting), resumable uploads, HTTP Range
-slicing, upload progress, folder ZIP archives, webhook cap enforcement, and
+slicing, upload progress, folder ZIP archives, webhook cap enforcement,
 setup-mode diagnostics (status contract, no-secret-leak assertions, hidden
-protected routes, file-backed `DB_URL` parent creation).
+protected routes, file-backed `DB_URL` parent creation), global drive search,
+upload cancellation, drive stats, and the boot-time trash retention sweep.
 
 ## Manual smoke path (configured Discord)
 

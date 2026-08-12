@@ -112,6 +112,18 @@ function createFileService({ db, repositories, discordStorage, config }) {
   // Round-robin position per drive across its webhooks (persists across
   // uploads so traffic keeps spreading evenly).
   const webhookCursors = new Map();
+  // Serialize upload-vs-cancel per upload token (and purge per entry): the
+  // cancel endpoint must never interleave with an upload's flush so partial
+  // chunks/blocks can't be orphaned or a committed entry wiped.
+  const entryLocks = new Map(); // key -> promise chain tail
+  function withEntryLock(key, fn) {
+    const prev = entryLocks.get(key) || Promise.resolve();
+    const run = prev.then(fn);
+    const tail = run.catch(() => {});
+    entryLocks.set(key, tail);
+    tail.then(() => { if (entryLocks.get(key) === tail) entryLocks.delete(key); });
+    return run;
+  }
 
   /**
    * Fetch, decrypt, hash-verify, decompress, and range-slice one chunk. The
@@ -235,13 +247,19 @@ function createFileService({ db, repositories, discordStorage, config }) {
 
   return {
     async listEntries({ drive, parentId, query, kind, sort, direction }) {
-      await resolveParent(repositories, drive, parentId);
+      const search = typeof query === 'string' && query.length > 0;
+      // Global search spans the whole drive; the folder-scope resolution is
+      // skipped so a stale/unknown parentId can never 404 a search.
+      if (!search) {
+        await resolveParent(repositories, drive, parentId);
+      }
       const normalizedSort = ['name', 'size', 'createdAt', 'updatedAt'].includes(sort) ? sort : 'name';
       const normalizedDirection = direction === 'desc' ? 'desc' : 'asc';
       const normalizedKind = ['file', 'folder', 'all'].includes(kind) ? kind : 'all';
       const rows = await repositories.listEntries(drive.id, {
         parentId,
         query: typeof query === 'string' ? query : '',
+        search,
         kind: normalizedKind,
         sort: normalizedSort,
         direction: normalizedDirection,
@@ -273,194 +291,203 @@ function createFileService({ db, repositories, discordStorage, config }) {
 
       const token = typeof uploadToken === 'string' && uploadToken.length > 0 ? uploadToken : null;
 
-      // A client upload token resumes the owning uploading/failed entry: the
-      // row and its name are reused and only missing ordinals are posted. A
-      // token bound to a ready entry (or no token at all) is a fresh upload.
-      let entry = null;
-      let resume = false;
-      if (token) {
-        const existing = await repositories.getEntryByUploadToken(drive.id, token);
-        if (existing && existing.kind === 'file' && (existing.status === 'uploading' || existing.status === 'failed')) {
-          entry = existing;
-          resume = true;
-        }
-      }
-
-      const usedBytes = await repositories.sumUsedBytes(drive.id);
-      const finalName = resume ? entry.name : await this.uniqueSiblingName(drive.id, parentId, filename);
-
-      const expectedSize =
-        expectedSizeBytes !== undefined && expectedSizeBytes !== null && expectedSizeBytes !== ''
-          ? Number(expectedSizeBytes)
-          : NaN;
-      const normalizedExpectedSize = Number.isInteger(expectedSize) && expectedSize >= 0 ? expectedSize : null;
-
-      if (!resume) {
-        try {
-          entry = await repositories.insertEntry({
-            driveId: drive.id,
-            parentId,
-            kind: 'file',
-            name: finalName,
-            sizeBytes: 0,
-            mimeType: mimeType || 'application/octet-stream',
-            status: 'uploading',
-            uploadToken: token,
-            expectedSizeBytes: normalizedExpectedSize,
-          });
-        } catch (err) {
-          if (err && err.code) throw err;
-          throw new WyvernError('UPLOAD_FAILED', 'Failed to create upload record');
-        }
-      }
-
-      const skipOrdinals = new Set();
-      if (resume) {
-        const posted = await repositories.getPendingChunks(entry.id);
-        for (const row of posted) skipOrdinals.add(row.ordinal);
-      }
-
-      let bytesRead = 0; // plaintext consumed from the stream (final size_bytes)
-      let newBytes = 0; // plaintext newly posted this run (quota; dedup/skips excluded)
-      let ordinal = 0;
-      const inFlight = [];
-      const pendingByWebhook = new Map(); // webhook.id -> { webhook, chunks: [] }
-      let webhookList = null; // refreshed once per uploadFile call, on first miss
-      let cursor = webhookCursors.get(drive.id) || 0;
-
-      /** Round-robin webhook for a fresh block; STORAGE_UNAVAILABLE when none. */
-      const nextWebhook = async () => {
-        if (webhookList === null) {
-          webhookList = await repositories.listWebhooks(drive.id);
-          if (webhookList.length === 0) {
-            throw new WyvernError('STORAGE_UNAVAILABLE', 'Drive has no configured webhooks');
+      // From entry resolution through the final ready/failed marker, the body
+      // below is serialized per upload token so the cancel endpoint can never
+      // interleave with an upload's flush: a cancel either runs before any
+      // chunk is posted or after the entry committed or marked failed.
+      const runUpload = async () => {
+        // A client upload token resumes the owning uploading/failed entry: the
+        // row and its name are reused and only missing ordinals are posted. A
+        // token bound to a ready entry (or no token at all) is a fresh upload.
+        let entry = null;
+        let resume = false;
+        if (token) {
+          const existing = await repositories.getEntryByUploadToken(drive.id, token);
+          if (existing && existing.kind === 'file' && (existing.status === 'uploading' || existing.status === 'failed')) {
+            entry = existing;
+            resume = true;
           }
         }
-        const webhook = webhookList[cursor % webhookList.length];
-        cursor += 1;
-        webhookCursors.set(drive.id, cursor);
-        return webhook;
-      };
 
-      /**
-       * Post one webhook's pending batch to Discord and insert its block +
-       * chunk rows only after the post succeeds. Apply upload backpressure:
-       * once `uploadConcurrency` batches are in flight, wait for the oldest
-       * before reading more stream.
-       */
-      const flushWebhook = (webhookId) => {
-        const holder = pendingByWebhook.get(webhookId);
-        if (!holder || holder.chunks.length === 0) return Promise.resolve();
-        const toPost = holder.chunks;
-        holder.chunks = [];
-        const promise = (async () => {
-          const results = await discordStorage.putChunks(
-            holder.webhook,
-            toPost.map((chunk) => ({
-              filename: `chunk-${chunk.ordinal}.bin`,
-              encryptedBuffer: chunk.cipher,
-              ordinal: chunk.ordinal,
-            }))
-          );
-          const messageIdByOrdinal = new Map(results.map((r) => [r.ordinal, r.messageId]));
-          for (const chunk of toPost) {
-            const block = await repositories.insertBlock({
+        const usedBytes = await repositories.sumUsedBytes(drive.id);
+        const finalName = resume ? entry.name : await this.uniqueSiblingName(drive.id, parentId, filename);
+
+        const expectedSize =
+          expectedSizeBytes !== undefined && expectedSizeBytes !== null && expectedSizeBytes !== ''
+            ? Number(expectedSizeBytes)
+            : NaN;
+        const normalizedExpectedSize = Number.isInteger(expectedSize) && expectedSize >= 0 ? expectedSize : null;
+
+        if (!resume) {
+          try {
+            entry = await repositories.insertEntry({
               driveId: drive.id,
-              contentHash: chunk.checksum,
-              messageId: messageIdByOrdinal.get(chunk.ordinal),
-              webhookId: holder.webhook.id,
-              plainSizeBytes: chunk.plain.length,
-              cipherSizeBytes: chunk.cipher.length,
-              nonce: chunk.nonce,
-              authTag: chunk.authTag,
-              compression: compressEnabled ? 'deflate' : 'none',
+              parentId,
+              kind: 'file',
+              name: finalName,
+              sizeBytes: 0,
+              mimeType: mimeType || 'application/octet-stream',
+              status: 'uploading',
+              uploadToken: token,
+              expectedSizeBytes: normalizedExpectedSize,
             });
-            await repositories.insertChunk({ entryId: entry.id, ordinal: chunk.ordinal, blockId: block.id });
+          } catch (err) {
+            if (err && err.code) throw err;
+            throw new WyvernError('UPLOAD_FAILED', 'Failed to create upload record');
           }
-        })();
-        // Mark handled immediately: a batch that rejects while other batches
-        // are still draining must not surface as an unhandled rejection; the
-        // error still propagates through the awaited oldest batch / final
-        // Promise.all below.
-        promise.catch(() => {});
-        inFlight.push(promise);
-        if (inFlight.length >= config.uploadConcurrency) {
-          return inFlight.shift();
         }
-        return Promise.resolve();
-      };
 
-      /**
-       * One plaintext chunk: identical content already stored for this drive
-       * reuses its block with no Discord I/O; a miss is encrypted and batched
-       * to its round-robin webhook. Dedup hits and skipped ordinals count
-       * toward size_bytes but never toward newBytes/quota.
-       */
-      const processChunk = async (plain, ordinal) => {
-        const stored = compressEnabled ? zlib.deflateSync(plain) : plain;
-        const contentHash = sha256hex(stored);
-        const existing = await repositories.getBlockByContentHash(drive.id, contentHash);
-        if (existing) {
-          await repositories.insertChunk({ entryId: entry.id, ordinal, blockId: existing.id });
-          return;
+        const skipOrdinals = new Set();
+        if (resume) {
+          const posted = await repositories.getPendingChunks(entry.id);
+          for (const row of posted) skipOrdinals.add(row.ordinal);
         }
-        const webhook = await nextWebhook();
-        const { cipher, nonce, authTag } = encryptChunk(stored, encryptionKey);
-        newBytes += plain.length;
-        this.assertQuota(usedBytes, newBytes, drive.quota_bytes);
-        let holder = pendingByWebhook.get(webhook.id);
-        if (!holder) {
-          holder = { webhook, chunks: [] };
-          pendingByWebhook.set(webhook.id, holder);
-        }
-        holder.chunks.push({ plain, cipher, nonce, authTag, checksum: contentHash, ordinal });
-        if (holder.chunks.length >= effectiveChunksPerMessage) {
-          await flushWebhook(webhook.id);
-        }
-      };
 
-      try {
-        let pending = Buffer.alloc(0);
-        for await (const data of fileStream) {
-          pending = pending.length > 0 ? Buffer.concat([pending, data]) : data;
-          while (pending.length >= chunkSizeBytes) {
-            const chunk = pending.subarray(0, chunkSizeBytes);
-            pending = pending.subarray(chunkSizeBytes);
-            bytesRead += chunk.length;
+        let bytesRead = 0; // plaintext consumed from the stream (final size_bytes)
+        let newBytes = 0; // plaintext newly posted this run (quota; dedup/skips excluded)
+        let ordinal = 0;
+        const inFlight = [];
+        const pendingByWebhook = new Map(); // webhook.id -> { webhook, chunks: [] }
+        let webhookList = null; // refreshed once per uploadFile call, on first miss
+        let cursor = webhookCursors.get(drive.id) || 0;
+
+        /** Round-robin webhook for a fresh block; STORAGE_UNAVAILABLE when none. */
+        const nextWebhook = async () => {
+          if (webhookList === null) {
+            webhookList = await repositories.listWebhooks(drive.id);
+            if (webhookList.length === 0) {
+              throw new WyvernError('STORAGE_UNAVAILABLE', 'Drive has no configured webhooks');
+            }
+          }
+          const webhook = webhookList[cursor % webhookList.length];
+          cursor += 1;
+          webhookCursors.set(drive.id, cursor);
+          return webhook;
+        };
+
+        /**
+         * Post one webhook's pending batch to Discord and insert its block +
+         * chunk rows only after the post succeeds. Apply upload backpressure:
+         * once `uploadConcurrency` batches are in flight, wait for the oldest
+         * before reading more stream.
+         */
+        const flushWebhook = (webhookId) => {
+          const holder = pendingByWebhook.get(webhookId);
+          if (!holder || holder.chunks.length === 0) return Promise.resolve();
+          const toPost = holder.chunks;
+          holder.chunks = [];
+          const promise = (async () => {
+            const results = await discordStorage.putChunks(
+              holder.webhook,
+              toPost.map((chunk) => ({
+                filename: `chunk-${chunk.ordinal}.bin`,
+                encryptedBuffer: chunk.cipher,
+                ordinal: chunk.ordinal,
+              }))
+            );
+            const messageIdByOrdinal = new Map(results.map((r) => [r.ordinal, r.messageId]));
+            for (const chunk of toPost) {
+              const block = await repositories.insertBlock({
+                driveId: drive.id,
+                contentHash: chunk.checksum,
+                messageId: messageIdByOrdinal.get(chunk.ordinal),
+                webhookId: holder.webhook.id,
+                plainSizeBytes: chunk.plain.length,
+                cipherSizeBytes: chunk.cipher.length,
+                nonce: chunk.nonce,
+                authTag: chunk.authTag,
+                compression: compressEnabled ? 'deflate' : 'none',
+              });
+              await repositories.insertChunk({ entryId: entry.id, ordinal: chunk.ordinal, blockId: block.id });
+            }
+          })();
+          // Mark handled immediately: a batch that rejects while other batches
+          // are still draining must not surface as an unhandled rejection; the
+          // error still propagates through the awaited oldest batch / final
+          // Promise.all below.
+          promise.catch(() => {});
+          inFlight.push(promise);
+          if (inFlight.length >= config.uploadConcurrency) {
+            return inFlight.shift();
+          }
+          return Promise.resolve();
+        };
+
+        /**
+         * One plaintext chunk: identical content already stored for this drive
+         * reuses its block with no Discord I/O; a miss is encrypted and batched
+         * to its round-robin webhook. Dedup hits and skipped ordinals count
+         * toward size_bytes but never toward newBytes/quota.
+         */
+        const processChunk = async (plain, ordinal) => {
+          const stored = compressEnabled ? zlib.deflateSync(plain) : plain;
+          const contentHash = sha256hex(stored);
+          const existing = await repositories.getBlockByContentHash(drive.id, contentHash);
+          if (existing) {
+            await repositories.insertChunk({ entryId: entry.id, ordinal, blockId: existing.id });
+            return;
+          }
+          const webhook = await nextWebhook();
+          const { cipher, nonce, authTag } = encryptChunk(stored, encryptionKey);
+          newBytes += plain.length;
+          this.assertQuota(usedBytes, newBytes, drive.quota_bytes);
+          let holder = pendingByWebhook.get(webhook.id);
+          if (!holder) {
+            holder = { webhook, chunks: [] };
+            pendingByWebhook.set(webhook.id, holder);
+          }
+          holder.chunks.push({ plain, cipher, nonce, authTag, checksum: contentHash, ordinal });
+          if (holder.chunks.length >= effectiveChunksPerMessage) {
+            await flushWebhook(webhook.id);
+          }
+        };
+
+        try {
+          let pending = Buffer.alloc(0);
+          for await (const data of fileStream) {
+            pending = pending.length > 0 ? Buffer.concat([pending, data]) : data;
+            while (pending.length >= chunkSizeBytes) {
+              const chunk = pending.subarray(0, chunkSizeBytes);
+              pending = pending.subarray(chunkSizeBytes);
+              bytesRead += chunk.length;
+              if (!skipOrdinals.has(ordinal)) {
+                await processChunk(chunk, ordinal);
+              }
+              ordinal += 1;
+            }
+          }
+          if (pending.length > 0) {
+            bytesRead += pending.length;
             if (!skipOrdinals.has(ordinal)) {
-              await processChunk(chunk, ordinal);
+              await processChunk(pending, ordinal);
             }
             ordinal += 1;
           }
-        }
-        if (pending.length > 0) {
-          bytesRead += pending.length;
-          if (!skipOrdinals.has(ordinal)) {
-            await processChunk(pending, ordinal);
+          // Flush each webhook's remaining batch, then drain every in-flight post.
+          for (const webhookId of pendingByWebhook.keys()) {
+            await flushWebhook(webhookId);
           }
-          ordinal += 1;
-        }
-        // Flush each webhook's remaining batch, then drain every in-flight post.
-        for (const webhookId of pendingByWebhook.keys()) {
-          await flushWebhook(webhookId);
-        }
-        await Promise.all(inFlight);
+          await Promise.all(inFlight);
 
-        const ready = await repositories.updateEntry(entry.id, { size_bytes: bytesRead, status: 'ready' });
-        return toEntryJson(ready);
-      } catch (err) {
-        // Keep the entry row and every posted chunk so the upload can resume;
-        // just mark the entry failed. Drain in-flight batches so no promise
-        // is left unobserved.
-        await Promise.allSettled(inFlight);
-        try {
-          await repositories.updateEntry(entry.id, { status: 'failed' });
-        } catch (updateErr) {
-          // Row vanished mid-upload; nothing left to mark.
+          const ready = await repositories.updateEntry(entry.id, { size_bytes: bytesRead, status: 'ready' });
+          return toEntryJson(ready);
+        } catch (err) {
+          // Keep the entry row and every posted chunk so the upload can resume;
+          // just mark the entry failed. Drain in-flight batches so no promise
+          // is left unobserved.
+          await Promise.allSettled(inFlight);
+          try {
+            await repositories.updateEntry(entry.id, { status: 'failed' });
+          } catch (updateErr) {
+            // Row vanished mid-upload; nothing left to mark.
+          }
+          if (err && err.code) throw err;
+          throw new WyvernError('UPLOAD_FAILED', 'Upload failed');
         }
-        if (err && err.code) throw err;
-        throw new WyvernError('UPLOAD_FAILED', 'Upload failed');
-      }
+
+      };
+
+      return token ? withEntryLock('upload:' + token, runUpload) : runUpload();
     },
 
     assertQuota(usedBytes, bytesRead, quotaBytes) {
@@ -589,75 +616,97 @@ function createFileService({ db, repositories, discordStorage, config }) {
      * rows whose deleted_at is still NULL.
      */
     async purgeEntry({ drive, entryId }) {
-      const entry = await repositories.getEntryById(entryId);
-      if (!entry || entry.drive_id !== drive.id) throw httpError('NOT_FOUND');
+      // Defense in depth: serialize purges per entry id so a purge never
+      // interleaves with an upload or another purge on the same subtree.
+      await withEntryLock('entry:' + entryId, async () => {
+        const entry = await repositories.getEntryById(entryId);
+        if (!entry || entry.drive_id !== drive.id) throw httpError('NOT_FOUND');
 
-      await repositories.markSubtreeDeleting(drive.id, entryId);
-      const deadBlocks = new Set();
-      const fileRows = await repositories.getSubtreeFiles(drive.id, entryId);
-      try {
-        for (const fileRow of fileRows) {
-          const chunks = await repositories.getPendingChunks(fileRow.id);
-          // Rows packed into one Discord message share its id and webhook;
-          // group them so the message is deleted exactly when every block it
-          // backs is dead.
-          const byMessageId = new Map();
-          for (const chunk of chunks) {
-            let group = byMessageId.get(chunk.message_id);
-            if (!group) {
-              group = [];
-              byMessageId.set(chunk.message_id, group);
-            }
-            group.push(chunk);
-          }
-          for (const [messageId, group] of byMessageId) {
-            const refsByBlock = new Map();
-            for (const chunk of group) {
-              refsByBlock.set(chunk.block_id, (refsByBlock.get(chunk.block_id) || 0) + 1);
-            }
-            // Block liveness after this entry's rows for the message go away.
-            let allDead = true;
-            for (const [blockId, ownRefs] of refsByBlock) {
-              const liveRefs = await repositories.countLiveBlockRefs(blockId);
-              if (liveRefs - ownRefs > 0) {
-                allDead = false;
-                break;
+        await repositories.markSubtreeDeleting(drive.id, entryId);
+        const deadBlocks = new Set();
+        const fileRows = await repositories.getSubtreeFiles(drive.id, entryId);
+        try {
+          for (const fileRow of fileRows) {
+            const chunks = await repositories.getPendingChunks(fileRow.id);
+            // Rows packed into one Discord message share its id and webhook;
+            // group them so the message is deleted exactly when every block it
+            // backs is dead.
+            const byMessageId = new Map();
+            for (const chunk of chunks) {
+              let group = byMessageId.get(chunk.message_id);
+              if (!group) {
+                group = [];
+                byMessageId.set(chunk.message_id, group);
               }
+              group.push(chunk);
             }
-            const webhook = {
-              id: group[0].webhook_id,
-              webhook_ciphertext: group[0].webhook_ciphertext,
-              webhook_nonce: group[0].webhook_nonce,
-              webhook_auth_tag: group[0].webhook_auth_tag,
-            };
-            if (allDead) {
-              await discordStorage.deleteChunk(webhook, messageId);
+            for (const [messageId, group] of byMessageId) {
+              const refsByBlock = new Map();
               for (const chunk of group) {
-                await repositories.markChunkDeleted(chunk.id);
+                refsByBlock.set(chunk.block_id, (refsByBlock.get(chunk.block_id) || 0) + 1);
               }
-              for (const blockId of refsByBlock.keys()) {
-                deadBlocks.add(blockId);
+              // Block liveness after this entry's rows for the message go away.
+              let allDead = true;
+              for (const [blockId, ownRefs] of refsByBlock) {
+                const liveRefs = await repositories.countLiveBlockRefs(blockId);
+                if (liveRefs - ownRefs > 0) {
+                  allDead = false;
+                  break;
+                }
               }
-            } else {
-              // Shared with another entry: the message stays; drop only this
-              // entry's rows so the other entry keeps its blocks.
-              for (const chunk of group) {
-                await repositories.markChunkDeleted(chunk.id);
+              const webhook = {
+                id: group[0].webhook_id,
+                webhook_ciphertext: group[0].webhook_ciphertext,
+                webhook_nonce: group[0].webhook_nonce,
+                webhook_auth_tag: group[0].webhook_auth_tag,
+              };
+              if (allDead) {
+                await discordStorage.deleteChunk(webhook, messageId);
+                for (const chunk of group) {
+                  await repositories.markChunkDeleted(chunk.id);
+                }
+                for (const blockId of refsByBlock.keys()) {
+                  deadBlocks.add(blockId);
+                }
+              } else {
+                // Shared with another entry: the message stays; drop only this
+                // entry's rows so the other entry keeps its blocks.
+                for (const chunk of group) {
+                  await repositories.markChunkDeleted(chunk.id);
+                }
               }
             }
           }
+        } catch (err) {
+          // Subtree stays in 'deleting' state; a later purge retries only the
+          // chunks whose deleted_at is still NULL.
+          throw new WyvernError('STORAGE_UNAVAILABLE', 'Remote chunk deletion failed');
         }
-      } catch (err) {
-        // Subtree stays in 'deleting' state; a later purge retries only the
-        // chunks whose deleted_at is still NULL.
-        throw new WyvernError('STORAGE_UNAVAILABLE', 'Remote chunk deletion failed');
-      }
-      await repositories.deleteRecursive(drive.id, entryId);
-      // Block rows drop only after their referencing chunk rows are gone (the
-      // recursive delete cascades them away); FK enforcement forbids earlier.
-      for (const blockId of deadBlocks) {
-        await repositories.deleteBlock(blockId);
-      }
+        await repositories.deleteRecursive(drive.id, entryId);
+        // Block rows drop only after their referencing chunk rows are gone (the
+        // recursive delete cascades them away); FK enforcement forbids earlier.
+        for (const blockId of deadBlocks) {
+          await repositories.deleteBlock(blockId);
+        }
+
+      });
+    },
+
+    /**
+     * Cancel a resumable upload: hard-purge the partial entry plus its posted
+     * chunks and Discord messages. Runs under the same per-token lock as
+     * uploadFile, so it can never interleave with an in-flight flush: a
+     * committed entry is seen as ready and 404s; a failed upload has already
+     * drained and marked every posted chunk, which the purge then removes.
+     */
+    async cancelUpload({ drive, uploadToken }) {
+      await withEntryLock('upload:' + uploadToken, async () => {
+        const entry = await repositories.getEntryByUploadToken(drive.id, uploadToken);
+        if (!entry || (entry.status !== 'uploading' && entry.status !== 'failed')) {
+          throw httpError('NOT_FOUND');
+        }
+        await this.purgeEntry({ drive, entryId: entry.id });
+      });
     },
 
     /** Trashed entries, most recently deleted first. */
@@ -702,7 +751,14 @@ function createFileService({ db, repositories, discordStorage, config }) {
       for (const row of trashed) {
         if (row.parent_id != null && trashedIds.has(row.parent_id)) continue;
         if (Date.parse(row.deleted_at) < cutoff) {
-          await this.purgeEntry({ drive, entryId: row.id });
+          try {
+            await this.purgeEntry({ drive, entryId: row.id });
+          } catch (err) {
+            // One failing entry must not abort the sweep for the rest of the
+            // trash: log and move on to the next trashed root.
+            console.error(`purgeExpiredTrash: failed to purge entry ${row.id}: ${err && err.message}`);
+            continue;
+          }
         }
       }
     },

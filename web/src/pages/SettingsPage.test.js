@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import SettingsPage from './SettingsPage';
@@ -18,6 +18,7 @@ jest.mock('../api/client', () => ({
   api: {
     me: jest.fn(),
     drive: jest.fn(),
+    driveStats: jest.fn(),
     webhooks: {
       list: jest.fn(),
       add: jest.fn(),
@@ -65,6 +66,16 @@ beforeEach(() => {
   client.api.me.mockResolvedValue({ user, drive });
   client.api.logout.mockResolvedValue(null);
   client.api.webhooks.list.mockResolvedValue({ webhooks: [] });
+  client.api.driveStats.mockResolvedValue({
+    files: 0,
+    folders: 0,
+    sizeBytes: 0,
+    storedBytes: 0,
+    blocks: 0,
+    messages: 0,
+    webhooks: 1,
+    compressionRatio: null,
+  });
 });
 
 it('shows the authenticated Discord identity and quota usage', async () => {
@@ -177,5 +188,75 @@ describe('webhook management', () => {
     expect(
       screen.getByText(/permanently delete those files first/i)
     ).toBeInTheDocument();
+  });
+});
+
+describe('drive stats', () => {
+  it('renders the stats grid with fetched values', async () => {
+    client.api.driveStats.mockResolvedValue({
+      files: 12,
+      folders: 3,
+      sizeBytes: 1048576,
+      storedBytes: 524288,
+      blocks: 16,
+      messages: 4,
+      webhooks: 2,
+      compressionRatio: 2,
+    });
+    renderSettings();
+
+    const grid = await screen.findByTestId('drive-stats');
+    expect(within(grid).getByText('Files')).toBeInTheDocument();
+    expect(within(grid).getByText('12')).toBeInTheDocument();
+    expect(within(grid).getByText('Folders')).toBeInTheDocument();
+    expect(within(grid).getByText('3')).toBeInTheDocument();
+    expect(within(grid).getByText('Logical size')).toBeInTheDocument();
+    expect(within(grid).getByText('1.0 MiB')).toBeInTheDocument();
+    expect(within(grid).getByText('Stored on Discord')).toBeInTheDocument();
+    expect(within(grid).getByText('512 KiB')).toBeInTheDocument();
+    expect(within(grid).getByText('Compression ratio')).toBeInTheDocument();
+    expect(within(grid).getByText('2.00×')).toBeInTheDocument();
+    expect(within(grid).getByText('Webhooks')).toBeInTheDocument();
+    expect(within(grid).getByText('2')).toBeInTheDocument();
+    expect(client.api.driveStats).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits the compression ratio when stats report it as null', async () => {
+    renderSettings();
+
+    const grid = await screen.findByTestId('drive-stats');
+    expect(within(grid).queryByText('Compression ratio')).not.toBeInTheDocument();
+    expect(within(grid).getByText('Webhooks')).toBeInTheDocument();
+  });
+
+  it('shows an error notice when stats fail to load and retries', async () => {
+    client.api.driveStats
+      .mockRejectedValueOnce(
+        new client.ApiError(
+          502,
+          'STORAGE_UNAVAILABLE',
+          'Discord storage is unavailable'
+        )
+      )
+      .mockResolvedValue({
+        files: 1,
+        folders: 0,
+        sizeBytes: 1024,
+        storedBytes: 512,
+        blocks: 2,
+        messages: 1,
+        webhooks: 1,
+        compressionRatio: 2,
+      });
+    renderSettings();
+
+    expect(
+      await screen.findByText('Discord storage is unavailable')
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('drive-stats')).not.toBeInTheDocument();
+
+    userEvent.click(screen.getByRole('button', { name: /retry/i }));
+    expect(await screen.findByTestId('drive-stats')).toBeInTheDocument();
+    expect(client.api.driveStats).toHaveBeenCalledTimes(2);
   });
 });

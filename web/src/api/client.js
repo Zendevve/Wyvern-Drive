@@ -80,7 +80,8 @@ export async function apiFetch(path, options = {}) {
  * queue can report post-upload server progress while chunks are stored.
  */
 export function uploadFile({ parentId, file, uploadToken, fileSize, onProgress }) {
-  return new Promise((resolve, reject) => {
+  let xhr = null;
+  const promise = new Promise((resolve, reject) => {
     const formData = new FormData();
     formData.append('parentId', parentId == null ? '' : String(parentId));
     formData.append('file', file, file.name);
@@ -91,7 +92,7 @@ export function uploadFile({ parentId, file, uploadToken, fileSize, onProgress }
       formData.append('fileSize', String(fileSize));
     }
 
-    const xhr = new XMLHttpRequest();
+    xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/files/upload');
     xhr.withCredentials = true;
     const csrf = readCookie('wyvern_csrf');
@@ -104,6 +105,10 @@ export function uploadFile({ parentId, file, uploadToken, fileSize, onProgress }
         onProgress(event.loaded, event.total);
       }
     };
+    // Aborting (the queue's Cancel control) settles the promise so the
+    // caller's await never hangs on a request the browser has dropped.
+    xhr.onabort = () =>
+      reject(new ApiError(0, 'ABORTED', 'Upload cancelled'));
     xhr.onload = () => {
       let body = null;
       try {
@@ -128,6 +133,12 @@ export function uploadFile({ parentId, file, uploadToken, fileSize, onProgress }
       reject(new ApiError(0, 'NETWORK_ERROR', 'Network error during upload'));
     xhr.send(formData);
   });
+  promise.abort = () => {
+    if (xhr) {
+      xhr.abort();
+    }
+  };
+  return promise;
 }
 
 export function downloadUrl(entryId, { inline } = {}) {
@@ -171,6 +182,11 @@ export const api = {
   setupStatus: () => apiFetch('/api/setup/status'),
   me: () => apiFetch('/api/auth/me'),
   drive: () => apiFetch('/api/drive'),
+  driveStats: () => apiFetch('/api/drive/stats'),
+  uploadCancel: (uploadToken) =>
+    apiFetch(`/api/uploads/${encodeURIComponent(uploadToken)}/cancel`, {
+      method: 'POST',
+    }),
   configureWebhook: (webhookUrl) =>
     apiFetch('/api/storage/webhook', {
       method: 'POST',

@@ -3,6 +3,7 @@ build/
 *.db
 *.db-journal
 *.log
+web-dev.log
 .env
 .env.*
 !.env.example

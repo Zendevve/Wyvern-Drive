@@ -17,6 +17,8 @@ jest.mock('../api/client', () => ({
   api: {
     me: jest.fn(),
     drive: jest.fn(),
+    driveStats: jest.fn(),
+    uploadCancel: jest.fn(),
     webhooks: {
       list: jest.fn(),
       add: jest.fn(),
@@ -124,6 +126,7 @@ beforeEach(() => {
   window.matchMedia = createMatchMedia(1024);
   client.api.me.mockResolvedValue({ user, drive });
   client.api.entries.mockResolvedValue({ entries: [] });
+  client.api.uploadCancel.mockResolvedValue(null);
 });
 
 describe('loading and empty states', () => {
@@ -213,6 +216,22 @@ describe('navigation and breadcrumbs', () => {
       { timeout: 1500 }
     );
   });
+
+  it('shows a search-results header while a search is active', async () => {
+    client.api.entries.mockResolvedValue({ entries: [fileEntry()] });
+    renderDrive();
+    await screen.findByText('notes.txt');
+    expect(screen.queryByTestId('search-results-header')).not.toBeInTheDocument();
+
+    userEvent.type(
+      screen.getByRole('textbox', { name: /search files and folders/i }),
+      'note'
+    );
+    expect(await screen.findByTestId('search-results-header')).toBeInTheDocument();
+    expect(
+      screen.getByText('Search results for "note"')
+    ).toBeInTheDocument();
+  });
 });
 
 describe('uploads', () => {
@@ -261,6 +280,30 @@ describe('uploads', () => {
     // MUI renders component="a" controls as links once href is present.
     const link = await screen.findByRole('link', { name: /download notes\.txt/i });
     expect(link.href).toBe('http://localhost/api/files/1/download');
+  });
+
+  it('cancels an uploading job: aborts the XHR, purges server-side, removes the job', async () => {
+    const abort = jest.fn();
+    const pending = new Promise(() => {});
+    pending.abort = abort;
+    client.uploadFile.mockImplementation(() => pending);
+    renderDrive();
+    await screen.findByTestId('empty-state');
+
+    const file = new File(['hello world'], 'hello.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByTestId('file-input'), { target: { files: [file] } });
+
+    const cancelButton = await screen.findByRole('button', {
+      name: /cancel upload hello\.txt/i,
+    });
+    userEvent.click(cancelButton);
+
+    await waitFor(() => expect(abort).toHaveBeenCalledTimes(1));
+    expect(client.api.uploadCancel).toHaveBeenCalledWith(expect.any(String));
+    // The job is removed from the queue after the exit transition.
+    await waitFor(() =>
+      expect(screen.queryByText('hello.txt')).not.toBeInTheDocument()
+    );
   });
 });
 
@@ -316,6 +359,29 @@ describe('entry mutations', () => {
 
     await waitFor(() => expect(client.api.deleteEntry).toHaveBeenCalledWith(1));
     await waitFor(() => expect(client.api.entries).toHaveBeenCalledTimes(2));
+  });
+
+  it('offers undo after deleting and restores the entry', async () => {
+    const notes = fileEntry();
+    client.api.entries.mockResolvedValue({ entries: [notes] });
+    client.api.deleteEntry.mockResolvedValue(null);
+    client.api.trash.restore.mockResolvedValue(notes);
+    renderDrive();
+    await screen.findByText('notes.txt');
+
+    userEvent.click(screen.getByRole('button', { name: /delete notes\.txt/i }));
+    userEvent.click(screen.getByTestId('confirm-delete'));
+
+    // Snackbar copy varies with the queue length ("Moved to Trash" /
+    // "Moved 1 item to Trash"), so match the shape, not the exact wording.
+    expect(await screen.findByText(/Moved .* to Trash/)).toBeInTheDocument();
+    userEvent.click(screen.getByTestId('undo-delete'));
+
+    await waitFor(() =>
+      expect(client.api.trash.restore).toHaveBeenCalledWith(1)
+    );
+    // initial list + reload after delete + reload after restore
+    await waitFor(() => expect(client.api.entries).toHaveBeenCalledTimes(3));
   });
 
   it('shows an actionable error when creating a conflicting folder', async () => {
@@ -461,11 +527,16 @@ describe('copy and folder upload', () => {
     renderDrive();
     await screen.findByText('notes.txt');
 
+    // The copy action now opens the copy dialog with the current parent
+    // pre-selected; confirming via copy-here performs the duplicate.
     userEvent.click(screen.getByRole('button', { name: /copy notes\.txt/i }));
+    await screen.findByRole('dialog');
+    userEvent.click(screen.getByTestId('copy-here'));
+
     await waitFor(() =>
       expect(client.api.copyEntry).toHaveBeenCalledWith(1, null)
     );
-    await waitFor(() => expect(client.api.entries).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(client.api.entries).toHaveBeenCalledTimes(3));
   });
 
   it('copies into the open folder, not the root', async () => {
@@ -483,8 +554,40 @@ describe('copy and folder upload', () => {
     userEvent.click(await screen.findByRole('button', { name: 'Documents' }));
     await screen.findByText('report.pdf');
     userEvent.click(screen.getByRole('button', { name: /copy report\.pdf/i }));
+
+    // The open folder (report's parent) is pre-selected in the dialog.
+    await screen.findByRole('dialog');
+    userEvent.click(screen.getByTestId('copy-here'));
+
     await waitFor(() =>
       expect(client.api.copyEntry).toHaveBeenCalledWith(3, 2)
+    );
+  });
+
+  it('copies into a folder picked in the dialog, not just the current parent', async () => {
+    const projects = folderEntry({ id: 6, name: 'Projects', parentId: null });
+    const notes = fileEntry({ id: 1, parentId: null, name: 'notes.txt' });
+    // The dialog's folder fetch passes kind: 'folder'; the main list does
+    // not, so the dialog tree is the only place 'Projects' appears.
+    client.api.entries.mockImplementation((params) => {
+      if (params.kind === 'folder') {
+        return Promise.resolve({ entries: [projects] });
+      }
+      return Promise.resolve({ entries: [notes] });
+    });
+    client.api.copyEntry.mockResolvedValue(
+      fileEntry({ id: 10, name: 'notes (1).txt' })
+    );
+    renderDrive();
+    await screen.findByText('notes.txt');
+
+    userEvent.click(screen.getByRole('button', { name: /copy notes\.txt/i }));
+    const target = await screen.findByRole('button', { name: 'Projects' });
+    userEvent.click(target);
+    userEvent.click(screen.getByTestId('copy-here'));
+
+    await waitFor(() =>
+      expect(client.api.copyEntry).toHaveBeenCalledWith(1, 6)
     );
   });
 

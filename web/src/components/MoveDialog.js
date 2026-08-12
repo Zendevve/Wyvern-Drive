@@ -22,11 +22,20 @@ import DialogTransition from '../motion/DialogTransition';
 const ROOT_KEY = 'root';
 
 /**
- * Folder tree picker for moves. Folders load lazily; the entry being moved
- * and any discovered descendant folders are disabled as targets. The server
- * still enforces INVALID_MOVE for self/descendant moves.
+ * Folder tree picker for moves and copies. Folders load lazily; the entry
+ * itself and any discovered descendant folders are disabled as targets (the
+ * server still enforces INVALID_MOVE/INVALID_COPY for self/descendant
+ * targets). In copy mode the current parent stays selectable so a duplicate
+ * can be created in place.
  */
-export default function MoveDialog({ open, entry, currentParentId, onClose, onMove }) {
+export default function MoveDialog({
+  open,
+  entry,
+  currentParentId,
+  onClose,
+  onMove,
+  mode = 'move',
+}) {
   const [folders, setFolders] = useState({});
   const [expanded, setExpanded] = useState(new Set());
   const [forbidden, setForbidden] = useState(new Set());
@@ -147,6 +156,9 @@ export default function MoveDialog({ open, entry, currentParentId, onClose, onMo
   };
 
   const sameParent = targetId === (currentParentId == null ? null : currentParentId);
+  // Moving to the entry's current parent is a no-op, so it's blocked in move
+  // mode; copying there is a legitimate duplicate and stays enabled.
+  const sameParentDisabled = mode === 'move' && sameParent;
 
   const renderNode = (node, depth) => {
     if (!node) {
@@ -192,7 +204,7 @@ export default function MoveDialog({ open, entry, currentParentId, onClose, onMo
           <ListItemText primary={node.name} />
           {isForbidden && (
             <Typography variant="caption" color="inkMuted">
-              Cannot move here
+              {mode === 'copy' ? 'Cannot copy here' : 'Cannot move here'}
             </Typography>
           )}
         </ListItemButton>
@@ -210,7 +222,9 @@ export default function MoveDialog({ open, entry, currentParentId, onClose, onMo
       fullWidth
       TransitionComponent={DialogTransition}
     >
-      <DialogTitle>Move {entry ? entry.name : ''}</DialogTitle>
+      <DialogTitle>
+        {mode === 'copy' ? 'Copy' : 'Move'} {entry ? entry.name : ''}
+      </DialogTitle>
       <DialogContent dividers>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -230,10 +244,10 @@ export default function MoveDialog({ open, entry, currentParentId, onClose, onMo
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={busy || sameParent}
-          data-testid="move-here"
+          disabled={busy || sameParentDisabled}
+          data-testid={mode === 'copy' ? 'copy-here' : 'move-here'}
         >
-          Move here
+          {mode === 'copy' ? 'Copy here' : 'Move here'}
         </Button>
       </DialogActions>
     </Dialog>

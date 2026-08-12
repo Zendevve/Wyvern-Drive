@@ -81,8 +81,30 @@ async function main() {
 
   const app = createApp({ config, db, repositories, sessionStore, oauth, discordStorage, fileService });
 
+  // Fire-and-forget boot retention sweep: purge expired trash for every drive
+  // once the server is up. Every step is guarded so a failing sweep (e.g. a
+  // storage outage) logs and never crashes or delays boot.
+  const runBootRetentionSweep = async () => {
+    try {
+      const driveIds = await repositories.listDriveIds();
+      for (const { id } of driveIds) {
+        try {
+          const drive = await repositories.getDriveById(id);
+          if (drive) {
+            await fileService.purgeExpiredTrash({ drive });
+          }
+        } catch (err) {
+          console.error(`Retention sweep failed for drive ${id}: ${err && err.message}`);
+        }
+      }
+    } catch (err) {
+      console.error(`Retention sweep failed: ${err && err.message}`);
+    }
+  };
+
   const server = app.listen(config.port, () => {
     console.log(`Wyvern server listening on ${config.appOrigin}`);
+    void runBootRetentionSweep();
   });
   server.on('error', async (err) => {
     console.error(`Wyvern server failed to start: ${err.message}`);

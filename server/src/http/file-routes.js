@@ -207,7 +207,7 @@ function createFileRoutes({ config, repositories, sessionStore, fileService }) {
  * /api/files and cannot express the /api/uploads/:uploadToken path; app.js
  * mounts this router at /api/uploads.
  */
-function createUploadRoutes({ repositories, sessionStore, fileService }) {
+function createUploadRoutes({ config, repositories, sessionStore, fileService }) {
   const router = express.Router();
   const auth = [requireSession(sessionStore), loadDrive(repositories)];
 
@@ -220,6 +220,26 @@ function createUploadRoutes({ repositories, sessionStore, fileService }) {
         uploadToken: req.params.uploadToken,
       });
       res.json(progress);
+    })
+  );
+
+  /**
+   * POST /api/uploads/:uploadToken/cancel — abort a resumable upload. The
+   * client aborts its XHR; this endpoint hard-purges the partial upload
+   * (entry + posted chunks + now-dead Discord messages) so nothing leaks
+   * into quota or trash. Only uploading/failed entries can be cancelled; a
+   * ready entry (upload already committed) or an unknown token is 404.
+   */
+  router.post(
+    '/:uploadToken/cancel',
+    csrfProtect(config),
+    auth,
+    asyncHandler(async (req, res) => {
+      // Status check and purge run inside the service's per-token lock, so a
+      // cancel can never interleave with an in-flight upload flush; a
+      // committed (ready) entry or unknown token maps to NOT_FOUND.
+      await fileService.cancelUpload({ drive: req.drive, uploadToken: req.params.uploadToken });
+      res.status(204).end();
     })
   );
 

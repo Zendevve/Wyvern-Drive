@@ -16,6 +16,14 @@ function createDriveRoutes({ repositories, sessionStore }) {
     })
   );
 
+  router.get(
+    '/stats',
+    auth,
+    asyncHandler(async (req, res) => {
+      res.json(await repositories.driveStats(req.drive.id));
+    })
+  );
+
   return router;
 }
 

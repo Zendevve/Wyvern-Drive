@@ -66,6 +66,48 @@ function createRepositories(db) {
       return get(db, 'SELECT * FROM drives WHERE id = ?', [driveId]);
     },
 
+    /** Every drive id (boot-time retention sweep iterates these). */
+    listDriveIds() {
+      return all(db, 'SELECT id FROM drives ORDER BY id ASC');
+    },
+
+    /**
+     * Drive-wide usage summary. sizeBytes is the logical user byte count over
+     * file entries (ready/uploading/failed, trashed included); storedBytes is
+     * the actual Discord footprint over content_blocks; messages counts
+     * distinct Discord messages holding blocks. compressionRatio is null when
+     * nothing is uploaded, 0 when no blocks are stored, else sizeBytes /
+     * storedBytes.
+     */
+    async driveStats(driveId) {
+      const row = await get(
+        db,
+        `SELECT
+           COALESCE(SUM(CASE WHEN kind = 'file' AND status IN ('ready','uploading','failed') THEN size_bytes END), 0) AS sizeBytes,
+           (SELECT COUNT(*) FROM entries WHERE drive_id = ? AND kind = 'file' AND status IN ('ready','uploading','failed') AND deleted_at IS NULL) AS files,
+           (SELECT COUNT(*) FROM entries WHERE drive_id = ? AND kind = 'folder' AND status = 'ready' AND deleted_at IS NULL) AS folders,
+           (SELECT COUNT(*) FROM content_blocks WHERE drive_id = ?) AS blocks,
+           (SELECT COUNT(DISTINCT message_id) FROM content_blocks WHERE drive_id = ?) AS messages,
+           (SELECT COUNT(*) FROM webhooks WHERE drive_id = ?) AS webhooks,
+           (SELECT COALESCE(SUM(cipher_size_bytes), 0) FROM content_blocks WHERE drive_id = ?) AS storedBytes
+         FROM entries WHERE drive_id = ?`,
+        [driveId, driveId, driveId, driveId, driveId, driveId, driveId]
+      );
+      const sizeBytes = row.sizeBytes;
+      const storedBytes = row.storedBytes;
+      const compressionRatio = sizeBytes > 0 ? (storedBytes > 0 ? sizeBytes / storedBytes : 0) : null;
+      return {
+        files: row.files,
+        folders: row.folders,
+        sizeBytes,
+        storedBytes,
+        blocks: row.blocks,
+        messages: row.messages,
+        webhooks: row.webhooks,
+        compressionRatio,
+      };
+    },
+
     // Drive rows still carry the legacy webhook credential columns (never
     // auto-migrated, like legacy_discord_channel_id) but no code path reads or
     // writes them: credentials live in the webhooks table (migration 004).
@@ -121,14 +163,18 @@ function createRepositories(db) {
       return run(db, 'DELETE FROM entries WHERE id = ?', [id]);
     },
 
-    listEntries(driveId, { parentId, query, kind, sort, direction }) {
+    listEntries(driveId, { parentId, query, kind, sort, direction, search }) {
       const where = ['drive_id = ?', "status = 'ready'", 'deleted_at IS NULL'];
       const params = [driveId];
-      if (parentId == null) {
-        where.push('parent_id IS NULL');
-      } else {
-        where.push('parent_id = ?');
-        params.push(parentId);
+      // Global search: when `search` is true the parent clause is dropped
+      // entirely so matches come from the whole drive, not one folder.
+      if (!search) {
+        if (parentId == null) {
+          where.push('parent_id IS NULL');
+        } else {
+          where.push('parent_id = ?');
+          params.push(parentId);
+        }
       }
       if (query) {
         where.push('name LIKE ? ESCAPE ?');

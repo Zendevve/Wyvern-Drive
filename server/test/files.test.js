@@ -486,3 +486,91 @@ test('upload progress: token lookup returns posted/expected bytes; unknown token
   assert.strictEqual(missing.status, 404);
   assert.strictEqual(missing.json.error.code, 'NOT_FOUND');
 });
+
+test('cancel purges a failed partial upload, its chunks, and its Discord messages', async (t) => {
+  const { ctx, client: c2 } = await freshContext(t, { chunkSizeBytes: 8 });
+  const fixture = makeFixture(200); // 25 chunks -> batches 10/10/5
+  const token = 'cancel-token-partial';
+
+  // First attempt stores batch 1 (chunks 0-9), then batch 2 fails on its
+  // second chunk; the trailing batch still posts, so 15 chunk rows / 2
+  // messages survive (same shape as the resume test).
+  ctx.discordStorage.failPutChunkOnCall = 12;
+  const first = await uploadFile(c2, {
+    name: 'cancel.bin',
+    data: fixture,
+    uploadToken: token,
+    expect: 502,
+  });
+  assert.strictEqual(first.json.error.code, 'STORAGE_UNAVAILABLE');
+  const failed = await ctx.repositories.getEntryByUploadToken(1, token);
+  assert.strictEqual(failed.status, 'failed');
+  const baselineMessages = ctx.discordStorage.countMessages();
+  assert.strictEqual(baselineMessages, 2);
+
+  // Cancelling hard-purges the partial upload: entry gone from listings and
+  // trash, chunks reclaimed, Discord messages deleted.
+  const cancel = await c2.request(`/api/uploads/${token}/cancel`, { method: 'POST', csrf: true, expect: 204 });
+  assert.strictEqual(cancel.status, 204);
+  assert.strictEqual(await ctx.repositories.getEntryByUploadToken(1, token), undefined);
+
+  const entries = await c2.request('/api/entries');
+  assert.ok(!entries.json.entries.some((e) => e.name === 'cancel.bin'));
+  const trash = await c2.request('/api/trash');
+  assert.ok(!trash.json.entries.some((e) => e.name === 'cancel.bin'), 'cancelled upload must not leak into trash');
+  assert.strictEqual(ctx.discordStorage.countMessages(), 0, 'partial messages are reclaimed');
+  assert.strictEqual(ctx.discordStorage.countAttachments(), 0);
+
+  // The token is gone: cancelling again 404s.
+  const again = await c2.request(`/api/uploads/${token}/cancel`, { method: 'POST', csrf: true });
+  assert.strictEqual(again.status, 404);
+  assert.strictEqual(again.json.error.code, 'NOT_FOUND');
+});
+
+test('cancel rejects ready entries and unknown tokens with 404', async (t) => {
+  const { client: c2 } = await freshContext(t);
+  const token = 'cancel-token-ready';
+
+  const res = await uploadFile(c2, {
+    name: 'ready-cancel.bin',
+    data: makeFixture(24),
+    uploadToken: token,
+    expect: 201,
+  });
+  assert.strictEqual(res.json.status, 'ready');
+
+  const cancel = await c2.request(`/api/uploads/${token}/cancel`, { method: 'POST', csrf: true });
+  assert.strictEqual(cancel.status, 404);
+  assert.strictEqual(cancel.json.error.code, 'NOT_FOUND');
+
+  // The committed file is untouched.
+  const entries = await c2.request('/api/entries');
+  assert.ok(entries.json.entries.some((e) => e.id === res.json.id));
+
+  // Unknown tokens are indistinguishable from missing entries.
+  const missing = await c2.request('/api/uploads/no-such-token/cancel', { method: 'POST', csrf: true });
+  assert.strictEqual(missing.status, 404);
+  assert.strictEqual(missing.json.error.code, 'NOT_FOUND');
+});
+
+test('cancel purges an in-flight uploading entry with no stored chunks', async (t) => {
+  const { ctx, client: c2 } = await freshContext(t);
+  // Simulate the transient uploading state (the client aborts mid-flight
+  // before any chunk is stored) by inserting the row the upload flow creates.
+  const row = await ctx.repositories.insertEntry({
+    driveId: 1,
+    parentId: null,
+    kind: 'file',
+    name: 'inflight.bin',
+    sizeBytes: 0,
+    mimeType: 'application/octet-stream',
+    status: 'uploading',
+    uploadToken: 'cancel-token-inflight',
+    expectedSizeBytes: null,
+  });
+
+  const cancel = await c2.request('/api/uploads/cancel-token-inflight/cancel', { method: 'POST', csrf: true, expect: 204 });
+  assert.strictEqual(cancel.status, 204);
+  assert.strictEqual(await ctx.repositories.getEntryById(row.id), undefined);
+  assert.strictEqual(ctx.discordStorage.countMessages(), 0);
+});

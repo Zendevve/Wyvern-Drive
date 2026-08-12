@@ -51,12 +51,15 @@ MVP (from README): OAuth2 sign-in with server-side sessions and CSRF; one drive
 per user with multi-webhook scaling (uploads round-robin across up to
 `WYVERN_MAX_WEBHOOKS_PER_DRIVE` webhooks); content dedup and per-chunk
 compression; parallel packed and resumable uploads with per-file progress,
-retry, and server-side progress polling; HTTP Range downloads and inline
-previews; folder ZIP archives; folders, rename, move, instant copy, folder
-upload, and a recycle bin (soft delete, restore, delete-forever, retention
-sweep); server-backed search and sort; anonymous read-only share links with
-optional expiry and revocation; rate limiting on OAuth, mutations, and public
-share downloads; responsive cloud-service-style UI (desktop table/grid, mobile
+retry, server-side progress polling, and upload cancellation (abort + server-
+side purge of the partial upload); HTTP Range downloads and inline previews;
+folder ZIP archives; folders, rename, move, instant copy, folder upload, and a
+recycle bin (soft delete, restore, delete-forever, retention sweep, plus a
+boot-time sweep of expired trash); global search (queries span the whole
+drive) and sort; drive stats (files, folders, logical and stored sizes,
+compression ratio, webhooks); anonymous read-only share links with optional
+expiry and revocation; rate limiting on OAuth, mutations, and public share
+downloads; responsive cloud-service-style UI (desktop table/grid, mobile
 cards, drag-drop upload, floating upload progress manager).
 
 Constraints: encryption is server-side, not end-to-end (Discord and the browser
@@ -86,9 +89,9 @@ never auto-migrated.
 ## Evidence on Hand
 
 - `README.md` — features, architecture, security model, config, testing.
-- `server/README.md` — manual smoke path (125 server tests; encrypted
+- `server/README.md` — manual smoke path (136 server tests; encrypted
   round-trip fixture verified against SHA-256; setup-mode coverage).
-- `web/` — 91 tests pinning accessible names, testids, quota/share text, trash
+- `web/` — 100 tests pinning accessible names, testids, quota/share text, trash
   and webhook surfaces, and the setup gate/page.
 - `refs/` — vendored prior art (Disbox et al.), read-only.
 
