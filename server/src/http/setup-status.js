@@ -26,9 +26,11 @@ function buildSetupStatus(missing = [], invalid = []) {
 /**
  * Read-only first-run status route. Mounted in both the full app (with empty
  * diagnostics, so setupRequired is false) and the limited setup app (with the
- * real diagnostics). No configure endpoint, browser secret form, or .env
- * writer exists; the operator's per-user webhook setup happens on the
- * authenticated /connect page, never here, and secrets stay server-side.
+ * real diagnostics). This module only serves the read-only status contract;
+ * the setup app separately mounts /api/setup/credentials (see setup-config.js),
+ * which writes only validated non-secret-defaulted values and never returns
+ * them. Per-user webhook setup happens on the authenticated /connect page,
+ * never here, and secrets stay server-side.
  */
 function createSetupStatusRoutes({ missing = [], invalid = [] }) {
   const router = express.Router();

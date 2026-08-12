@@ -37,6 +37,97 @@ describe('api client', () => {
     expect(init.headers['X-CSRF-Token']).toBeUndefined();
   });
 
+  it('setupMeta fetches /api/setup/meta', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          writesSupported: true,
+          tokenRequired: false,
+          clientIdConfigured: false,
+          clientSecretConfigured: false,
+        }),
+    });
+
+    const meta = await api.setupMeta();
+
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe('/api/setup/meta');
+    expect(init.credentials).toBe('include');
+    // GET: no method override, no CSRF header.
+    expect(init.method).toBeUndefined();
+    expect(init.headers['X-CSRF-Token']).toBeUndefined();
+    expect(meta).toEqual({
+      writesSupported: true,
+      tokenRequired: false,
+      clientIdConfigured: false,
+      clientSecretConfigured: false,
+    });
+  });
+
+  it('saveSetupCredentials posts JSON with the setup token header', async () => {
+    document.cookie = 'wyvern_csrf=csrf-token-123';
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          ok: true,
+          restartRequired: true,
+          saved: ['DISCORD_CLIENT_ID', 'DISCORD_CLIENT_SECRET'],
+          generated: ['WYVERN_ENCRYPTION_KEY'],
+          remainingMissing: [],
+          remainingInvalid: [],
+        }),
+    });
+
+    const result = await api.saveSetupCredentials({
+      clientId: '123456789012345678',
+      clientSecret: 'abcdefghijklmnopqrstuvwxyz0123456789',
+      appOrigin: 'https://drive.example.com',
+      setupToken: 'tok',
+    });
+
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe('/api/setup/credentials');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-CSRF-Token']).toBe('csrf-token-123');
+    expect(init.headers['X-Wyvern-Setup-Token']).toBe('tok');
+    expect(init.headers['Content-Type']).toBe('application/json');
+    expect(JSON.parse(init.body)).toEqual({
+      clientId: '123456789012345678',
+      clientSecret: 'abcdefghijklmnopqrstuvwxyz0123456789',
+      appOrigin: 'https://drive.example.com',
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('saveSetupCredentials omits empty fields and the token header when absent', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          ok: true,
+          restartRequired: true,
+          saved: [],
+          generated: [],
+          remainingMissing: [],
+          remainingInvalid: [],
+        }),
+    });
+
+    const result = await api.saveSetupCredentials();
+
+    const [, init] = fetch.mock.calls[0];
+    expect(init.method).toBe('POST');
+    expect(init.headers['X-Wyvern-Setup-Token']).toBeUndefined();
+    expect(JSON.parse(init.body)).toEqual({});
+    expect(result.ok).toBe(true);
+  });
+
   it('configureWebhook posts the URL as JSON to /api/storage/webhook with CSRF', async () => {
     document.cookie = 'wyvern_csrf=csrf-token-456';
     global.fetch = jest

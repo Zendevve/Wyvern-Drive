@@ -57,7 +57,7 @@ The `refs/` directories remain read-only prior art, not runtime behavior.
 - Server-backed search and sort
 - Anonymous read-only share links with optional expiry and revocation
 - Cloud-service-style UI (Google Drive / Dropbox / Mega flow): desktop list + grid views, row/card selection with bulk actions, hover-revealed actions, drag-and-drop upload, floating upload progress manager; responsive (desktop table/grid, mobile cards)
-- Friendly first-run onboarding: a guided `/setup` page (Discord app link, copyable redirect-URI chip, restart-and-recheck, "What's left" diagnostics showing variable names only) and a step-by-step `/connect` page walk users through connecting their own storage in about a minute
+- Friendly first-run onboarding: a guided `/setup` page (Discord app link, copyable redirect-URI chip, a form that saves the Discord Client ID/Secret plus safe derived defaults, restart-and-recheck, "What's left" diagnostics showing variable names only) and a step-by-step `/connect` page walk users through connecting their own storage in about a minute
 - Rate limiting on OAuth, mutations, and public share downloads
 
 ## Architecture
@@ -99,15 +99,22 @@ npm start
 ```
 
 On first run the server loads `.env` (dotenv), validates the configuration, and
-— if anything is missing or invalid — starts in **setup mode**: a read-only
-server that serves `GET /api/setup/status` and a friendly guided `/setup` page.
-The page links to the Discord developer portal, shows a copyable chip with your
-redirect URI, and lists exactly which variables are missing or invalid (names
-only, never values); after filling in `server/.env`, restart the server and hit
-Recheck, and `/setup` redirects to the normal sign-in flow. A file-backed
-`DB_URL` parent directory is created automatically. The OAuth callback URI on
-your Discord application must match `DISCORD_REDIRECT_URI` exactly
-(`<APP_ORIGIN>/api/auth/discord/callback`).
+— if anything is missing or invalid — starts in **setup mode**: a server that
+serves `GET /api/setup/status`, the authenticated `/api/setup/credentials`
+write route, and a friendly guided `/setup` page. The page links to the Discord
+developer portal, shows a copyable chip with your redirect URI, and lists
+exactly which variables are missing or invalid (names only, never values). On
+it you can enter the Discord Client ID and Client Secret directly: the server
+derives safe defaults for `APP_ORIGIN`, `DISCORD_REDIRECT_URI`, and `DB_URL`,
+and generates a fresh `WYVERN_ENCRYPTION_KEY` when none is set, writing the
+batch atomically to `server/.env`. Requests from outside the machine require
+the one-time setup token printed in the server log (`Wyvern server setup
+token: …`) and must use HTTPS. Values are never returned to the browser,
+logged, or kept by the web client. Restart the server for the written file to
+take effect, then hit Recheck, and `/setup` redirects to the normal sign-in
+flow. A file-backed `DB_URL` parent directory is created automatically. The
+OAuth callback URI on your Discord application must match
+`DISCORD_REDIRECT_URI` exactly (`<APP_ORIGIN>/api/auth/discord/callback`).
 
 Open http://localhost:3000 and sign in with Discord.
 
@@ -135,11 +142,13 @@ There is no global webhook variable: each authenticated user connects their
 own Discord webhook on `/connect`, and the server seals it with
 `WYVERN_ENCRYPTION_KEY`.
 
-With an incomplete or invalid configuration the server boots into read-only
-setup mode (see Quick start) instead of failing; an invalid `PORT` is the one
-fatal case, because the process cannot choose a listening port. Once every
-required variable validates, the server runs the full app (SQLite → migrations
-→ OAuth/storage → HTTP) and `GET /api/setup/status` reports
+With an incomplete or invalid configuration the server boots into setup mode
+(see Quick start) instead of failing; the `/setup` page can write the two
+Discord OAuth values plus safe derived/default values to `server/.env`, but
+the process must be restarted for them to take effect. An invalid `PORT` is
+the one fatal case, because the process cannot choose a listening port. Once
+every required variable validates, the server runs the full app (SQLite →
+migrations → OAuth/storage → HTTP) and `GET /api/setup/status` reports
 `setupRequired: false`.
 
 ## Production

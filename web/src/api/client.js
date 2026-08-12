@@ -180,6 +180,20 @@ export function shareDownloadUrl(token) {
 
 export const api = {
   setupStatus: () => apiFetch('/api/setup/status'),
+  setupMeta: () => apiFetch('/api/setup/meta'),
+  saveSetupCredentials: ({ clientId, clientSecret, appOrigin, setupToken } = {}) => {
+    const body = {};
+    if (clientId) body.clientId = clientId;
+    if (clientSecret) body.clientSecret = clientSecret;
+    if (appOrigin) body.appOrigin = appOrigin;
+    const headers = {};
+    if (setupToken) headers['X-Wyvern-Setup-Token'] = setupToken;
+    return apiFetch('/api/setup/credentials', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+  },
   me: () => apiFetch('/api/auth/me'),
   drive: () => apiFetch('/api/drive'),
   driveStats: () => apiFetch('/api/drive/stats'),

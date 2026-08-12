@@ -7,8 +7,8 @@ const { loadConfig, diagnoseConfig, REQUIRED_VARS, DEFAULT_PORT, DEFAULT_QUOTA_B
 const VALID_ENV = {
   APP_ORIGIN: 'http://localhost:3000',
   DB_URL: ':memory:',
-  DISCORD_CLIENT_ID: 'cid',
-  DISCORD_CLIENT_SECRET: 'csecret',
+  DISCORD_CLIENT_ID: '123456789012345678',
+  DISCORD_CLIENT_SECRET: 'abcdefghijklmnopqrstuvwxyz0123456789',
   DISCORD_REDIRECT_URI: 'http://localhost:3000/api/auth/discord/callback',
   WYVERN_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString('base64'),
   WYVERN_CHUNK_SIZE_BYTES: '1048576', // 1 MiB — valid in every environment
@@ -19,7 +19,8 @@ test('loadConfig accepts a complete valid environment', () => {
   const cfg = loadConfig(VALID_ENV);
   assert.strictEqual(cfg.appOrigin, 'http://localhost:3000');
   assert.strictEqual(cfg.dbUrl, ':memory:');
-  assert.strictEqual(cfg.discordClientId, 'cid');
+  assert.strictEqual(cfg.discordClientId, '123456789012345678');
+  assert.strictEqual(cfg.discordClientSecret, 'abcdefghijklmnopqrstuvwxyz0123456789');
   assert.strictEqual(cfg.encryptionKey.length, 32);
   assert.strictEqual(cfg.defaultQuotaBytes, DEFAULT_QUOTA_BYTES);
   assert.strictEqual(cfg.port, DEFAULT_PORT);
@@ -202,6 +203,39 @@ test('loadConfig rejects a malformed DISCORD_REDIRECT_URI', () => {
   assert.throws(() => loadConfig({ ...VALID_ENV, DISCORD_REDIRECT_URI: 'ftp://x/api/auth/discord/callback' }), /DISCORD_REDIRECT_URI/);
   const cfg = loadConfig({ ...VALID_ENV, DISCORD_REDIRECT_URI: 'https://drive.example.com/api/auth/discord/callback' });
   assert.strictEqual(cfg.discordRedirectUri, 'https://drive.example.com/api/auth/discord/callback');
+});
+
+test('loadConfig rejects invalid Discord client credential formats', () => {
+  // 17-20 digits required: too short, non-numeric, too long.
+  for (const bad of ['abc', '1234567890123456', '123456789012345678901234567890123']) {
+    assert.throws(() => loadConfig({ ...VALID_ENV, DISCORD_CLIENT_ID: bad }), /DISCORD_CLIENT_ID/, bad);
+  }
+  // 16-256 printable ASCII, no whitespace: too short, whitespace inside.
+  for (const bad of ['x', 'short', 'has whitespace inside', 'not printable \u0007']) {
+    assert.throws(() => loadConfig({ ...VALID_ENV, DISCORD_CLIENT_SECRET: bad }), /DISCORD_CLIENT_SECRET/, JSON.stringify(bad));
+  }
+});
+
+test('diagnoseConfig reports invalid client credential formats with names and messages only', () => {
+  const result = diagnoseConfig({
+    ...VALID_ENV,
+    DISCORD_CLIENT_ID: 'abc',
+    DISCORD_CLIENT_SECRET: 'x',
+  });
+  assert.deepStrictEqual(result.missing, []);
+  assert.strictEqual(result.invalid.length, 2);
+  const byKey = Object.fromEntries(result.invalid.map((item) => [item.key, item.message]));
+  assert.match(byKey.DISCORD_CLIENT_ID, /17-20 digit/);
+  assert.match(byKey.DISCORD_CLIENT_SECRET, /16-256 printable/);
+
+  // Diagnostics carry names and messages only — never the submitted values.
+  const serialized = JSON.stringify(result);
+  assert.ok(!serialized.includes('abc'), 'invalid values must not leak');
+  assert.ok(!serialized.includes('DISCORD_CLIENT_ID='), 'no value assignments may appear');
+  assert.throws(
+    () => loadConfig({ ...VALID_ENV, DISCORD_CLIENT_ID: 'abc', DISCORD_CLIENT_SECRET: 'x' }),
+    (err) => err.message.includes('DISCORD_CLIENT_ID') && err.message.includes('DISCORD_CLIENT_SECRET')
+  );
 });
 
 test('loadConfig exposes environment flags', () => {

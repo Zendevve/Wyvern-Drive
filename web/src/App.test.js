@@ -7,6 +7,8 @@ jest.mock('./api/client', () => ({
   ApiError: class ApiError extends Error {},
   api: {
     setupStatus: jest.fn(),
+    setupMeta: jest.fn(),
+    saveSetupCredentials: jest.fn(),
     me: jest.fn(),
     drive: jest.fn(),
     configureWebhook: jest.fn(),
@@ -58,6 +60,12 @@ beforeEach(() => {
   client.shareDownloadUrl.mockImplementation((token) => `/s/${token}`);
   window.history.pushState({}, '', '/');
   client.api.setupStatus.mockResolvedValue(COMPLETE_STATUS);
+  client.api.setupMeta.mockResolvedValue({
+    writesSupported: true,
+    tokenRequired: false,
+    clientIdConfigured: false,
+    clientSecretConfigured: false,
+  });
   client.api.me.mockResolvedValue({ user: null });
   client.api.entries.mockResolvedValue({ entries: [] });
 });
@@ -150,6 +158,8 @@ describe('setup gating', () => {
     expect(
       await screen.findByTestId('missing-var-DISCORD_CLIENT_SECRET')
     ).toBeInTheDocument();
+    // The guided wizard's save button is reachable from the gated app.
+    expect(await screen.findByTestId('setup-save')).toBeInTheDocument();
     // The login surface must not be reachable while setup is pending.
     expect(
       screen.queryByRole('button', { name: /sign in with discord/i })

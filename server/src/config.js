@@ -84,6 +84,19 @@ function validateEnv(env = process.env) {
     }
   }
 
+  if (env.DISCORD_CLIENT_ID) {
+    const id = env.DISCORD_CLIENT_ID.trim();
+    if (!/^\d{17,20}$/.test(id)) {
+      invalid.push({ key: 'DISCORD_CLIENT_ID', message: 'must be a 17-20 digit Discord application ID' });
+    }
+  }
+  if (env.DISCORD_CLIENT_SECRET) {
+    const secret = env.DISCORD_CLIENT_SECRET.trim();
+    if (!/^[\x21-\x7E]{16,256}$/.test(secret)) {
+      invalid.push({ key: 'DISCORD_CLIENT_SECRET', message: 'must be 16-256 printable ASCII characters with no whitespace' });
+    }
+  }
+
   let encryptionKey = null;
   if (env.WYVERN_ENCRYPTION_KEY) {
     let buf = null;

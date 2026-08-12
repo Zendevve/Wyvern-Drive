@@ -23,8 +23,8 @@ const WEBHOOK_URL_RE = /^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks
 process.env.NODE_ENV = 'test';
 process.env.APP_ORIGIN = ORIGIN;
 process.env.DB_URL = ':memory:';
-process.env.DISCORD_CLIENT_ID = 'test-client-id';
-process.env.DISCORD_CLIENT_SECRET = 'test-client-secret';
+process.env.DISCORD_CLIENT_ID = '123456789012345678';
+process.env.DISCORD_CLIENT_SECRET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 process.env.DISCORD_REDIRECT_URI = `${ORIGIN}/api/auth/discord/callback`;
 process.env.WYVERN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
 // Smallest config-valid chunk size (64 KiB). Individual tests that need

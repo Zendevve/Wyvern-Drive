@@ -1,14 +1,16 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const path = require('node:path');
 const fs = require('node:fs');
+const { resolveEnvFile } = require('./config/env-file');
 
 // Load server/.env before any config validation so the documented
 // `Copy-Item .env.example .env; npm start` flow reads the file. Skipped in
 // test mode: the test suite sets every variable explicitly and must stay
 // hermetic against a developer's local .env.
 if (process.env.NODE_ENV !== 'test') {
-  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+  require('dotenv').config({ path: resolveEnvFile() });
 }
 
 const { loadConfig, diagnoseConfig } = require('./config');
@@ -49,11 +51,17 @@ async function main() {
     diagnostics.missing.length > 0 || diagnostics.invalid.length > 0;
 
   if (setupRequired) {
-    // Limited setup mode: status endpoint + production SPA only. No SQLite,
-    // migrations, OAuth, storage adapter, or protected file routes.
+    // Limited setup mode: status endpoint, authenticated credential-write
+    // route, and the production SPA. No SQLite, migrations, OAuth, storage
+    // adapter, or protected file routes.
+    const setupToken = crypto.randomBytes(24).toString('base64url');
+    console.log(`Wyvern server setup token: ${setupToken}`);
     const app = createSetupApp({
       missing: diagnostics.missing,
       invalid: diagnostics.invalid,
+      setupToken,
+      envFile: resolveEnvFile(),
+      initialEnv: { ...process.env },
     });
     const server = app.listen(diagnostics.config.port, () => {
       const addr = server.address();

@@ -41,9 +41,17 @@ Express + SQLite server; Discord OAuth2 sign-in; desktop list/grid views,
 mobile cards; drag-and-drop upload; anonymous read-only share links; quota
 (default 10 GiB). Server serves the built SPA in production.
 First-run onboarding is operator-managed: with incomplete configuration the
-server boots a read-only setup mode serving `GET /api/setup/status` and a
-guided `/setup` page (missing-variable names only, never values); the operator
-fills `server/.env` and restarts. No browser form writes secrets.
+server boots a setup mode serving `GET /api/setup/status`, the token-guarded
+`POST /api/setup/credentials` write route, and a guided `/setup` page
+(missing-variable names only, never values). On that page the operator can
+enter the two Discord OAuth values; the server derives safe defaults
+(`APP_ORIGIN`, `DISCORD_REDIRECT_URI`, `DB_URL`) and generates
+`WYVERN_ENCRYPTION_KEY` when absent, writes the batch to `server/.env`, and
+requires a restart. The browser may submit those values transiently over the
+setup origin, but secrets are never returned, logged, or stored client-side;
+non-loopback submissions need the one-time setup token from the server log
+and must use HTTPS. The operator can equally fill `server/.env` by hand and
+restart.
 
 ## Capabilities and Constraints
 
@@ -107,8 +115,11 @@ never auto-migrated.
    hosted).
 5. Security-sensitive: never leak server-held Discord credentials (OAuth2
    client secret, sealed webhook credentials), raw attachment URLs, message
-   IDs, or encryption keys to the browser. Setup surfaces render variable
-   names only, never values.
+   IDs, or encryption keys to the browser. The setup page may submit the two
+   Discord OAuth values transiently over the setup origin, but secrets are
+   never returned to the browser, logged, or kept client-side; safe defaults
+   and the encryption key are generated server-side, and diagnostics render
+   variable names only, never values.
 
 ## Accessibility & Inclusion
 

@@ -13,12 +13,19 @@ Self-hostable Discord-backed cloud drive backend. The server is the only compone
 
 1. Create a Discord application at <https://discord.com/developers/applications>.
 2. In **OAuth2**, copy the Client ID and Client Secret; add your redirect URI (`APP_ORIGIN/api/auth/discord/callback`) to the redirect list. The registered URI must match `DISCORD_REDIRECT_URI` exactly. No bot is needed.
-3. Generate an encryption key and create the environment file:
+3. Create the environment file, optionally leaving values for the setup page:
 
    ```powershell
-   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-   Copy-Item .env.example .env   # then fill in every value
+   Copy-Item .env.example .env
    ```
+
+   You can fill in every value by hand (generate a 32-byte base64 key with
+   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`),
+   or leave them for the guided `/setup` page: it saves the Discord Client ID
+   and Client Secret, derives safe defaults (`APP_ORIGIN`,
+   `DISCORD_REDIRECT_URI`, `DB_URL`), and generates `WYVERN_ENCRYPTION_KEY`
+   server-side when it is absent — the key is written to `.env` and never sent
+   to the browser.
 
 4. Install and start:
 
@@ -32,12 +39,21 @@ Self-hostable Discord-backed cloud drive backend. The server is the only compone
 invalid configuration the server boots into **setup mode**: it serves
 `GET /api/setup/status` (JSON: `setupRequired`, `usesWebhooks: true`,
 `storageMode: "discord-webhooks-per-user"`, and the `missing`/`invalid`
-variable names — never secret values) plus the production SPA's guided `/setup`
-page, and hides every other route behind the standard JSON 404. No database,
-migrations, or OAuth client are initialized in setup mode. An invalid `PORT`
-is the only fatal config error, since the process cannot pick a listening
-port. A file-backed `DB_URL`'s parent directory is created automatically
-before SQLite opens. Once every variable validates, the full composition runs
+variable names — never secret values), the authenticated
+`POST /api/setup/credentials` write route, and the production SPA's guided
+`/setup` page, and hides every other route behind the standard JSON 404. On
+the page you can enter the Discord Client ID and Client Secret; the server
+derives safe defaults for `APP_ORIGIN`, `DISCORD_REDIRECT_URI`, and `DB_URL`
+and generates a fresh `WYVERN_ENCRYPTION_KEY` when none is set, writing the
+batch atomically to `server/.env`. The client secret is submitted over the
+setup origin and is never returned, logged, or kept in the browser;
+non-loopback submissions require the one-time setup token printed once in the
+setup-mode log (`Wyvern server setup token: …`) and must use HTTPS. A restart
+is required for the written file to take effect. No database, migrations, or
+OAuth client are initialized in setup mode. An invalid `PORT` is the only
+fatal config error, since the process cannot pick a listening port. A
+file-backed `DB_URL`'s parent directory is created automatically before
+SQLite opens. Once every variable validates, the full composition runs
 (SQLite → migrations → services → HTTP) and `/api/setup/status` reports
 `setupRequired: false`.
 
@@ -58,7 +74,7 @@ in the browser.
 | `DISCORD_CLIENT_ID` | yes | — | Discord OAuth2 application client ID. |
 | `DISCORD_CLIENT_SECRET` | yes | — | Discord OAuth2 application client secret. |
 | `DISCORD_REDIRECT_URI` | yes | — | OAuth callback URL, must be an absolute http(s) URL and match the Discord application's registered redirect exactly. |
-| `WYVERN_ENCRYPTION_KEY` | yes | — | Base64-encoded 32-byte AES-256-GCM master key; encrypts file chunks and per-user webhook credentials. |
+| `WYVERN_ENCRYPTION_KEY` | yes | — | Base64-encoded 32-byte AES-256-GCM master key; encrypts file chunks and per-user webhook credentials. On first GUI setup the server generates one and writes it to `.env` if absent; it never leaves the server. |
 | `DEFAULT_QUOTA_BYTES` | no | `10737418240` (10 GiB) | Per-user storage quota in bytes. |
 | `WYVERN_CHUNK_SIZE_BYTES` | no | `2097152` (2 MiB) | Plaintext chunk size in bytes; valid `65536`..`8388608`. Honored in every environment. |
 | `WYVERN_CHUNKS_PER_MESSAGE` | no | `10` | Max encrypted chunks packed per Discord message (one attachment per chunk); valid `1`..`10`. The effective batch also caps at how many chunks fit under Discord's 25 MiB upload limit. |
@@ -154,6 +170,7 @@ src/http/trash-routes.js      GET /api/trash (lazy retention sweep), POST /api/t
 src/http/file-routes.js       POST /api/files/upload (uploadToken/fileSize), GET /api/files/:id/download (Range + ?inline=1), POST /api/uploads/:uploadToken/cancel (abort purge), GET /api/uploads/:uploadToken (progress), shares
 src/http/entry-routes.js      GET /api/entries (list; `query` searches the whole drive), PATCH/DELETE (soft) /api/entries/:id, POST /api/entries/:id/copy, GET /api/entries/:id/archive (ZIP)
 src/http/setup-status.js      read-only first-run status contract (mounted in full and setup apps)
-src/http/setup-app.js         limited setup-mode app (status + SPA only)
+src/http/setup-config.js      setup-only routes: GET /api/setup/meta + POST /api/setup/credentials (token/origin-checked; writes validated values + safe defaults)
+src/http/setup-app.js         limited setup-mode app (status, /api/setup/* credential routes, SPA only)
 test/                         node:test suite with fake Discord adapters
 ```

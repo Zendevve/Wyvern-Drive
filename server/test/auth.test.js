@@ -21,7 +21,7 @@ test('GET /api/auth/discord redirects to Discord with state and a state cookie',
   assert.strictEqual(url.pathname, '/api/oauth2/authorize');
   assert.strictEqual(url.searchParams.get('scope'), 'identify');
   assert.strictEqual(url.searchParams.get('response_type'), 'code');
-  assert.strictEqual(url.searchParams.get('client_id'), 'test-client-id');
+  assert.strictEqual(url.searchParams.get('client_id'), '123456789012345678');
   assert.strictEqual(url.searchParams.get('redirect_uri'), `${ORIGIN}/api/auth/discord/callback`);
   assert.ok(url.searchParams.get('state'));
   assert.ok(res.cookies.wyvern_oauth_state);
