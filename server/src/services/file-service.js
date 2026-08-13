@@ -1009,7 +1009,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
         if (!entry || entry.drive_id !== drive.id) throw httpError('NOT_FOUND');
 
         await repositories.markSubtreeDeleting(drive.id, entryId);
-        const deadBlocks = new Set();
+        const deadBlocks = new Map();
         const fileRows = await repositories.getSubtreeFiles(drive.id, entryId);
         try {
           for (const fileRow of fileRows) {
@@ -1028,8 +1028,10 @@ function createFileService({ db, repositories, discordStorage, config }) {
             }
             for (const [messageId, group] of byMessageId) {
               const refsByBlock = new Map();
+              const hashByBlock = new Map();
               for (const chunk of group) {
                 refsByBlock.set(chunk.block_id, (refsByBlock.get(chunk.block_id) || 0) + 1);
+                hashByBlock.set(chunk.block_id, chunk.checksum);
               }
               // Block liveness after this entry's rows for the message go away.
               let allDead = true;
@@ -1052,7 +1054,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
                   await repositories.markChunkDeleted(chunk.id);
                 }
                 for (const blockId of refsByBlock.keys()) {
-                  deadBlocks.add(blockId);
+                  deadBlocks.set(blockId, hashByBlock.get(blockId));
                 }
               } else {
                 // Shared with another entry: the message stays; drop only this
@@ -1071,7 +1073,8 @@ function createFileService({ db, repositories, discordStorage, config }) {
         await repositories.deleteRecursive(drive.id, entryId);
         // Block rows drop only after their referencing chunk rows are gone (the
         // recursive delete cascades them away); FK enforcement forbids earlier.
-        for (const blockId of deadBlocks) {
+        for (const [blockId, contentHash] of deadBlocks) {
+          if (contentHash) invalidateContentBlock(drive.id, contentHash);
           await repositories.deleteBlock(blockId);
         }
 
@@ -1271,6 +1274,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
             // leftovers); drop them first so the block row can go. Live
             // chunk rows are never here — they would make the block live.
             await repositories.deleteDeadChunkRows(block.id);
+            invalidateContentBlock(block.drive_id, block.content_hash);
             await repositories.deleteBlock(block.id);
           }
         } catch (err) {
