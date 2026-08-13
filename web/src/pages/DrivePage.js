@@ -533,90 +533,120 @@ export default function DrivePage() {
         sx={{
           display: 'flex',
           flexWrap: 'wrap',
-          gap: 1,
-          mb: 2,
+          gap: 1.5,
+          mb: 3,
           alignItems: 'center',
         }}
       >
         <TextField
           size="small"
-          placeholder="Search files and folders"
+          placeholder="Search files and folders..."
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           disabled={entriesLoading}
           sx={{
             flexGrow: 1,
-            minWidth: 220,
+            minWidth: 240,
+            maxWidth: { md: 360 },
+            '& .MuiOutlinedInput-root': {
+              borderRadius: '100px',
+              bgcolor: 'surface1',
+            },
           }}
           inputProps={{ 'aria-label': 'Search files and folders' }}
           InputProps={{
             startAdornment: (
               <Box
                 component="span"
-                sx={{ color: 'inkMuted', display: 'inline-flex' }}
+                sx={{ color: 'inkMuted', display: 'inline-flex', mr: 0.5 }}
               >
                 <FontAwesomeIcon icon={faMagnifyingGlass} aria-hidden="true" />
               </Box>
             ),
           }}
         />
-        <Button
-          variant="contained"
-          startIcon={<FontAwesomeIcon icon={faUpload} />}
-          onClick={() => fileInputRef.current && fileInputRef.current.click()}
-          disabled={entriesLoading}
-        >
-          Upload
-        </Button>
-        <Button
-          variant="outlined"
-          startIcon={<FontAwesomeIcon icon={faFolderTree} />}
-          onClick={() => folderInputRef.current && folderInputRef.current.click()}
-          disabled={entriesLoading}
-        >
-          Upload folder
-        </Button>
-        <Button
-          variant="outlined"
-          startIcon={<FontAwesomeIcon icon={faFolderPlus} />}
-          onClick={() => setFolderDialogOpen(true)}
-        >
-          New folder
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button
+            variant="contained"
+            startIcon={<FontAwesomeIcon icon={faUpload} />}
+            onClick={() => fileInputRef.current && fileInputRef.current.click()}
+            disabled={entriesLoading}
+            sx={{ height: 38, px: 2.25 }}
+          >
+            Upload
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<FontAwesomeIcon icon={faFolderTree} />}
+            onClick={() => folderInputRef.current && folderInputRef.current.click()}
+            disabled={entriesLoading}
+            sx={{ height: 38, px: 2 }}
+          >
+            Upload folder
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<FontAwesomeIcon icon={faFolderPlus} />}
+            onClick={() => setFolderDialogOpen(true)}
+            sx={{ height: 38, px: 2 }}
+          >
+            New folder
+          </Button>
+        </Box>
         {isDesktop && (
-          <Box sx={{ display: 'inline-flex', gap: 1 }}>
+          <Box
+            sx={{
+              display: 'inline-flex',
+              p: '3px',
+              bgcolor: 'surface1',
+              border: '1px solid hairline',
+              borderRadius: '100px',
+              gap: '2px',
+            }}
+          >
             <IconButton
               aria-label="List view"
               aria-pressed={view === 'list'}
               onClick={() => setView('list')}
               sx={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
+                width: 32,
+                height: 32,
+                borderRadius: '100px',
                 color: view === 'list' ? 'ink' : 'inkMuted',
                 bgcolor: view === 'list' ? 'surface2' : 'transparent',
+                boxShadow: view === 'list' ? 'inset 0 1px 0 rgba(255,255,255,0.08)' : 'none',
               }}
             >
-              <FontAwesomeIcon icon={faTableList} />
+              <FontAwesomeIcon icon={faTableList} size="sm" />
             </IconButton>
             <IconButton
               aria-label="Grid view"
               aria-pressed={view === 'grid'}
               onClick={() => setView('grid')}
               sx={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
+                width: 32,
+                height: 32,
+                borderRadius: '100px',
                 color: view === 'grid' ? 'ink' : 'inkMuted',
                 bgcolor: view === 'grid' ? 'surface2' : 'transparent',
+                boxShadow: view === 'grid' ? 'inset 0 1px 0 rgba(255,255,255,0.08)' : 'none',
               }}
             >
-              <FontAwesomeIcon icon={faTableCellsLarge} />
+              <FontAwesomeIcon icon={faTableCellsLarge} size="sm" />
             </IconButton>
           </Box>
         )}
         <Box
-          sx={{ ml: 'auto', width: 200, display: isDesktop ? 'block' : 'none' }}
+          sx={{
+            ml: 'auto',
+            width: 220,
+            display: isDesktop ? 'block' : 'none',
+            bgcolor: 'surface1',
+            border: '1px solid hairline',
+            borderRadius: '14px',
+            px: 2,
+            py: 1.25,
+          }}
         >
           <QuotaMeter drive={drive} />
         </Box>

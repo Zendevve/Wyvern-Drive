@@ -27,19 +27,54 @@ export default function QuotaMeter({ drive }) {
   const percent =
     quotaBytes > 0 ? Math.min(100, Math.round((usedBytes / quotaBytes) * 100)) : 0;
   return (
-    <Box>
-      <Typography variant="caption" color="inkMuted" component="p">
-        Storage
-      </Typography>
-      <Typography variant="caption" color="inkMuted" component="p">
-        {formatBytes(usedBytes)} of {formatBytes(quotaBytes)} used
-      </Typography>
+    <Box sx={{ width: '100%' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          mb: 0.5,
+        }}
+      >
+        <Typography
+          variant="caption"
+          color="inkMuted"
+          component="span"
+          sx={{ fontWeight: 500 }}
+        >
+          Storage
+        </Typography>
+        <Typography
+          variant="caption"
+          component="span"
+          sx={{
+            fontFamily: 'monospace',
+            fontWeight: 600,
+            fontSize: 11,
+            color: 'accentBlue',
+            bgcolor: 'rgba(0,153,255,0.10)',
+            px: 1,
+            py: 0.2,
+            borderRadius: '100px',
+          }}
+        >
+          {percent}%
+        </Typography>
+      </Box>
       <LinearProgress
         variant="determinate"
         value={percent}
         aria-label={`${percent}% of quota used`}
-        sx={{ mt: 1 }}
+        sx={{ my: 0.75 }}
       />
+      <Typography
+        variant="caption"
+        color="inkMuted"
+        component="p"
+        sx={{ fontSize: 11, letterSpacing: '-0.1px' }}
+      >
+        {formatBytes(usedBytes)} of {formatBytes(quotaBytes)} used
+      </Typography>
     </Box>
   );
 }

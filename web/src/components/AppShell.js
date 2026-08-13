@@ -77,7 +77,7 @@ export default function AppShell({ title, children }) {
       >
         <BrandLockup />
       </Box>
-      <List sx={{ px: 1, pt: 1 }}>
+      <List sx={{ px: 1.5, pt: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
         {navItems.map((item) => {
           const selected = location.pathname.startsWith(item.to);
           return (
@@ -87,25 +87,35 @@ export default function AppShell({ title, children }) {
                 onClick={() => go(item.to)}
                 aria-current={selected ? 'page' : undefined}
                 sx={{
-                  gap: 1,
-                  minHeight: 44,
-                  borderRadius: '10px',
-                  color: 'inkMuted',
-                  '&:hover': { bgcolor: 'rgba(255,255,255,0.04)', color: 'ink' },
-                  '& .MuiListItemIcon-root': { color: 'inkMuted' },
+                  gap: 1.5,
+                  minHeight: 42,
+                  borderRadius: '12px',
+                  px: 2,
+                  color: selected ? 'ink' : 'inkMuted',
+                  fontWeight: selected ? 600 : 500,
+                  bgcolor: selected ? 'surface2' : 'transparent',
+                  boxShadow: selected ? 'inset 0 1px 0 rgba(255,255,255,0.08)' : 'none',
+                  '&:hover': { bgcolor: selected ? 'surface2' : 'rgba(255,255,255,0.04)', color: 'ink' },
+                  '& .MuiListItemIcon-root': {
+                    color: selected ? 'accentBlue' : 'inkMuted',
+                    minWidth: 'auto',
+                    width: 20,
+                    justifyContent: 'center',
+                  },
                   '&:hover .MuiListItemIcon-root': { color: 'ink' },
-                  '&.Mui-selected': { bgcolor: 'surface2' },
-                  '&.Mui-selected:hover': { bgcolor: 'surface2' },
-                  ...(selected && {
-                    color: 'ink',
-                    '& .MuiListItemIcon-root': { color: 'ink' },
-                  }),
                 }}
               >
                 <ListItemIcon>
                   <FontAwesomeIcon icon={item.icon} />
                 </ListItemIcon>
-                <ListItemText primary={item.label} />
+                <ListItemText
+                  primary={item.label}
+                  primaryTypographyProps={{
+                    fontSize: 14,
+                    fontWeight: selected ? 600 : 500,
+                    letterSpacing: '-0.14px',
+                  }}
+                />
               </ListItemButton>
             </ListItem>
           );
@@ -116,47 +126,70 @@ export default function AppShell({ title, children }) {
         sx={{
           borderTop: 1,
           borderColor: 'hairline',
-          p: 2,
+          p: 1.5,
           display: 'flex',
           flexDirection: 'column',
           gap: 1.5,
         }}
       >
         {user && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 1 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              p: 1.25,
+              bgcolor: 'surface1',
+              border: '1px solid hairline',
+              borderRadius: '14px',
+            }}
+          >
             <Avatar
               src={user.avatarUrl || undefined}
-              sx={{ width: 26, height: 26, fontSize: 12 }}
+              sx={{ width: 32, height: 32, fontSize: 13, bgcolor: 'surface2', color: 'ink', border: '1px solid hairline' }}
             >
               {user.username ? user.username.charAt(0).toUpperCase() : ''}
             </Avatar>
-            <Typography
-              variant="body2"
-              noWrap
-              sx={{ flexGrow: 1, color: 'inkMuted' }}
-            >
-              {user.username}
-            </Typography>
+            <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{ color: 'ink', fontWeight: 600, fontSize: 13, lineHeight: 1.2 }}
+              >
+                {user.username}
+              </Typography>
+              <Typography
+                variant="caption"
+                noWrap
+                sx={{ color: 'inkMuted', fontSize: 11, display: 'block', mt: 0.2 }}
+              >
+                Discord Account
+              </Typography>
+            </Box>
           </Box>
         )}
-        <List disablePadding sx={{ px: 1 }}>
+        <List disablePadding>
           <ListItem disablePadding>
             <ListItemButton
               onClick={handleLogout}
               data-testid="sidebar-logout"
               sx={{
-                minHeight: 44,
-                borderRadius: '10px',
+                minHeight: 40,
+                borderRadius: '12px',
+                px: 1.5,
                 color: 'inkMuted',
-                '&:hover': { bgcolor: 'rgba(255,255,255,0.04)', color: 'ink' },
-                '& .MuiListItemIcon-root': { color: 'inkMuted' },
-                '&:hover .MuiListItemIcon-root': { color: 'ink' },
+                '&:hover': { bgcolor: 'rgba(255,92,92,0.08)', color: 'error.main' },
+                '& .MuiListItemIcon-root': { color: 'inkMuted', minWidth: 'auto', width: 20, justifyContent: 'center' },
+                '&:hover .MuiListItemIcon-root': { color: 'error.main' },
               }}
             >
               <ListItemIcon>
                 <FontAwesomeIcon icon={faRightFromBracket} />
               </ListItemIcon>
-              <ListItemText primary="Log out" />
+              <ListItemText
+                primary="Log out"
+                primaryTypographyProps={{ fontSize: 14, fontWeight: 500 }}
+              />
             </ListItemButton>
           </ListItem>
         </List>

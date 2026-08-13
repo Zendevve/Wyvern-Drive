@@ -196,21 +196,51 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
             size="small"
             onClick={stop(() => actions.onOpenFolder(entry))}
             startIcon={
-              <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" />
+              <Box
+                sx={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: '6px',
+                  bgcolor: 'surface2',
+                  border: '1px solid hairlineSoft',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mr: 0.5,
+                }}
+              >
+                <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" style={{ fontSize: 14 }} />
+              </Box>
             }
             sx={{
               textTransform: 'none',
-              fontWeight: 500,
+              fontWeight: 600,
               color: 'ink',
-              '&:hover': { color: 'ink' },
+              '&:hover': { color: 'accentBlue' },
             }}
           >
             {entry.name}
           </Button>
         ) : (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" />
-            <span>{entry.name}</span>
+            <Box
+              sx={{
+                width: 28,
+                height: 28,
+                borderRadius: '6px',
+                bgcolor: 'surface2',
+                border: '1px solid hairlineSoft',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" style={{ fontSize: 14 }} />
+            </Box>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: 'ink' }}>
+              {entry.name}
+            </Typography>
           </Box>
         )}
       </TableCell>
@@ -218,7 +248,7 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
         <Typography
           variant="body2"
           component="span"
-          sx={{ color: 'inkMuted' }}
+          sx={{ color: 'inkMuted', fontFamily: 'monospace', fontSize: 13 }}
         >
           {isFolder ? '—' : formatBytes(entry.sizeBytes)}
         </Typography>

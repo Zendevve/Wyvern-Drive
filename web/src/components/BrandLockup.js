@@ -29,11 +29,13 @@ export default function BrandLockup({ compact = false, align = 'left' }) {
           alignItems: 'center',
           justifyContent: 'center',
           bgcolor: 'surface2',
-          borderRadius: '50%',
+          border: '1px solid hairline',
+          borderRadius: '10px',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
         }}
         aria-hidden="true"
       >
-        <FontAwesomeIcon icon={faFolder} color="#FFFFFF" size="sm" />
+        <FontAwesomeIcon icon={faFolder} color="#0099FF" size="sm" />
       </Box>
       <Typography
         variant={compact ? 'subtitle2' : 'h6'}

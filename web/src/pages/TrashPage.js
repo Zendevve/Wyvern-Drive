@@ -166,17 +166,41 @@ export default function TrashPage() {
             variant="outlined"
             elevation={0}
             data-testid="trash-empty"
-            sx={{ borderRadius: '20px', bgcolor: 'surface1' }}
+            sx={{
+              maxWidth: 480,
+              mx: 'auto',
+              my: 6,
+              borderRadius: '24px',
+              bgcolor: 'surface1',
+              borderColor: 'hairline',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 40px rgba(0,0,0,0.3)',
+            }}
           >
-            <CardContent sx={{ p: 4, textAlign: 'center' }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, color: 'ink' }}>
+            <CardContent sx={{ p: 5, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Box
+                sx={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: '50%',
+                  bgcolor: 'rgba(255,92,92,0.08)',
+                  border: '1px solid rgba(255,92,92,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'danger',
+                  mb: 2,
+                }}
+              >
+                <FontAwesomeIcon icon={faTrashCan} size="lg" />
+              </Box>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: 'ink', fontSize: 20, letterSpacing: '-0.4px' }}>
                 Trash is empty
               </Typography>
               <Typography
                 variant="body2"
-                sx={{ mt: 1, color: 'inkMuted' }}
+                sx={{ mt: 1, color: 'inkMuted', fontSize: 14, maxWidth: 320, lineHeight: 1.4 }}
               >
-                Deleted files and folders appear here and can be restored.
+                Deleted files and folders appear here and can be restored anytime.
               </Typography>
             </CardContent>
           </Card>

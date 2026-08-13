@@ -390,8 +390,11 @@ const theme = createTheme({
     },
     MuiLinearProgress: {
       styleOverrides: {
-        root: { backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 100, height: 6 },
-        bar: { backgroundColor: tokens.ink, borderRadius: 100 },
+        root: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 100, height: 6, overflow: 'hidden' },
+        bar: {
+          background: 'linear-gradient(90deg, #0099FF 0%, #38BDF8 100%)',
+          borderRadius: 100,
+        },
       },
     },
     MuiLink: {
