@@ -127,6 +127,12 @@ async function runWorkflow(iteration) {
     quotaBytes: 16 * 1024 * 1024,
     compressChunks: true,
   });
+  let messageBlockQueries = 0;
+  const getBlocksByMessageId = ctx.repositories.getBlocksByMessageId.bind(ctx.repositories);
+  ctx.repositories.getBlocksByMessageId = (...args) => {
+    messageBlockQueries += 1;
+    return getBlocksByMessageId(...args);
+  };
   try {
     const user = await ctx.repositories.upsertUserByDiscord({
       discordId: `bench-${iteration}`,
@@ -183,6 +189,7 @@ async function runWorkflow(iteration) {
       attachments: mockDiscord.attachmentCount,
       messageFetches: mockDiscord.messageFetches,
       cdnFetches: mockDiscord.cdnFetches,
+      dbMessageBlockQueries: messageBlockQueries,
       storedBytes: stats.storedBytes,
       logicalBytes: stats.sizeBytes,
       entries: [original, duplicate, secondEntry, thirdEntry, copy].length,
@@ -244,6 +251,7 @@ async function main() {
   console.log(`METRIC discord_attachments=${last.attachments}`);
   console.log(`METRIC discord_message_fetches=${last.messageFetches}`);
   console.log(`METRIC discord_cdn_fetches=${last.cdnFetches}`);
+  console.log(`METRIC db_message_block_queries=${last.dbMessageBlockQueries}`);
   console.log(`METRIC dedup_saved_chunks=${last.dedupSavedChunks}`);
   console.log(`METRIC logical_bytes=${last.logicalBytes}`);
   console.log(`METRIC stored_bytes=${last.storedBytes}`);

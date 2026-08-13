@@ -175,6 +175,35 @@ function createFileService({ db, repositories, discordStorage, config }) {
     encryptedChunkCache.delete(blockId);
     encryptedChunkCacheBytes -= previous.buffer.length;
   }
+  // Block-to-attachment order is immutable while a message has live content;
+  // cache the small SQLite lookup alongside encrypted chunks. A bounded map
+  // avoids turning many previews into unbounded metadata retention.
+  const messageBlockIndexCache = new Map();
+  const messageBlockIndexInflight = new Map();
+  const messageBlockIndexCacheMax = 256;
+  async function blocksForMessage(messageId) {
+    const cached = messageBlockIndexCache.get(messageId);
+    if (cached) {
+      messageBlockIndexCache.delete(messageId);
+      messageBlockIndexCache.set(messageId, cached);
+      return cached;
+    }
+    const inflight = messageBlockIndexInflight.get(messageId);
+    if (inflight) return inflight;
+    const promise = repositories.getBlocksByMessageId(messageId).then((blocks) => {
+      while (messageBlockIndexCache.size >= messageBlockIndexCacheMax) {
+        messageBlockIndexCache.delete(messageBlockIndexCache.keys().next().value);
+      }
+      messageBlockIndexCache.set(messageId, blocks);
+      return blocks;
+    });
+    messageBlockIndexInflight.set(messageId, promise);
+    promise.then(
+      () => { if (messageBlockIndexInflight.get(messageId) === promise) messageBlockIndexInflight.delete(messageId); },
+      () => { if (messageBlockIndexInflight.get(messageId) === promise) messageBlockIndexInflight.delete(messageId); }
+    );
+    return promise;
+  }
   // One Discord message holds up to ~24.5 MiB of attachment bytes; cap each
   // packed batch so a batch of chunkSizeBytes chunks always fits.
   const effectiveChunksPerMessage = Math.max(
@@ -311,7 +340,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
       {
         const messages = new Set(chunks.map((row) => row.message_id));
         for (const messageId of messages) {
-          const blocks = await repositories.getBlocksByMessageId(messageId);
+          const blocks = await blocksForMessage(messageId);
           blocks.forEach((block, index) => attachmentIndexByBlockId.set(block.id, index));
         }
       }
