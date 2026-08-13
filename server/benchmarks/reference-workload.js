@@ -133,6 +133,12 @@ async function runWorkflow(iteration) {
     messageBlockQueries += 1;
     return getBlocksByMessageId(...args);
   };
+  let entryChunkQueries = 0;
+  const getChunksByEntry = ctx.repositories.getChunksByEntry.bind(ctx.repositories);
+  ctx.repositories.getChunksByEntry = (...args) => {
+    entryChunkQueries += 1;
+    return getChunksByEntry(...args);
+  };
   try {
     const user = await ctx.repositories.upsertUserByDiscord({
       discordId: `bench-${iteration}`,
@@ -154,12 +160,16 @@ async function runWorkflow(iteration) {
     const secondEntry = await upload(ctx, drive, alpha.id, 'second.bin', second, `bench-${iteration}-second`);
     const thirdEntry = await upload(ctx, drive, beta.id, 'third.bin', third, `bench-${iteration}-third`);
 
+    messageBlockQueries = 0;
+    entryChunkQueries = 0;
     const full = await download(ctx, drive, original.id);
     assert.equal(full.result.status, 200);
     assert.equal(sha256(full.body), sha256(first));
     const range = await download(ctx, drive, original.id, { start: 1234, end: CHUNK_SIZE + 4321 });
     assert.equal(range.result.status, 206);
     assert.deepEqual(range.body, first.subarray(1234, CHUNK_SIZE + 4322));
+    const downloadMessageBlockQueries = messageBlockQueries;
+    const downloadEntryChunkQueries = entryChunkQueries;
 
     const search = await ctx.fileService.listEntries({
       drive,
@@ -189,7 +199,8 @@ async function runWorkflow(iteration) {
       attachments: mockDiscord.attachmentCount,
       messageFetches: mockDiscord.messageFetches,
       cdnFetches: mockDiscord.cdnFetches,
-      dbMessageBlockQueries: messageBlockQueries,
+      dbMessageBlockQueries: downloadMessageBlockQueries,
+      dbEntryChunkQueries: downloadEntryChunkQueries,
       storedBytes: stats.storedBytes,
       logicalBytes: stats.sizeBytes,
       entries: [original, duplicate, secondEntry, thirdEntry, copy].length,
@@ -252,6 +263,7 @@ async function main() {
   console.log(`METRIC discord_message_fetches=${last.messageFetches}`);
   console.log(`METRIC discord_cdn_fetches=${last.cdnFetches}`);
   console.log(`METRIC db_message_block_queries=${last.dbMessageBlockQueries}`);
+  console.log(`METRIC db_entry_chunk_queries=${last.dbEntryChunkQueries}`);
   console.log(`METRIC dedup_saved_chunks=${last.dedupSavedChunks}`);
   console.log(`METRIC logical_bytes=${last.logicalBytes}`);
   console.log(`METRIC stored_bytes=${last.storedBytes}`);

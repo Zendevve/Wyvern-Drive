@@ -204,6 +204,32 @@ function createFileService({ db, repositories, discordStorage, config }) {
     );
     return promise;
   }
+  const entryChunkCache = new Map();
+  const entryChunkInflight = new Map();
+  const entryChunkCacheMax = 256;
+  async function chunksForEntry(entryId) {
+    const cached = entryChunkCache.get(entryId);
+    if (cached) {
+      entryChunkCache.delete(entryId);
+      entryChunkCache.set(entryId, cached);
+      return cached;
+    }
+    const inflight = entryChunkInflight.get(entryId);
+    if (inflight) return inflight;
+    const promise = repositories.getChunksByEntry(entryId).then((chunks) => {
+      while (entryChunkCache.size >= entryChunkCacheMax) {
+        entryChunkCache.delete(entryChunkCache.keys().next().value);
+      }
+      entryChunkCache.set(entryId, chunks);
+      return chunks;
+    });
+    entryChunkInflight.set(entryId, promise);
+    promise.then(
+      () => { if (entryChunkInflight.get(entryId) === promise) entryChunkInflight.delete(entryId); },
+      () => { if (entryChunkInflight.get(entryId) === promise) entryChunkInflight.delete(entryId); }
+    );
+    return promise;
+  }
   // One Discord message holds up to ~24.5 MiB of attachment bytes; cap each
   // packed batch so a batch of chunkSizeBytes chunks always fits.
   const effectiveChunksPerMessage = Math.max(
@@ -328,7 +354,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
    */
   function streamChunks(entry, drive, range) {
     return async function* stream() {
-      const chunks = await repositories.getChunksByEntry(entry.id);
+      const chunks = await chunksForEntry(entry.id);
 
       // Attachment order within a message = block id order (blocks are
       // inserted in attachment order when their batch is posted). Resolve
