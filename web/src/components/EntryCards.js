@@ -48,18 +48,39 @@ export default function EntryCards({ entries, actions, onPreview }) {
                   handlePreview(entry);
                 }
               }}
-              sx={{ width: '100%', borderRadius: '15px', bgcolor: 'surface1' }}
+              sx={{
+                width: '100%',
+                borderRadius: '16px',
+                bgcolor: 'surface1',
+                borderColor: 'hairline',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+              }}
             >
               <CardContent
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 1,
+                  gap: 1.5,
                   py: 1.5,
+                  px: 2,
                   '&:last-child': { pb: 1.5 },
                 }}
               >
-                <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" />
+                <Box
+                  sx={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: '8px',
+                    bgcolor: 'surface2',
+                    border: '1px solid hairlineSoft',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" style={{ fontSize: 16 }} />
+                </Box>
                 <Box sx={{ minWidth: 0, flexGrow: 1 }}>
                   {isFolder ? (
                     <Button
@@ -67,23 +88,25 @@ export default function EntryCards({ entries, actions, onPreview }) {
                       onClick={() => actions.onOpenFolder(entry)}
                       sx={{
                         textTransform: 'none',
-                        fontWeight: 500,
+                        fontWeight: 600,
+                        fontSize: 14,
                         color: 'ink',
                         p: 0,
                         minWidth: 0,
+                        textAlign: 'left',
                       }}
                     >
                       {entry.name}
                     </Button>
                   ) : (
-                    <Typography variant="body2" noWrap>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: 600, color: 'ink', fontSize: 14 }}>
                       {entry.name}
                     </Typography>
                   )}
                   <Typography
                     variant="caption"
                     component="p"
-                    sx={{ color: 'inkMuted' }}
+                    sx={{ color: 'inkMuted', fontSize: 12, mt: 0.2 }}
                   >
                     {meta}
                   </Typography>

@@ -27,60 +27,73 @@ const crumbLinkSx = {
 export default function Breadcrumbs({ trail, onNavigate }) {
   const parts = trail || [];
   return (
-    <MuiBreadcrumbs
-      aria-label="breadcrumb"
+    <Box
       sx={{
-        mb: 2,
-        // hairline dividers: the route trail reads as ruled, not bulleted
-        '& .MuiBreadcrumbs-separator': { color: 'hairline' },
+        display: 'inline-flex',
+        alignItems: 'center',
+        bgcolor: 'surface1',
+        border: '1px solid hairlineSoft',
+        borderRadius: '12px',
+        px: 2,
+        py: 0.85,
+        mb: 2.5,
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
       }}
     >
-      <Box
-        component="span"
-        sx={{ display: 'inline-flex', alignItems: 'center', color: 'inkMuted' }}
+      <MuiBreadcrumbs
+        aria-label="breadcrumb"
+        sx={{
+          '& .MuiBreadcrumbs-separator': { color: 'hairline', mx: 1 },
+        }}
       >
-        <FontAwesomeIcon
-          icon={faFolderOpen}
-          aria-hidden="true"
-          style={{ fontSize: 16, marginRight: 8 }}
-        />
-        <Link
-          component="button"
-          underline="hover"
-          sx={crumbLinkSx}
-          onClick={() => onNavigate(null)}
+        <Box
+          component="span"
+          sx={{ display: 'inline-flex', alignItems: 'center', color: 'inkMuted' }}
         >
-          My drive
-        </Link>
-      </Box>
-      {parts.map((part, index) => {
-        const isLast = index === parts.length - 1;
-        if (isLast) {
-          return (
-            <Typography
-              key={part.id}
-              color="text.primary"
-              fontWeight={500}
-              aria-current="page"
-              noWrap
-              sx={{ maxWidth: 220 }}
-            >
-              {part.name}
-            </Typography>
-          );
-        }
-        return (
+          <FontAwesomeIcon
+            icon={faFolderOpen}
+            aria-hidden="true"
+            style={{ fontSize: 15, marginRight: 8, color: '#0099FF' }}
+          />
           <Link
             component="button"
-            key={part.id}
             underline="hover"
-            sx={crumbLinkSx}
-            onClick={() => onNavigate(part.id)}
+            sx={{ ...crumbLinkSx, fontWeight: 500, fontSize: 13 }}
+            onClick={() => onNavigate(null)}
           >
-            {part.name}
+            My drive
           </Link>
-        );
-      })}
-    </MuiBreadcrumbs>
+        </Box>
+        {parts.map((part, index) => {
+          const isLast = index === parts.length - 1;
+          if (isLast) {
+            return (
+              <Typography
+                key={part.id}
+                color="text.primary"
+                fontWeight={600}
+                fontSize={13}
+                aria-current="page"
+                noWrap
+                sx={{ maxWidth: 220 }}
+              >
+                {part.name}
+              </Typography>
+            );
+          }
+          return (
+            <Link
+              component="button"
+              key={part.id}
+              underline="hover"
+              sx={{ ...crumbLinkSx, fontWeight: 500, fontSize: 13 }}
+              onClick={() => onNavigate(part.id)}
+            >
+              {part.name}
+            </Link>
+          );
+        })}
+      </MuiBreadcrumbs>
+    </Box>
   );
 }
