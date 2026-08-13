@@ -230,6 +230,38 @@ function createFileService({ db, repositories, discordStorage, config }) {
     );
     return promise;
   }
+  const contentBlockCache = new Map();
+  const contentBlockCacheMax = 1024;
+  function contentBlockKey(driveId, contentHash) {
+    return `${driveId}:${contentHash}`;
+  }
+  function cachedContentBlock(driveId, contentHash) {
+    const key = contentBlockKey(driveId, contentHash);
+    const block = contentBlockCache.get(key);
+    if (!block) return null;
+    contentBlockCache.delete(key);
+    contentBlockCache.set(key, block);
+    return block;
+  }
+  function cacheContentBlock(block) {
+    if (!block) return;
+    const key = contentBlockKey(block.drive_id, block.content_hash);
+    contentBlockCache.delete(key);
+    while (contentBlockCache.size >= contentBlockCacheMax) {
+      contentBlockCache.delete(contentBlockCache.keys().next().value);
+    }
+    contentBlockCache.set(key, block);
+  }
+  function invalidateContentBlock(driveId, contentHash) {
+    contentBlockCache.delete(contentBlockKey(driveId, contentHash));
+  }
+  async function findContentBlock(driveId, contentHash) {
+    const cached = cachedContentBlock(driveId, contentHash);
+    if (cached) return cached;
+    const block = await repositories.getBlockByContentHash(driveId, contentHash);
+    if (block) cacheContentBlock(block);
+    return block;
+  }
   // One Discord message holds up to ~24.5 MiB of attachment bytes; cap each
   // packed batch so a batch of chunkSizeBytes chunks always fits.
   const effectiveChunksPerMessage = Math.max(
@@ -655,6 +687,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
               // transaction itself runs under the commit serialization chain
               // so concurrent flushes never nest BEGIN on the connection.
               let createdBlocks = 0;
+              const committedBlocks = [];
               await withCommitSerialization(async () => {
                 await exec(db, 'BEGIN');
                 try {
@@ -679,6 +712,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
                       createdBlocks += 1;
                     }
                     await repositories.insertChunk({ entryId: entry.id, ordinal: chunk.ordinal, blockId: block.id });
+                    committedBlocks.push(block);
                   }
                   await repositories.deletePendingPost(intent.id);
                 } catch (txErr) {
@@ -691,6 +725,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
                 }
                 await exec(db, 'COMMIT');
               });
+              for (const block of committedBlocks) cacheContentBlock(block);
               if (createdBlocks === 0) {
                 // The POST is redundant after a concurrent dedup win. The
                 // metadata commit is already durable, so deletion is best
@@ -730,10 +765,18 @@ function createFileService({ db, repositories, discordStorage, config }) {
         const processChunk = async (plain, ordinal) => {
           const stored = compressEnabled ? zlib.deflateSync(plain) : plain;
           const contentHash = sha256hex(stored);
-          const existing = await repositories.getBlockByContentHash(drive.id, contentHash);
+          let existing = await findContentBlock(drive.id, contentHash);
           if (existing) {
-            await repositories.insertChunk({ entryId: entry.id, ordinal, blockId: existing.id });
-            return;
+            try {
+              await repositories.insertChunk({ entryId: entry.id, ordinal, blockId: existing.id });
+              return;
+            } catch (err) {
+              // A purge may have removed a cached block between lookup and
+              // reference. Drop only that positive cache entry and retry as a miss.
+              if (!(err && err.code === 'SQLITE_CONSTRAINT' && /FOREIGN KEY/i.test(err.message || ''))) throw err;
+              invalidateContentBlock(drive.id, contentHash);
+              existing = null;
+            }
           }
           const webhook = await nextWebhook();
           const { cipher, nonce, authTag } = encryptChunk(stored, encryptionKey);
