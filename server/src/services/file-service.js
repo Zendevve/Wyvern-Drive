@@ -196,6 +196,39 @@ function createFileService({ db, repositories, discordStorage, config }) {
     commitChain = run.catch(() => {});
     return run;
   }
+  // Reserve new stored bytes before posting them so concurrent uploads cannot
+  // each pass the same stale sumUsedBytes quota check.
+  const quotaReservations = new Map();
+  const quotaChains = new Map();
+  function withQuotaLock(driveId, fn) {
+    const previous = quotaChains.get(driveId) || Promise.resolve();
+    const run = previous.then(fn);
+    const tail = run.catch(() => {});
+    quotaChains.set(driveId, tail);
+    tail.then(() => {
+      if (quotaChains.get(driveId) === tail) quotaChains.delete(driveId);
+    });
+    return run;
+  }
+  async function reserveQuota(drive, bytes) {
+    if (bytes <= 0) return;
+    await withQuotaLock(drive.id, async () => {
+      const committed = await repositories.sumUsedBytes(drive.id);
+      const reserved = quotaReservations.get(drive.id) || 0;
+      if (committed + reserved + bytes > drive.quota_bytes) {
+        throw new WyvernError('QUOTA_EXCEEDED', 'Quota exceeded', 413);
+      }
+      quotaReservations.set(drive.id, reserved + bytes);
+    });
+  }
+  async function releaseQuota(driveId, bytes) {
+    if (bytes <= 0) return;
+    await withQuotaLock(driveId, async () => {
+      const remaining = (quotaReservations.get(driveId) || 0) - bytes;
+      if (remaining > 0) quotaReservations.set(driveId, remaining);
+      else quotaReservations.delete(driveId);
+    });
+  }
   // Serialize upload-vs-cancel per upload token (and purge per entry): the
   // cancel endpoint must never interleave with an upload's flush so partial
   // chunks/blocks can't be orphaned or a committed entry wiped.
@@ -428,6 +461,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
       // interleave with an upload's flush: a cancel either runs before any
       // chunk is posted or after the entry committed or marked failed.
       const runUpload = async () => {
+        let reservedBytes = 0;
         // A client upload token resumes the owning uploading/failed entry: the
         // row and its name are reused and only missing ordinals are posted. A
         // token bound to a ready entry (or no token at all) is a fresh upload.
@@ -648,6 +682,8 @@ function createFileService({ db, repositories, discordStorage, config }) {
           }
           const webhook = await nextWebhook();
           const { cipher, nonce, authTag } = encryptChunk(stored, encryptionKey);
+          await reserveQuota(drive, plain.length);
+          reservedBytes += plain.length;
           newBytes += plain.length;
           this.assertQuota(usedBytes, newBytes, drive.quota_bytes);
           let holder = pendingByWebhook.get(webhook.id);
@@ -689,6 +725,8 @@ function createFileService({ db, repositories, discordStorage, config }) {
           await Promise.all(inFlight);
 
           const ready = await repositories.updateEntry(entry.id, { size_bytes: bytesRead, status: 'ready' });
+          await releaseQuota(drive.id, reservedBytes);
+          reservedBytes = 0;
           return toEntryJson(ready);
         } catch (err) {
           // Keep the entry row and every posted chunk so the upload can resume;
@@ -711,6 +749,8 @@ function createFileService({ db, repositories, discordStorage, config }) {
           } catch (updateErr) {
             // Row vanished mid-upload; nothing left to mark.
           }
+          await releaseQuota(drive.id, reservedBytes);
+          reservedBytes = 0;
           if (err && err.code) throw err;
           throw new WyvernError('UPLOAD_FAILED', 'Upload failed');
         }

@@ -192,9 +192,47 @@ async function runWorkflow(iteration) {
   }
 }
 
+async function runQuotaProbe() {
+  const ctx = await startTestServer({ quotaBytes: 8 });
+  try {
+    const user = await ctx.repositories.upsertUserByDiscord({
+      discordId: 'quota-probe',
+      username: 'quota-probe',
+      avatarUrl: null,
+    });
+    const drive = await ctx.repositories.insertDrive({ ownerId: user.id, quotaBytes: 8 });
+    await ctx.fileService.addWebhook({ drive, webhookUrl: WEBHOOK_URL });
+    const upload = (name, value) => ctx.fileService.uploadFile({
+      drive,
+      parentId: null,
+      fileStream: Readable.from([Buffer.from(value)]),
+      filename: name,
+      mimeType: 'application/octet-stream',
+      uploadToken: `quota-${name}`,
+      expectedSizeBytes: 8,
+    });
+    const outcomes = await Promise.allSettled([
+      upload('quota-a.bin', [1, 2, 3, 4, 5, 6, 7, 8]),
+      upload('quota-b.bin', [9, 10, 11, 12, 13, 14, 15, 16]),
+    ]);
+    const successes = outcomes.filter((outcome) => outcome.status === 'fulfilled').length;
+    const quotaFailures = outcomes.filter(
+      (outcome) => outcome.status === 'rejected' && outcome.reason.code === 'QUOTA_EXCEEDED'
+    ).length;
+    const stats = await ctx.repositories.driveStats(drive.id);
+    assert.equal(successes, 1);
+    assert.equal(quotaFailures, 1);
+    assert.equal(stats.sizeBytes, 8);
+    return { successes, quotaFailures };
+  } finally {
+    await ctx.close();
+  }
+}
+
 async function main() {
   process.env.WYVERN_UPLOAD_CONCURRENCY = '4';
   process.env.WYVERN_DOWNLOAD_CONCURRENCY = '4';
+  const quotaProbe = await runQuotaProbe();
   await runWorkflow(0);
   const results = [];
   for (let i = 1; i <= ITERATIONS; i += 1) results.push(await runWorkflow(i));
@@ -209,6 +247,8 @@ async function main() {
   console.log(`METRIC dedup_saved_chunks=${last.dedupSavedChunks}`);
   console.log(`METRIC logical_bytes=${last.logicalBytes}`);
   console.log(`METRIC stored_bytes=${last.storedBytes}`);
+  console.log(`METRIC quota_race_successes=${quotaProbe.successes}`);
+  console.log(`METRIC quota_race_failures=${quotaProbe.quotaFailures}`);
 }
 
 main().catch((error) => {
