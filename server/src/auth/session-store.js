@@ -30,6 +30,15 @@ function createSessionStore(repositories) {
       if (!token) return;
       await repositories.deleteSessionByTokenHash(sha256(token));
     },
+
+    /**
+     * Reclaim expired session rows. Invoked by the periodic maintenance sweep;
+     * lookup semantics are unchanged (findByToken already treats an expired
+     * row as absent).
+     */
+    async deleteExpired() {
+      return repositories.deleteExpiredSessions();
+    },
   };
 }
 

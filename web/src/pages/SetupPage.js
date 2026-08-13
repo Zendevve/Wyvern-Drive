@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -44,7 +44,12 @@ function redirectUri() {
  */
 function RedirectUriChip() {
   const [copied, setCopied] = useState(false);
+  const resetTimer = useRef(null);
   const uri = redirectUri();
+
+  useEffect(() => () => {
+    if (resetTimer.current != null) window.clearTimeout(resetTimer.current);
+  }, []);
 
   function copyUri() {
     const fallbackCopy = () => {
@@ -67,7 +72,8 @@ function RedirectUriChip() {
       fallbackCopy();
     }
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
+    if (resetTimer.current != null) window.clearTimeout(resetTimer.current);
+    resetTimer.current = window.setTimeout(() => setCopied(false), 2000);
   }
 
   return (

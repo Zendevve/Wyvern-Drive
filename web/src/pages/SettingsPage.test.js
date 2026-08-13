@@ -115,9 +115,9 @@ describe('webhook management', () => {
 
     const line = await screen.findByTestId('storage-connected');
     expect(within(line).getByText('Storage connected')).toBeInTheDocument();
-    expect(await screen.findByText('2 connection(s)')).toBeInTheDocument();
+    expect(await within(line).findByText(/2 connection\(s\)/)).toBeInTheDocument();
     expect(
-      screen.getByText(/Your files are encrypted before they're stored/i)
+      screen.getByText(/Discord webhooks act as encrypted blob storage targets/i)
     ).toBeInTheDocument();
     // The add-webhook CTA remains available alongside the list.
     expect(screen.getByTestId('add-webhook')).toBeInTheDocument();

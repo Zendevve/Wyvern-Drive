@@ -80,4 +80,20 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ab, bb);
 }
 
-module.exports = { asyncHandler, requireSession, loadDrive, csrfProtect, createRateLimiter, safeEqual };
+/**
+ * Baseline hardening headers on every response: no MIME sniffing, a
+ * conservative referrer policy (full URL same-origin, bare origin
+ * cross-origin), and same-origin framing so the SPA cannot be embedded
+ * elsewhere. Deliberately no HSTS (the app runs on plain HTTP in development)
+ * and no CSP (the CRA runtime relies on inline scripts a CSP would break).
+ */
+function securityHeaders() {
+  return (req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    next();
+  };
+}
+
+module.exports = { asyncHandler, requireSession, loadDrive, csrfProtect, createRateLimiter, safeEqual, securityHeaders };

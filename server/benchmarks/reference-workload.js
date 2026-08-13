@@ -3,10 +3,76 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { Readable } = require('node:stream');
+const { createDiscordWebhookStorage } = require('../src/storage/discord-webhook-storage');
 const { startTestServer } = require('../test/helpers');
 
 const CHUNK_SIZE = 64 * 1024;
 const ITERATIONS = 3;
+function jsonResponse(body, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: new Headers({ 'content-type': 'application/json' }),
+    json: async () => body,
+    arrayBuffer: async () => Buffer.from(JSON.stringify(body)),
+  };
+}
+
+function createMockDiscord() {
+  const messages = new Map();
+  const cdnObjects = new Map();
+  let messageSequence = 0;
+  let messageFetches = 0;
+  let cdnFetches = 0;
+
+  async function fetchImpl(rawUrl, init = {}) {
+    const url = new URL(rawUrl);
+    if (url.hostname === 'cdn.test') {
+      cdnFetches += 1;
+      const data = cdnObjects.get(url.href);
+      return data ? { ok: true, status: 200, arrayBuffer: async () => Buffer.from(data) } : jsonResponse({}, 404);
+    }
+    if (url.hostname !== 'discord.com') return jsonResponse({}, 404);
+    const messageMatch = url.pathname.match(/\/messages\/([^/]+)$/);
+    if (messageMatch && (!init.method || init.method === 'GET')) {
+      messageFetches += 1;
+      const message = messages.get(messageMatch[1]);
+      return message ? jsonResponse(message) : jsonResponse({}, 404);
+    }
+    if (messageMatch && init.method === 'DELETE') {
+      messages.delete(messageMatch[1]);
+      return jsonResponse({}, 204);
+    }
+    if (init.method === 'POST' && url.searchParams.get('wait') === 'true') {
+      const id = `msg-${++messageSequence}`;
+      const attachments = [];
+      if (init.body && typeof init.body.entries === 'function') {
+        for (const [name, value] of init.body.entries()) {
+          if (name !== 'file') continue;
+          const attachmentUrl = `https://cdn.test/${id}/${attachments.length}`;
+          cdnObjects.set(attachmentUrl, Buffer.from(await value.arrayBuffer()));
+          attachments.push({ url: attachmentUrl });
+        }
+      }
+      const message = { id, attachments };
+      messages.set(id, message);
+      return jsonResponse(message);
+    }
+    return jsonResponse({ id: '123' });
+  }
+
+  return {
+    fetchImpl,
+    get messageFetches() { return messageFetches; },
+    get cdnFetches() { return cdnFetches; },
+    get messageCount() { return messages.size; },
+    get attachmentCount() {
+      let total = 0;
+      for (const message of messages.values()) total += message.attachments.length;
+      return total;
+    },
+  };
+}
 const WEBHOOK_URL = 'https://discord.com/api/webhooks/123/test-token';
 
 function makeFixture(size, seed) {
@@ -50,7 +116,13 @@ async function download(ctx, drive, entryId, range) {
 }
 
 async function runWorkflow(iteration) {
+  const mockDiscord = createMockDiscord();
+  const storage = createDiscordWebhookStorage(
+    { encryptionKey: Buffer.alloc(32, 7) },
+    { chunkSizeBytes: CHUNK_SIZE, fetchImpl: mockDiscord.fetchImpl }
+  );
   const ctx = await startTestServer({
+    storage,
     chunkSizeBytes: CHUNK_SIZE,
     quotaBytes: 16 * 1024 * 1024,
     compressChunks: true,
@@ -103,12 +175,14 @@ async function runWorkflow(iteration) {
     const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
 
     assert.equal(stats.sizeBytes, first.length * 2 + second.length * 2 + third.length);
-    assert.ok(ctx.discordStorage.countMessages() > 0);
+    assert.ok(mockDiscord.messageCount > 0);
     return {
       elapsedMs,
       dedupSavedChunks: Math.ceil(first.length / CHUNK_SIZE),
-      messages: ctx.discordStorage.countMessages(),
-      attachments: ctx.discordStorage.countAttachments(),
+      messages: mockDiscord.messageCount,
+      attachments: mockDiscord.attachmentCount,
+      messageFetches: mockDiscord.messageFetches,
+      cdnFetches: mockDiscord.cdnFetches,
       storedBytes: stats.storedBytes,
       logicalBytes: stats.sizeBytes,
       entries: [original, duplicate, secondEntry, thirdEntry, copy].length,
@@ -130,6 +204,8 @@ async function main() {
   console.log(`METRIC workflow_ms=${medianMs.toFixed(3)}`);
   console.log(`METRIC discord_messages=${last.messages}`);
   console.log(`METRIC discord_attachments=${last.attachments}`);
+  console.log(`METRIC discord_message_fetches=${last.messageFetches}`);
+  console.log(`METRIC discord_cdn_fetches=${last.cdnFetches}`);
   console.log(`METRIC dedup_saved_chunks=${last.dedupSavedChunks}`);
   console.log(`METRIC logical_bytes=${last.logicalBytes}`);
   console.log(`METRIC stored_bytes=${last.storedBytes}`);

@@ -585,6 +585,15 @@ function createRepositories(db) {
     deleteSessionByTokenHash(tokenHash) {
       return run(db, 'DELETE FROM sessions WHERE token_hash = ?', [tokenHash]);
     },
+
+    /**
+     * Delete every session row whose TTL has passed. expires_at is stored as
+     * UTC ISO text, so the string comparison is time-ordered; it mirrors the
+     * expiry check findByToken applies per lookup.
+     */
+    deleteExpiredSessions() {
+      return run(db, 'DELETE FROM sessions WHERE expires_at <= ?', [nowIso()]);
+    },
   };
 }
 

@@ -128,6 +128,16 @@ Coverage includes: config validation and setup diagnostics (missing variables, m
   (`deleted_at` older than `WYVERN_TRASH_RETENTION_DAYS`) is purged for every
   drive, fire-and-forget with per-drive guards so a storage outage never
   delays boot.
+- **Expired-session sweep**: at boot and every 6 hours, session rows whose
+  30-day TTL has passed are deleted (`sessions.expires_at <= now`),
+  fire-and-forget so maintenance never blocks requests. Lookup semantics are
+  unchanged: `findByToken` already treats an expired row as absent, so
+  expired cookies still get `401 AUTH_REQUIRED`.
+- **Security headers**: every response (API, SPA, downloads, redirects,
+  errors) carries `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, and
+  `X-Frame-Options: SAMEORIGIN`. No HSTS (dev runs plain HTTP) and no CSP
+  (the CRA runtime relies on inline scripts).
 
 ## Manual smoke path (configured Discord)
 

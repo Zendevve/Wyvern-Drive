@@ -13,6 +13,35 @@ const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 // entries so drive stats never count phantom files.
 const ORPHAN_UPLOAD_TTL_MS = 24 * 60 * 60 * 1000;
 
+// Bounded retries when a concurrent upload wins the race for an auto-suffixed
+// name. Each retry re-derives a free suffix against the now-committed rows, so
+// exhausting this means 5+ simultaneous racers for the same name.
+const UPLOAD_NAME_RETRIES = 5;
+
+/**
+ * The live-sibling unique indexes are the final authority for sibling-name
+ * uniqueness: idx_entries_unique_live over folder children and
+ * idx_entries_unique_live_root over drive-root rows. The siblingCount
+ * pre-checks are only a fast path, so a raced mutation that loses the
+ * insert/update lands here as a SQLite UNIQUE violation on entries. Match
+ * exactly those two indexes' column lists; every other constraint failure
+ * (CHECK, FOREIGN KEY) or database error propagates unchanged.
+ */
+function isLiveSiblingUniqueViolation(err) {
+  if (err == null || err.code !== 'SQLITE_CONSTRAINT' || typeof err.message !== 'string') return false;
+  return (
+    /^SQLITE_CONSTRAINT: UNIQUE constraint failed: entries\.drive_id, (?:entries\.parent_id, )?entries\.name$/.test(
+      err.message
+    ) || /UNIQUE constraint failed: index ['"]idx_entries_unique_live(?:_root)?['"]/.test(err.message)
+  );
+}
+
+/** Rethrow as NAME_CONFLICT only for a live-sibling name uniqueness violation. */
+function asNameConflict(err) {
+  if (isLiveSiblingUniqueViolation(err)) throw httpError('NAME_CONFLICT');
+  throw err;
+}
+
 function sha256hex(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
 }
@@ -324,15 +353,24 @@ function createFileService({ db, repositories, discordStorage, config }) {
       if ((await repositories.siblingCount(drive.id, parentId, name)) > 0) {
         throw httpError('NAME_CONFLICT');
       }
-      const row = await repositories.insertEntry({
-        driveId: drive.id,
-        parentId,
-        kind: 'folder',
-        name,
-        sizeBytes: 0,
-        mimeType: null,
-        status: 'ready',
-      });
+      // The live-sibling unique index is the final authority: two concurrent
+      // requests can both pass the siblingCount fast-path above, and the
+      // loser surfaces here as a SQLite UNIQUE violation mapped to
+      // NAME_CONFLICT (asNameConflict rethrows everything else unchanged).
+      let row;
+      try {
+        row = await repositories.insertEntry({
+          driveId: drive.id,
+          parentId,
+          kind: 'folder',
+          name,
+          sizeBytes: 0,
+          mimeType: null,
+          status: 'ready',
+        });
+      } catch (err) {
+        asNameConflict(err);
+      }
       return toEntryJson(row);
     },
 
@@ -361,7 +399,7 @@ function createFileService({ db, repositories, discordStorage, config }) {
         }
 
         const usedBytes = await repositories.sumUsedBytes(drive.id);
-        const finalName = resume ? entry.name : await this.uniqueSiblingName(drive.id, parentId, filename);
+        let finalName = resume ? entry.name : await this.uniqueSiblingName(drive.id, parentId, filename);
 
         const expectedSize =
           expectedSizeBytes !== undefined && expectedSizeBytes !== null && expectedSizeBytes !== ''
@@ -370,21 +408,36 @@ function createFileService({ db, repositories, discordStorage, config }) {
         const normalizedExpectedSize = Number.isInteger(expectedSize) && expectedSize >= 0 ? expectedSize : null;
 
         if (!resume) {
-          try {
-            entry = await repositories.insertEntry({
-              driveId: drive.id,
-              parentId,
-              kind: 'file',
-              name: finalName,
-              sizeBytes: 0,
-              mimeType: mimeType || 'application/octet-stream',
-              status: 'uploading',
-              uploadToken: token,
-              expectedSizeBytes: normalizedExpectedSize,
-            });
-          } catch (err) {
-            if (err && err.code) throw err;
-            throw new WyvernError('UPLOAD_FAILED', 'Failed to create upload record');
+          // The live-sibling unique index is the final authority: two
+          // concurrent uploads of the same name can both pass the
+          // uniqueSiblingName check, and the loser lands here. Keep the
+          // friendly auto-suffix contract by re-deriving a free name against
+          // the now-committed rows and retrying; a lost race after
+          // UPLOAD_NAME_RETRIES attempts is a name conflict.
+          let nameAttempts = 0;
+          for (;;) {
+            try {
+              entry = await repositories.insertEntry({
+                driveId: drive.id,
+                parentId,
+                kind: 'file',
+                name: finalName,
+                sizeBytes: 0,
+                mimeType: mimeType || 'application/octet-stream',
+                status: 'uploading',
+                uploadToken: token,
+                expectedSizeBytes: normalizedExpectedSize,
+              });
+              break;
+            } catch (err) {
+              if (!isLiveSiblingUniqueViolation(err)) {
+                if (err && err.code) throw err;
+                throw new WyvernError('UPLOAD_FAILED', 'Failed to create upload record');
+              }
+              nameAttempts += 1;
+              if (nameAttempts >= UPLOAD_NAME_RETRIES) throw httpError('NAME_CONFLICT');
+              finalName = await this.uniqueSiblingName(drive.id, parentId, filename);
+            }
           }
         }
 
@@ -469,21 +522,30 @@ function createFileService({ db, repositories, discordStorage, config }) {
               // message_id-set/no-blocks state the sweep reconciles. The
               // transaction itself runs under the commit serialization chain
               // so concurrent flushes never nest BEGIN on the connection.
+              let createdBlocks = 0;
               await withCommitSerialization(async () => {
                 await exec(db, 'BEGIN');
                 try {
                   for (const chunk of toPost) {
-                    const block = await repositories.insertBlock({
-                      driveId: drive.id,
-                      contentHash: chunk.checksum,
-                      messageId,
-                      webhookId: holder.webhook.id,
-                      plainSizeBytes: chunk.plain.length,
-                      cipherSizeBytes: chunk.cipher.length,
-                      nonce: chunk.nonce,
-                      authTag: chunk.authTag,
-                      compression: compressEnabled ? 'deflate' : 'none',
-                    });
+                    // A concurrent upload may have committed this hash after
+                    // the preflight lookup. Re-check inside the serialized
+                    // commit so the unique block index becomes a dedup hit
+                    // instead of turning a valid upload into SQLITE_CONSTRAINT.
+                    let block = await repositories.getBlockByContentHash(drive.id, chunk.checksum);
+                    if (!block) {
+                      block = await repositories.insertBlock({
+                        driveId: drive.id,
+                        contentHash: chunk.checksum,
+                        messageId,
+                        webhookId: holder.webhook.id,
+                        plainSizeBytes: chunk.plain.length,
+                        cipherSizeBytes: chunk.cipher.length,
+                        nonce: chunk.nonce,
+                        authTag: chunk.authTag,
+                        compression: compressEnabled ? 'deflate' : 'none',
+                      });
+                      createdBlocks += 1;
+                    }
                     await repositories.insertChunk({ entryId: entry.id, ordinal: chunk.ordinal, blockId: block.id });
                   }
                   await repositories.deletePendingPost(intent.id);
@@ -497,6 +559,16 @@ function createFileService({ db, repositories, discordStorage, config }) {
                 }
                 await exec(db, 'COMMIT');
               });
+              if (createdBlocks === 0) {
+                // The POST is redundant after a concurrent dedup win. The
+                // metadata commit is already durable, so deletion is best
+                // effort and must not make the successful upload fail.
+                try {
+                  await discordStorage.deleteChunk(holder.webhook, messageId);
+                } catch (deleteErr) {
+                  // The orphan reconciliation sweep owns any failed delete.
+                }
+              }
             } catch (err) {
               // The message exists on Discord but its block rows never
               // committed: record it so the upload failure path deletes it
@@ -684,7 +756,16 @@ function createFileService({ db, repositories, discordStorage, config }) {
           throw httpError('NAME_CONFLICT');
         }
       }
-      const updated = await repositories.updateEntry(entry.id, { name });
+      // The live-sibling unique index is the final authority: a concurrent
+      // rename can commit the target name between the siblingCount fast-path
+      // and this UPDATE, in which case the loser lands here as a SQLite
+      // UNIQUE violation mapped to NAME_CONFLICT.
+      let updated;
+      try {
+        updated = await repositories.updateEntry(entry.id, { name });
+      } catch (err) {
+        asNameConflict(err);
+      }
       return toEntryJson(updated);
     },
 
@@ -707,7 +788,16 @@ function createFileService({ db, repositories, discordStorage, config }) {
           throw httpError('NAME_CONFLICT');
         }
       }
-      const updated = await repositories.updateEntry(entry.id, { parent_id: targetParent });
+      // The live-sibling unique index is the final authority: a concurrent
+      // mutation can commit a same-named entry in the target between the
+      // siblingCount fast-path and this UPDATE, in which case the loser
+      // lands here as a SQLite UNIQUE violation mapped to NAME_CONFLICT.
+      let updated;
+      try {
+        updated = await repositories.updateEntry(entry.id, { parent_id: targetParent });
+      } catch (err) {
+        asNameConflict(err);
+      }
       return toEntryJson(updated);
     },
 
@@ -1060,7 +1150,18 @@ function createFileService({ db, repositories, discordStorage, config }) {
         return row;
       };
 
-      const copied = await copySubtree(entry, parentId, finalName);
+      // The live-sibling unique index is the final authority: two concurrent
+      // copies of the same source into one parent can both pass the
+      // uniqueSiblingName check, and the loser lands here as a SQLite UNIQUE
+      // violation mapped to NAME_CONFLICT. (Children of a copied subtree go
+      // into the brand-new copy row, so the only possible conflict is the
+      // top-level insert.)
+      let copied;
+      try {
+        copied = await copySubtree(entry, parentId, finalName);
+      } catch (err) {
+        asNameConflict(err);
+      }
       return toEntryJson(copied);
     },
 

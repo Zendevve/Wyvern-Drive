@@ -3,7 +3,7 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const { toErrorBody } = require('../errors');
-const { createRateLimiter } = require('./middleware');
+const { createRateLimiter, securityHeaders } = require('./middleware');
 const { createAuthRoutes } = require('./auth-routes');
 const { createSetupStatusRoutes } = require('./setup-status');
 const { createStorageRoutes } = require('./storage-routes');
@@ -23,6 +23,10 @@ function createApp(deps) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', false);
+
+  // Baseline hardening headers on every response, including API, static,
+  // downloads, redirects, and error bodies.
+  app.use(securityHeaders());
 
   app.use(cookieParser());
   app.use(express.json({ limit: '1mb' }));
@@ -47,9 +51,9 @@ function createApp(deps) {
     next();
   });
 
-  // Mutation rate limit: every POST/PATCH/DELETE under /api (the auth redirect
-  // is a GET and stays unlimited; public share metadata GETs are not limited).
-  const mutationLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 60 });
+  // Tests may raise this per in-memory app to keep long contract scenarios
+  // independent; production retains the conservative 60/minute default.
+  const mutationLimiter = createRateLimiter({ windowMs: 60 * 1000, max: config.mutationRateLimitMax ?? 60 });
   app.use('/api', (req, res, next) => {
     if (req.method === 'POST' || req.method === 'PATCH' || req.method === 'DELETE') {
       mutationLimiter(req, res, next);

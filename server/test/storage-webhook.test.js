@@ -59,6 +59,7 @@ function createFakeDiscordFetch() {
     putRetryAfter: 0.01, // retry_after value for injected 429s
     putServerErrors: 0, // respond 500 this many times before succeeding
     messageGetCalls: 0,
+    messageGetDelayMs: 0, // message GET sleeps this long so tests can force real concurrency
     getMessageFailures: 0, // message GET returns 500 this many times
     cdnFailures: 0, // attachment fetch returns 500 this many times
     deleted: [],
@@ -131,6 +132,9 @@ function createFakeDiscordFetch() {
 
     if (messageId && method === 'GET') {
       state.messageGetCalls += 1;
+      if (state.messageGetDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, state.messageGetDelayMs));
+      }
       if (state.getMessageFailures > 0) {
         state.getMessageFailures -= 1;
         return rawResponse(Buffer.from('boom'), 500);
@@ -589,4 +593,205 @@ test('webhook validation maps Discord unavailability to STORAGE_UNAVAILABLE', as
     storage.validateAndSealWebhook(VALID_URL),
     (err) => err.code === 'STORAGE_UNAVAILABLE'
   );
+});
+
+function sealedWebhook(id) {
+  const env = { ...process.env };
+  const config = loadConfig(env);
+  const fetchC = createFakeDiscordFetch();
+  const storage = createDiscordWebhookStorage(config, { chunkSizeBytes: 8, fetchImpl: fetchC });
+  return {
+    storage,
+    fetchC,
+    async webhook() {
+      const sealed = await storage.validateAndSealWebhook(VALID_URL);
+      return {
+        id,
+        webhook_ciphertext: sealed.webhook_ciphertext,
+        webhook_nonce: sealed.webhook_nonce,
+        webhook_auth_tag: sealed.webhook_auth_tag,
+      };
+    },
+  };
+}
+
+test('adapter unit: getChunk caches message metadata so sequential reads reuse one message GET', async () => {
+  const { storage, fetchC, webhook: makeWebhook } = sealedWebhook(90);
+  const webhook = await makeWebhook();
+
+  const mid = await storage.putChunk(webhook, 'cached.bin', Buffer.from('cached-bytes'));
+  assert.strictEqual(fetchC.state.messageGetCalls, 0);
+  assert.deepStrictEqual(await storage.getChunk(webhook, mid), Buffer.from('cached-bytes'));
+  assert.strictEqual(fetchC.state.messageGetCalls, 1);
+  assert.deepStrictEqual(await storage.getChunk(webhook, mid), Buffer.from('cached-bytes'));
+  assert.strictEqual(fetchC.state.messageGetCalls, 1, 'second read is served from the metadata cache');
+
+  // Keying is per webhook+message: a different message is fetched fresh.
+  const mid2 = await storage.putChunk(webhook, 'other.bin', Buffer.from('other-bytes'));
+  assert.deepStrictEqual(await storage.getChunk(webhook, mid2), Buffer.from('other-bytes'));
+  assert.strictEqual(fetchC.state.messageGetCalls, 2);
+});
+
+test('adapter unit: concurrent packed-chunk reads coalesce onto one message GET', async () => {
+  const { storage, fetchC, webhook: makeWebhook } = sealedWebhook(89);
+  const webhook = await makeWebhook();
+
+  const chunks = Array.from({ length: 10 }, (_, i) => ({
+    ordinal: i,
+    filename: `packed-${i}.bin`,
+    encryptedBuffer: Buffer.from(`enc-${i}`),
+  }));
+  const results = await storage.putChunks(webhook, chunks);
+  const mid = results[0].messageId;
+  assert.ok(results.every((r) => r.messageId === mid), 'ten chunks pack into one message');
+
+  // A slow message GET: ten truly concurrent reads of the packed message
+  // must share one in-flight fetch instead of serializing ten GETs.
+  fetchC.state.messageGetDelayMs = 25;
+  const started = Date.now();
+  const bytes = await Promise.all(
+    Array.from({ length: 10 }, (_, i) => storage.getChunk(webhook, mid, i))
+  );
+  const elapsed = Date.now() - started;
+  fetchC.state.messageGetDelayMs = 0;
+
+  assert.strictEqual(fetchC.state.messageGetCalls, 1, '10 concurrent reads -> exactly one message GET');
+  assert.ok(elapsed < 200, `reads must share one delayed GET, got ${elapsed}ms (serialized floor is 250ms)`);
+  bytes.forEach((b, i) => assert.deepStrictEqual(b, Buffer.from(`enc-${i}`), `attachment ${i}`));
+});
+
+test('adapter unit: a missing attachment maps to STORAGE_UNAVAILABLE even from cached metadata', async () => {
+  const { storage, fetchC, webhook: makeWebhook } = sealedWebhook(88);
+  const webhook = await makeWebhook();
+
+  const mid = await storage.putChunk(webhook, 'solo.bin', Buffer.from('solo-bytes'));
+  await assert.rejects(
+    storage.getChunk(webhook, mid, 3), // only attachment 0 exists
+    (err) => err.code === 'STORAGE_UNAVAILABLE'
+  );
+  assert.strictEqual(fetchC.state.messageGetCalls, 1);
+  // The failure is per attachment index, not a message failure: the valid
+  // index still reads from the same cached metadata without a new GET.
+  assert.deepStrictEqual(await storage.getChunk(webhook, mid, 0), Buffer.from('solo-bytes'));
+  assert.strictEqual(fetchC.state.messageGetCalls, 1, 'valid read reused the cached metadata');
+
+  // A message that does not exist is never cached: each read retries Discord.
+  await assert.rejects(storage.getChunk(webhook, 'm-unknown'), (err) => err.code === 'STORAGE_UNAVAILABLE');
+  assert.strictEqual(fetchC.state.messageGetCalls, 2);
+  await assert.rejects(storage.getChunk(webhook, 'm-unknown'), (err) => err.code === 'STORAGE_UNAVAILABLE');
+  assert.strictEqual(fetchC.state.messageGetCalls, 3, 'failed reads are not cached');
+});
+
+test('adapter unit: concurrent reads of a missing message coalesce, all reject, and nothing is cached', async () => {
+  const { storage, fetchC, webhook: makeWebhook } = sealedWebhook(87);
+  const webhook = await makeWebhook();
+
+  fetchC.state.messageGetDelayMs = 25;
+  const results = await Promise.allSettled(
+    Array.from({ length: 10 }, () => storage.getChunk(webhook, 'm-never'))
+  );
+  fetchC.state.messageGetDelayMs = 0;
+
+  assert.strictEqual(fetchC.state.messageGetCalls, 1, 'concurrent misses share one failed message GET');
+  assert.ok(
+    results.every((r) => r.status === 'rejected' && r.reason.code === 'STORAGE_UNAVAILABLE'),
+    'every waiter rejects with STORAGE_UNAVAILABLE'
+  );
+  // Nothing was cached: the next read tries Discord again.
+  await assert.rejects(storage.getChunk(webhook, 'm-never'), (err) => err.code === 'STORAGE_UNAVAILABLE');
+  assert.strictEqual(fetchC.state.messageGetCalls, 2);
+});
+
+test('adapter unit: a failed CDN download invalidates the cached metadata so the next read re-fetches', async () => {
+  const { storage, fetchC, webhook: makeWebhook } = sealedWebhook(86);
+  const webhook = await makeWebhook();
+
+  const mid = await storage.putChunk(webhook, 'cdn.bin', Buffer.from('cdn-bytes'));
+  assert.deepStrictEqual(await storage.getChunk(webhook, mid), Buffer.from('cdn-bytes'));
+  assert.strictEqual(fetchC.state.messageGetCalls, 1);
+
+  // A transient CDN failure must not stick: the cached metadata is dropped
+  // and the next read re-fetches the message instead of replaying the dead URL.
+  fetchC.state.cdnFailures = 1;
+  await assert.rejects(storage.getChunk(webhook, mid), (err) => err.code === 'STORAGE_UNAVAILABLE');
+  assert.strictEqual(fetchC.state.messageGetCalls, 1, 'failed CDN read did not issue a message GET');
+
+  assert.deepStrictEqual(await storage.getChunk(webhook, mid), Buffer.from('cdn-bytes'));
+  assert.strictEqual(fetchC.state.messageGetCalls, 2, 'metadata re-fetched after the CDN failure');
+});
+
+test('adapter unit: cached message metadata expires after the TTL', async () => {
+  const env = { ...process.env };
+  const config = loadConfig(env);
+  const fetchC = createFakeDiscordFetch();
+  const storage = createDiscordWebhookStorage(config, {
+    chunkSizeBytes: 8,
+    fetchImpl: fetchC,
+    messageMetaTtlMs: 20,
+  });
+  const sealed = await storage.validateAndSealWebhook(VALID_URL);
+  const webhook = {
+    id: 85,
+    webhook_ciphertext: sealed.webhook_ciphertext,
+    webhook_nonce: sealed.webhook_nonce,
+    webhook_auth_tag: sealed.webhook_auth_tag,
+  };
+
+  const mid = await storage.putChunk(webhook, 'ttl.bin', Buffer.from('ttl-bytes'));
+  await storage.getChunk(webhook, mid);
+  assert.strictEqual(fetchC.state.messageGetCalls, 1);
+  await storage.getChunk(webhook, mid);
+  assert.strictEqual(fetchC.state.messageGetCalls, 1, 'fresh entry is a cache hit');
+
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  await storage.getChunk(webhook, mid);
+  assert.strictEqual(fetchC.state.messageGetCalls, 2, 'expired entry is re-fetched');
+});
+
+test('adapter unit: the metadata cache is bounded and evicts the oldest entries', async () => {
+  const env = { ...process.env };
+  const config = loadConfig(env);
+  const fetchC = createFakeDiscordFetch();
+  const storage = createDiscordWebhookStorage(config, {
+    chunkSizeBytes: 8,
+    fetchImpl: fetchC,
+    messageMetaCacheMax: 2,
+  });
+  const sealed = await storage.validateAndSealWebhook(VALID_URL);
+  const webhook = {
+    id: 84,
+    webhook_ciphertext: sealed.webhook_ciphertext,
+    webhook_nonce: sealed.webhook_nonce,
+    webhook_auth_tag: sealed.webhook_auth_tag,
+  };
+
+  const m1 = await storage.putChunk(webhook, 'a.bin', Buffer.from('aaa'));
+  const m2 = await storage.putChunk(webhook, 'b.bin', Buffer.from('bbb'));
+  const m3 = await storage.putChunk(webhook, 'c.bin', Buffer.from('ccc'));
+  await storage.getChunk(webhook, m1);
+  await storage.getChunk(webhook, m2);
+  await storage.getChunk(webhook, m3); // full (max 2): FIFO evicts m1
+  assert.strictEqual(fetchC.state.messageGetCalls, 3);
+
+  await storage.getChunk(webhook, m2);
+  await storage.getChunk(webhook, m3);
+  assert.strictEqual(fetchC.state.messageGetCalls, 3, 'm2 and m3 are still cached');
+
+  await storage.getChunk(webhook, m1);
+  assert.strictEqual(fetchC.state.messageGetCalls, 4, 'evicted m1 is re-fetched');
+});
+
+test('adapter unit: deleteChunk invalidates the cached metadata for that message', async () => {
+  const { storage, fetchC, webhook: makeWebhook } = sealedWebhook(83);
+  const webhook = await makeWebhook();
+
+  const mid = await storage.putChunk(webhook, 'doomed.bin', Buffer.from('doomed-bytes'));
+  assert.deepStrictEqual(await storage.getChunk(webhook, mid), Buffer.from('doomed-bytes'));
+  assert.strictEqual(fetchC.state.messageGetCalls, 1);
+
+  await storage.deleteChunk(webhook, mid);
+  // After the delete the metadata must not be replayed: a fresh read misses
+  // the cache and re-fetches (Discord reports the message gone -> 404).
+  await assert.rejects(storage.getChunk(webhook, mid), (err) => err.code === 'STORAGE_UNAVAILABLE');
+  assert.strictEqual(fetchC.state.messageGetCalls, 2, 'post-delete read re-fetched instead of hitting the cache');
 });

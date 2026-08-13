@@ -261,6 +261,7 @@ async function startTestServer(overrides = {}) {
   if (overrides.compressChunks != null) config.compressChunks = overrides.compressChunks;
   if (overrides.maxWebhooksPerDrive != null) config.maxWebhooksPerDrive = overrides.maxWebhooksPerDrive;
   if (overrides.trashRetentionDays != null) config.trashRetentionDays = overrides.trashRetentionDays;
+  if (overrides.mutationRateLimitMax != null) config.mutationRateLimitMax = overrides.mutationRateLimitMax;
 
   const db = await openDatabase(config.dbUrl);
   await migrate(db, MIGRATIONS_DIR);

@@ -3,14 +3,13 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert');
 const { startTestServer, makeClient, login, uploadFile } = require('./helpers');
-
 let ctx;
 let client;
 let rootFolder;
 let nestedFolder;
 
 before(async () => {
-  ctx = await startTestServer();
+  ctx = await startTestServer({ mutationRateLimitMax: 200 });
   client = makeClient(ctx.baseUrl);
   await login(client, ctx);
   rootFolder = await createFolder(client, 'root');
@@ -298,6 +297,150 @@ test('move entry between folders, to root, and its validation rules', async () =
   });
   assert.strictEqual(res.status, 409);
   assert.strictEqual(res.json.error.code, 'NAME_CONFLICT');
+});
+
+test('raced folder creation: exactly one same-name folder wins, losers get NAME_CONFLICT', async () => {
+  // Drive root: the migration-006 root index is the final authority.
+  const rootPair = await Promise.all([
+    client.request('/api/folders', {
+      method: 'POST',
+      body: JSON.stringify({ parentId: null, name: 'race-root' }),
+      headers: { 'content-type': 'application/json' },
+      csrf: true,
+    }),
+    client.request('/api/folders', {
+      method: 'POST',
+      body: JSON.stringify({ parentId: null, name: 'race-root' }),
+      headers: { 'content-type': 'application/json' },
+      csrf: true,
+    }),
+  ]);
+  const rootStatuses = rootPair.map((r) => r.status).sort((a, b) => a - b);
+  assert.deepStrictEqual(rootStatuses, [201, 409]);
+  assert.strictEqual(rootPair.find((r) => r.status === 409).json.error.code, 'NAME_CONFLICT');
+  let list = await client.request('/api/entries');
+  assert.strictEqual(list.json.entries.filter((e) => e.name === 'race-root').length, 1, 'one live root row');
+
+  // Under a shared folder: the migration-004 sibling index is the final authority.
+  const { json: raceParent } = await client.request('/api/folders', {
+    method: 'POST',
+    body: JSON.stringify({ parentId: null, name: 'race-parent' }),
+    headers: { 'content-type': 'application/json' },
+    csrf: true,
+    expect: 201,
+  });
+  const childPair = await Promise.all([
+    client.request('/api/folders', {
+      method: 'POST',
+      body: JSON.stringify({ parentId: raceParent.id, name: 'race-child' }),
+      headers: { 'content-type': 'application/json' },
+      csrf: true,
+    }),
+    client.request('/api/folders', {
+      method: 'POST',
+      body: JSON.stringify({ parentId: raceParent.id, name: 'race-child' }),
+      headers: { 'content-type': 'application/json' },
+      csrf: true,
+    }),
+  ]);
+  const childStatuses = childPair.map((r) => r.status).sort((a, b) => a - b);
+  assert.deepStrictEqual(childStatuses, [201, 409]);
+  assert.strictEqual(childPair.find((r) => r.status === 409).json.error.code, 'NAME_CONFLICT');
+  list = await client.request(`/api/entries?parentId=${raceParent.id}`);
+  assert.strictEqual(list.json.entries.filter((e) => e.name === 'race-child').length, 1, 'one live child row');
+});
+
+test('raced rename to one target name: exactly one wins, the loser gets NAME_CONFLICT', async () => {
+  const a = await createFolder(client, 'rename-race-a');
+  const b = await createFolder(client, 'rename-race-b');
+  const pair = await Promise.all([
+    client.request(`/api/entries/${a.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'race-target' }),
+      headers: { 'content-type': 'application/json' },
+      csrf: true,
+    }),
+    client.request(`/api/entries/${b.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'race-target' }),
+      headers: { 'content-type': 'application/json' },
+      csrf: true,
+    }),
+  ]);
+  const statuses = pair.map((r) => r.status).sort((x, y) => x - y);
+  assert.deepStrictEqual(statuses, [200, 409]);
+  assert.strictEqual(pair.find((r) => r.status === 409).json.error.code, 'NAME_CONFLICT');
+  const list = await client.request('/api/entries');
+  assert.strictEqual(list.json.entries.filter((e) => e.name === 'race-target').length, 1, 'one live row keeps the name');
+});
+
+test('raced move into one folder: exactly one wins, the loser gets NAME_CONFLICT', async () => {
+  const p1 = await createFolder(client, 'move-race-p1');
+  const p2 = await createFolder(client, 'move-race-p2');
+  const dest = await createFolder(client, 'move-race-dest');
+  const a = await createFolder(client, 'shared-name', p1.id);
+  const b = await createFolder(client, 'shared-name', p2.id);
+  const pair = await Promise.all([
+    client.request(`/api/entries/${a.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ parentId: dest.id }),
+      headers: { 'content-type': 'application/json' },
+      csrf: true,
+    }),
+    client.request(`/api/entries/${b.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ parentId: dest.id }),
+      headers: { 'content-type': 'application/json' },
+      csrf: true,
+    }),
+  ]);
+  const statuses = pair.map((r) => r.status).sort((x, y) => x - y);
+  assert.deepStrictEqual(statuses, [200, 409]);
+  assert.strictEqual(pair.find((r) => r.status === 409).json.error.code, 'NAME_CONFLICT');
+  const list = await client.request(`/api/entries?parentId=${dest.id}`);
+  assert.strictEqual(list.json.entries.filter((e) => e.name === 'shared-name').length, 1, 'one live row in the destination');
+});
+
+test('raced copy into one parent: exactly one wins, the loser gets NAME_CONFLICT', async () => {
+  const src = await createFolder(client, 'copy-race-src');
+
+  // Force both copies past uniqueSiblingName before either inserts, so the
+  // loser is decided by the unique index rather than the fast-path check.
+  const originalSiblingCount = ctx.repositories.siblingCount.bind(ctx.repositories);
+  let arrivals = 0;
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  ctx.repositories.siblingCount = async (...args) => {
+    arrivals += 1;
+    if (arrivals === 2) release();
+    if (arrivals <= 2) await gate;
+    return originalSiblingCount(...args);
+  };
+  try {
+    const pair = await Promise.all([
+      client.request(`/api/entries/${src.id}/copy`, {
+        method: 'POST',
+        body: JSON.stringify({ parentId: null }),
+        headers: { 'content-type': 'application/json' },
+        csrf: true,
+      }),
+      client.request(`/api/entries/${src.id}/copy`, {
+        method: 'POST',
+        body: JSON.stringify({ parentId: null }),
+        headers: { 'content-type': 'application/json' },
+        csrf: true,
+      }),
+    ]);
+    const statuses = pair.map((r) => r.status).sort((x, y) => x - y);
+    assert.deepStrictEqual(statuses, [201, 409]);
+    assert.strictEqual(pair.find((r) => r.status === 409).json.error.code, 'NAME_CONFLICT');
+    const list = await client.request('/api/entries');
+    assert.strictEqual(list.json.entries.filter((e) => e.name === 'copy-race-src').length, 1, 'one live copy row');
+  } finally {
+    ctx.repositories.siblingCount = originalSiblingCount;
+  }
 });
 
 test('foreign entry operations return 404', async () => {

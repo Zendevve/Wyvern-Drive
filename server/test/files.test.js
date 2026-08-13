@@ -98,6 +98,43 @@ test('upload name conflicts get a server-side auto-suffix', async () => {
   assert.strictEqual(third.json.name, 'photo (2).png');
 });
 
+test('concurrent same-name uploads: one keeps the name, the other gets an auto-suffix', async (t) => {
+  const { ctx, client: c2 } = await freshContext(t);
+  const fixture = makeFixture(8);
+
+  // Force both uploads past uniqueSiblingName before either inserts, so the
+  // loser is decided by the live-sibling unique index and retries with a
+  // fresh suffix instead of erroring.
+  const originalSiblingCount = ctx.repositories.siblingCount.bind(ctx.repositories);
+  let arrivals = 0;
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  ctx.repositories.siblingCount = async (...args) => {
+    arrivals += 1;
+    if (arrivals === 2) release();
+    if (arrivals <= 2) await gate;
+    return originalSiblingCount(...args);
+  };
+  try {
+    const [a, b] = await Promise.all([
+      uploadFile(c2, { name: 'race-upload.bin', data: fixture }),
+      uploadFile(c2, { name: 'race-upload.bin', data: fixture }),
+    ]);
+    assert.strictEqual(a.status, 201);
+    assert.strictEqual(b.status, 201);
+    const names = [a.json.name, b.json.name].sort();
+    assert.deepStrictEqual(names, ['race-upload (1).bin', 'race-upload.bin']);
+    for (const res of [a, b]) {
+      assert.strictEqual(res.json.status, 'ready');
+      assert.strictEqual(res.json.sizeBytes, 8);
+    }
+  } finally {
+    ctx.repositories.siblingCount = originalSiblingCount;
+  }
+});
+
 test('empty file upload produces a zero-chunk ready entry', async () => {
   const res = await uploadFile(client, { name: 'empty.bin', data: Buffer.alloc(0) });
   assert.strictEqual(res.json.status, 'ready');

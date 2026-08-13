@@ -155,10 +155,23 @@ async function main() {
       console.error(`Orphan-block sweep failed: ${err && err.message}`);
     }
   };
+  // Fire-and-forget expired-session sweep: reclaim session rows whose TTL has
+  // passed so the sessions table cannot grow unbounded. Runs at boot and every
+  // 6 hours; a failure logs and never blocks requests. Lookup semantics are
+  // unchanged — findByToken already treats an expired row as absent.
+  const runExpiredSessionSweep = async () => {
+    try {
+      const { changes } = await sessionStore.deleteExpired();
+      if (changes > 0) console.log(`Expired-session sweep: removed ${changes} session(s)`);
+    } catch (err) {
+      console.error(`Expired-session sweep failed: ${err && err.message}`);
+    }
+  };
   setInterval(() => {
     void runOrphanUploadSweep();
     void runPendingPostSweep();
     void runOrphanBlockSweep();
+    void runExpiredSessionSweep();
   }, 6 * 60 * 60 * 1000).unref();
 
   const server = app.listen(config.port, () => {
@@ -167,6 +180,7 @@ async function main() {
     void runOrphanUploadSweep();
     void runPendingPostSweep();
     void runOrphanBlockSweep();
+    void runExpiredSessionSweep();
   });
   server.on('error', async (err) => {
     console.error(`Wyvern server failed to start: ${err.message}`);

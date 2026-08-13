@@ -14,6 +14,14 @@ const MAX_RETRIES_429 = 3;
 const MAX_TOTAL_ATTEMPTS = 10;
 const MAX_CHUNKS_PER_MESSAGE = 10;
 
+// Message-metadata cache bounds (discord-cdn-proxy style URL caching with
+// gcsfuse-style in-flight coalescing): successful message GETs cache their
+// attachment metadata (CDN URLs) per webhook+message for a short TTL so
+// repeated downloads reuse one fetch, and the cache is FIFO-bounded at
+// MESSAGE_META_CACHE_MAX entries so memory stays flat.
+const MESSAGE_META_TTL_MS = 60 * 1000;
+const MESSAGE_META_CACHE_MAX = 500;
+
 // Module-scoped Discord GLOBAL rate-limit gate: when Discord reports a global
 // rate limit (x-ratelimit-global header or body.global), every webhook in the
 // process shares ONE wait so parallel uploads across webhooks do not hammer
@@ -85,7 +93,12 @@ function waitGlobalRateLimit(retryAfterSec) {
  * `chunkSizeBytes` metadata; the test fake returns the identical
  * capabilities so the contract is test-visible.
  */
-function createDiscordWebhookStorage(config, { chunkSizeBytes, fetchImpl = globalThis.fetch }) {
+function createDiscordWebhookStorage(config, {
+  chunkSizeBytes,
+  fetchImpl = globalThis.fetch,
+  messageMetaTtlMs = MESSAGE_META_TTL_MS,
+  messageMetaCacheMax = MESSAGE_META_CACHE_MAX,
+}) {
   const encryptionKey = config.encryptionKey;
 
   // Per-webhook Discord rate-limit awareness: { remaining, resetAt } keyed by
@@ -260,6 +273,77 @@ function createDiscordWebhookStorage(config, { chunkSizeBytes, fetchImpl = globa
     return parsed;
   }
 
+  // Bounded in-memory message-metadata cache: successful message GETs store
+  // their attachment metadata (CDN URLs) per webhook+message for a short TTL
+  // (discord-cdn-proxy style URL caching), and concurrent reads of the same
+  // message share one in-flight promise (gcsfuse style chunk coalescing), so
+  // packed-chunk downloads — several attachments in one message — issue a
+  // single messages/:id GET. Keys are SHA-256 digests of the decrypted
+  // webhook base URL + message id, so no plaintext URL or webhook token is
+  // retained and distinct credentials never share entries. Failed reads never
+  // populate the cache; a failed CDN download drops the cached metadata so
+  // the next read re-fetches (and may receive a refreshed attachment URL).
+  const messageMetaCache = new Map(); // key -> { expiresAt, attachments }
+  const inflightMessageGets = new Map(); // key -> Promise<attachments>
+
+  function messageMetaKey(parsed, messageId) {
+    return crypto.createHash('sha256').update(`${parsed.base}\n${messageId}`).digest('hex');
+  }
+
+  /** Insert a successful metadata response, evicting the oldest entry when full. */
+  function cacheMessageMeta(key, attachments) {
+    if (messageMetaCache.size >= messageMetaCacheMax) {
+      const oldest = messageMetaCache.keys().next().value;
+      if (oldest !== undefined) messageMetaCache.delete(oldest);
+    }
+    messageMetaCache.set(key, { expiresAt: Date.now() + messageMetaTtlMs, attachments });
+  }
+
+  /** Drop a cached/in-flight entry (delete, CDN failure, TTL expiry). */
+  function invalidateMessageMeta(key) {
+    messageMetaCache.delete(key);
+    inflightMessageGets.delete(key);
+  }
+
+  /**
+   * Attachment metadata for a message: a live cache entry wins; otherwise
+   * concurrent callers share one in-flight fetch. The in-flight entry is
+   * removed once the fetch settles (identity-checked so a newer fetch is
+   * never clobbered), and only a fetch that is still current may populate
+   * the cache, so an invalidation that raced the fetch is not undone.
+   */
+  function getMessageAttachments(key, fetchMeta) {
+    const cached = messageMetaCache.get(key);
+    if (cached) {
+      if (cached.expiresAt > Date.now()) return cached.attachments;
+      messageMetaCache.delete(key);
+    }
+    const inflight = inflightMessageGets.get(key);
+    if (inflight) return inflight;
+    const promise = fetchMeta().then(
+      (attachments) => {
+        if (inflightMessageGets.get(key) === promise) {
+          cacheMessageMeta(key, attachments);
+        }
+        return attachments;
+      },
+      (err) => {
+        // Failed reads are never cached; the next read retries fresh.
+        throw err;
+      }
+    );
+    inflightMessageGets.set(key, promise);
+    promise.then(
+      () => {
+        if (inflightMessageGets.get(key) === promise) inflightMessageGets.delete(key);
+      },
+      () => {
+        if (inflightMessageGets.get(key) === promise) inflightMessageGets.delete(key);
+      }
+    );
+    return promise;
+  }
+
   /**
    * Post 1..10 encrypted chunks as ONE webhook message, one attachment per
    * chunk (FormData payload_json + a unique file part per chunk). Resolves
@@ -355,14 +439,18 @@ function createDiscordWebhookStorage(config, { chunkSizeBytes, fetchImpl = globa
      */
     async getChunk(webhook, messageId, attachmentIndex = 0) {
       const parsed = resolveWebhook(webhook);
-      const res = await withRetry(() => discordFetch(`${parsed.base}/messages/${messageId}`));
-      if (!res.ok) {
-        throw new WyvernError('STORAGE_UNAVAILABLE', 'Discord chunk fetch failed');
-      }
-      const message = await res.json();
+      const key = messageMetaKey(parsed, messageId);
+      const attachments = await getMessageAttachments(key, async () => {
+        const res = await withRetry(() => discordFetch(`${parsed.base}/messages/${messageId}`));
+        if (!res.ok) {
+          throw new WyvernError('STORAGE_UNAVAILABLE', 'Discord chunk fetch failed');
+        }
+        const message = await res.json();
+        return message && Array.isArray(message.attachments) ? message.attachments : [];
+      });
       const attachment =
-        message && message.attachments && Number.isInteger(attachmentIndex) && attachmentIndex >= 0
-          ? message.attachments[attachmentIndex]
+        Number.isInteger(attachmentIndex) && attachmentIndex >= 0
+          ? attachments[attachmentIndex]
           : undefined;
       if (!attachment || typeof attachment.url !== 'string') {
         throw new WyvernError('STORAGE_UNAVAILABLE', 'Discord chunk attachment missing');
@@ -371,9 +459,11 @@ function createDiscordWebhookStorage(config, { chunkSizeBytes, fetchImpl = globa
       try {
         cdnRes = await fetchImpl(attachment.url);
       } catch (err) {
+        invalidateMessageMeta(key);
         throw new WyvernError('STORAGE_UNAVAILABLE', 'Discord chunk download failed');
       }
       if (!cdnRes.ok) {
+        invalidateMessageMeta(key);
         throw new WyvernError('STORAGE_UNAVAILABLE', 'Discord chunk download failed');
       }
       return Buffer.from(await cdnRes.arrayBuffer());
@@ -381,17 +471,22 @@ function createDiscordWebhookStorage(config, { chunkSizeBytes, fetchImpl = globa
 
     /**
      * Delete one chunk message through the webhook API. Idempotent: a Discord
-     * 404 (unknown message or webhook) counts as success.
+     * 404 (unknown message or webhook) counts as success. The message's
+     * cached metadata is invalidated so a later read cannot replay it.
      */
     async deleteChunk(webhook, messageId) {
       const parsed = resolveWebhook(webhook);
       const res = await withRetry(() =>
         discordFetch(`${parsed.base}/messages/${messageId}`, { method: 'DELETE' })
       );
-      if (res.status === 404) return;
+      if (res.status === 404) {
+        invalidateMessageMeta(messageMetaKey(parsed, messageId));
+        return;
+      }
       if (!res.ok) {
         throw new WyvernError('STORAGE_UNAVAILABLE', 'Discord chunk deletion failed');
       }
+      invalidateMessageMeta(messageMetaKey(parsed, messageId));
     },
   };
 }
