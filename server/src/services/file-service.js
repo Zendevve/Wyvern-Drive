@@ -139,6 +139,42 @@ function createFileService({ db, repositories, discordStorage, config }) {
   const compressEnabled = config.compressChunks !== false;
   const trashRetentionDays = config.trashRetentionDays != null ? config.trashRetentionDays : 30;
   const maxWebhooksPerDrive = config.maxWebhooksPerDrive != null ? config.maxWebhooksPerDrive : 8;
+  // Cache immutable encrypted chunks in memory for repeated previews/ranges.
+  // Byte accounting follows gcsfuse's LRU invariant; plaintext never enters
+  // this cache and integrity verification still runs on every read.
+  const encryptedChunkCache = new Map();
+  let encryptedChunkCacheBytes = 0;
+  const encryptedChunkCacheMaxBytes = 32 * 1024 * 1024;
+  function cachedEncryptedChunk(blockId) {
+    const entry = encryptedChunkCache.get(blockId);
+    if (!entry) return null;
+    encryptedChunkCache.delete(blockId);
+    encryptedChunkCache.set(blockId, entry);
+    return entry.buffer;
+  }
+  function cacheEncryptedChunk(blockId, buffer) {
+    if (!Buffer.isBuffer(buffer) || buffer.length > encryptedChunkCacheMaxBytes) return;
+    const previous = encryptedChunkCache.get(blockId);
+    if (previous) encryptedChunkCacheBytes -= previous.buffer.length;
+    encryptedChunkCache.delete(blockId);
+    while (
+      encryptedChunkCacheBytes + buffer.length > encryptedChunkCacheMaxBytes &&
+      encryptedChunkCache.size > 0
+    ) {
+      const oldest = encryptedChunkCache.keys().next().value;
+      const removed = encryptedChunkCache.get(oldest);
+      encryptedChunkCache.delete(oldest);
+      encryptedChunkCacheBytes -= removed.buffer.length;
+    }
+    encryptedChunkCache.set(blockId, { buffer });
+    encryptedChunkCacheBytes += buffer.length;
+  }
+  function invalidateEncryptedChunk(blockId) {
+    const previous = encryptedChunkCache.get(blockId);
+    if (!previous) return;
+    encryptedChunkCache.delete(blockId);
+    encryptedChunkCacheBytes -= previous.buffer.length;
+  }
   // One Discord message holds up to ~24.5 MiB of attachment bytes; cap each
   // packed batch so a batch of chunkSizeBytes chunks always fits.
   const effectiveChunksPerMessage = Math.max(
@@ -185,26 +221,33 @@ function createFileService({ db, repositories, discordStorage, config }) {
       webhook_nonce: row.webhook_nonce,
       webhook_auth_tag: row.webhook_auth_tag,
     };
-    let encrypted;
-    try {
-      encrypted = await discordStorage.getChunk(webhook, row.message_id, attachmentIndex);
-    } catch (err) {
-      if (err && err.code === 'STORAGE_UNAVAILABLE') throw err;
-      throw new WyvernError('STORAGE_UNAVAILABLE', 'Chunk fetch failed');
+    const cacheKey = row.block_id ?? `${row.message_id}:${attachmentIndex}`;
+    let encrypted = cachedEncryptedChunk(cacheKey);
+    if (!encrypted) {
+      try {
+        encrypted = await discordStorage.getChunk(webhook, row.message_id, attachmentIndex);
+        cacheEncryptedChunk(cacheKey, encrypted);
+      } catch (err) {
+        if (err && err.code === 'STORAGE_UNAVAILABLE') throw err;
+        throw new WyvernError('STORAGE_UNAVAILABLE', 'Chunk fetch failed');
+      }
     }
     let stored;
     try {
       stored = decryptChunk(encrypted, encryptionKey, row.nonce, row.auth_tag);
     } catch (err) {
+      invalidateEncryptedChunk(cacheKey);
       throw new WyvernError('CHECKSUM_MISMATCH', 'Chunk decryption failed');
     }
     if (sha256hex(stored) !== row.checksum) {
+      invalidateEncryptedChunk(cacheKey);
       throw new WyvernError('CHECKSUM_MISMATCH', 'Chunk checksum mismatch');
     }
     let plain;
     try {
       plain = row.compression === 'deflate' ? zlib.inflateSync(stored) : stored;
     } catch (err) {
+      invalidateEncryptedChunk(cacheKey);
       throw new WyvernError('CHECKSUM_MISMATCH', 'Chunk checksum mismatch');
     }
     if (from === 0 && to === plain.length - 1) return plain;

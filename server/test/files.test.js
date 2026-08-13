@@ -88,6 +88,19 @@ test('download round-trips byte-for-byte with the original SHA-256', async () =>
   assert.deepStrictEqual(buf, fixture);
   assert.strictEqual(sha256hex(buf), sha256hex(fixture));
 });
+test('repeated downloads reuse bounded encrypted chunk cache', async (t) => {
+  const { ctx, client: c2 } = await freshContext(t, { chunkSizeBytes: 8 });
+  const fixture = makeFixture(24);
+  const { json: entry } = await uploadFile(c2, { name: 'cached-download.bin', data: fixture });
+
+  const first = await c2.request(`/api/files/${entry.id}/download`);
+  assert.deepStrictEqual(Buffer.from(await first.raw.arrayBuffer()), fixture);
+  assert.strictEqual(ctx.discordStorage.getChunkCalls, 3);
+
+  const second = await c2.request(`/api/files/${entry.id}/download`);
+  assert.deepStrictEqual(Buffer.from(await second.raw.arrayBuffer()), fixture);
+  assert.strictEqual(ctx.discordStorage.getChunkCalls, 3, 'second read served encrypted chunks from cache');
+});
 
 test('upload name conflicts get a server-side auto-suffix', async () => {
   const data = makeFixture(8);

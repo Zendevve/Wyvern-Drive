@@ -106,6 +106,7 @@ function createFakeDiscordStorage() {
     failPutChunkOnCall: 0,
     putCalls: 0,
     failNextGetChunks: 0,
+    getChunkCalls: 0,
     failNextDeleteChunks: 0,
     failDeleteChunkOnCall: 0,
     deleteCalls: 0,
@@ -188,6 +189,7 @@ function createFakeDiscordStorage() {
     },
 
     async getChunk(webhook, messageId, attachmentIndex = 0) {
+      storage.getChunkCalls += 1;
       if (storage.failNextGetChunks > 0) {
         storage.failNextGetChunks -= 1;
         throw storageError('fake: getChunk failed');
