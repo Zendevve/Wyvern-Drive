@@ -1,36 +1,38 @@
 import { createTheme } from '@mui/material/styles';
 
-// Tier-1 First-Party Cloud Storage Design Tokens (Linear/Apple/Framer grade).
+// Midnight Obsidian & Electric Signal Blue design system (matching reference UI).
 export const tokens = {
-  canvas: '#0A0B0D',         // Deep obsidian background
-  sidebar: '#0F1013',        // Distinct navigation rail surface
-  surface1: '#15171C',       // Primary container / row surface
-  surface2: '#1D2027',       // Elevated card / hover state
-  surfaceElevated: '#262A34',// Dialogs, popovers, menus
-  ink: '#F5F6F8',            // Pure white primary text
-  inkSecondary: '#9DA3AE',   // Crisp secondary text
-  inkMuted: '#686E7B',       // Muted captions and metadata
+  canvas: '#0B0E14',          // Deepest midnight obsidian
+  sidebar: '#0E121A',         // Distinct dark navy rail
+  surface1: '#141A26',        // Primary container / row surface
+  surface2: '#1C2436',        // Elevated card / hover state
+  surfaceElevated: '#242F45', // Dialogs, floating modals, context menus
+  ink: '#F5F7FA',             // Crisp white text
+  inkSecondary: '#9AA5B8',    // Slate blue-gray secondary text
+  inkMuted: '#627086',        // Muted captions and metadata
   hairline: 'rgba(255, 255, 255, 0.08)',
-  hairlineSoft: 'rgba(255, 255, 255, 0.04)',
-  accentBlue: '#0084FF',     // Tier-1 signal blue for focus, active, selection
-  accentBlueHover: '#1A90FF',
-  focusRing: 'rgba(0, 132, 255, 0.25)',
-  selectionBg: 'rgba(0, 132, 255, 0.10)',
+  hairlineSoft: 'rgba(255, 255, 255, 0.05)',
+  accentBlue: '#1E86FF',      // Electric cloud blue
+  accentBlueHover: '#3896FF',
+  folderGold: '#FFB020',      // Reference golden folder color
+  focusRing: 'rgba(30, 134, 255, 0.25)',
+  selectionBg: 'rgba(30, 134, 255, 0.12)',
   success: '#30D158',
   danger: '#FF453A',
   warning: '#FF9F0A',
 };
 
 export const gradients = {
-  violet: 'linear-gradient(135deg, #4C1D95 0%, #6D28D9 50%, #8B5CF6 100%)',
-  blue: 'linear-gradient(135deg, #0066CC 0%, #0084FF 100%)',
+  blue: 'linear-gradient(135deg, #1E86FF 0%, #0062D6 100%)',
+  folder: 'linear-gradient(135deg, #FFC043 0%, #FF9800 100%)',
+  uploadCard: 'linear-gradient(135deg, #1E86FF 0%, #1565C0 100%)',
 };
 
 const display = "'Mona Sans Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const body = "'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const bodyFeatures = "'cv01' 1, 'cv05' 1, 'cv09' 1, 'cv11' 1, 'ss03' 1, 'ss07' 1, 'dlig' 1";
 
-const lightEdge = (alpha = 0.08, drop = '0 12px 32px rgba(0,0,0,0.45)') =>
+const lightEdge = (alpha = 0.08, drop = '0 12px 32px rgba(0,0,0,0.5)') =>
   `inset 0 1px 0 rgba(255,255,255,${alpha}), ${drop}`;
 
 const theme = createTheme({
@@ -61,6 +63,7 @@ const theme = createTheme({
     focusRing: tokens.focusRing,
     accentBlue: tokens.accentBlue,
     selectionBg: tokens.selectionBg,
+    folderGold: tokens.folderGold,
     surface3: tokens.surface2,
     signal: tokens.accentBlue,
     signalSoft: tokens.focusRing,
@@ -68,21 +71,21 @@ const theme = createTheme({
     successSoft: 'rgba(48,209,88,0.12)',
     steel: tokens.inkSecondary,
   },
-  shape: { borderRadius: 10 },
+  shape: { borderRadius: 14 },
   spacing: 6,
   typography: {
     fontFamily: body,
     h1: {
       fontFamily: display,
       fontWeight: 600,
-      fontSize: 48,
-      lineHeight: 1.1,
-      letterSpacing: '-0.03em',
+      fontSize: 40,
+      lineHeight: 1.15,
+      letterSpacing: '-0.025em',
     },
     h2: {
       fontFamily: display,
       fontWeight: 600,
-      fontSize: 28,
+      fontSize: 26,
       lineHeight: 1.2,
       letterSpacing: '-0.02em',
     },
@@ -109,7 +112,7 @@ const theme = createTheme({
     },
     h6: {
       fontWeight: 600,
-      fontSize: 15,
+      fontSize: 14.5,
       lineHeight: 1.4,
       letterSpacing: '-0.01em',
       fontFeatureSettings: bodyFeatures,
@@ -132,7 +135,7 @@ const theme = createTheme({
       fontWeight: 500,
       fontSize: 12,
       lineHeight: 1.3,
-      letterSpacing: '0.01em',
+      letterSpacing: '0.005em',
       fontFeatureSettings: bodyFeatures,
     },
     overline: {
@@ -145,7 +148,7 @@ const theme = createTheme({
     },
     subtitle1: {
       fontWeight: 500,
-      fontSize: 15,
+      fontSize: 14.5,
       lineHeight: 1.35,
       letterSpacing: '-0.01em',
       fontFeatureSettings: bodyFeatures,
@@ -158,10 +161,10 @@ const theme = createTheme({
       fontFeatureSettings: bodyFeatures,
     },
     button: {
-      fontWeight: 500,
-      fontSize: 13.5,
+      fontWeight: 600,
+      fontSize: 13,
       lineHeight: 1.0,
-      letterSpacing: '-0.01em',
+      letterSpacing: '-0.005em',
       textTransform: 'none',
       fontFeatureSettings: bodyFeatures,
     },
@@ -176,14 +179,15 @@ const theme = createTheme({
           MozOsxFontSmoothing: 'grayscale',
         },
         '::selection': {
-          backgroundColor: 'rgba(0,132,255,0.35)',
+          backgroundColor: 'rgba(30,134,255,0.35)',
         },
-        ':focus-visible': {
+        'button:focus-visible, [role="button"]:focus-visible, a:focus-visible': {
           outline: `2px solid ${tokens.accentBlue}`,
           outlineOffset: 2,
         },
-        'input:focus-visible, textarea:focus-visible': {
-          outline: 'none',
+        'main, [tabindex="-1"], input:focus-visible, textarea:focus-visible, div:focus': {
+          outline: 'none !important',
+          boxShadow: 'none !important',
         },
       },
     },
@@ -191,18 +195,18 @@ const theme = createTheme({
       defaultProps: { disableElevation: true },
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 10,
           padding: '8px 16px',
-          fontWeight: 500,
+          fontWeight: 600,
           transition: 'all 140ms ease-out',
           '&:active': { transform: 'scale(0.98)' },
         },
-        sizeSmall: { padding: '5px 11px', fontSize: 12.5 },
+        sizeSmall: { padding: '5px 12px', fontSize: 12.5 },
         contained: {
           backgroundColor: tokens.ink,
-          color: '#0A0B0D',
+          color: '#0B0E14',
           fontWeight: 600,
-          '&:hover': { backgroundColor: '#FFFFFF', boxShadow: '0 2px 8px rgba(255,255,255,0.15)' },
+          '&:hover': { backgroundColor: '#FFFFFF', boxShadow: '0 2px 10px rgba(255,255,255,0.2)' },
           '&:disabled': {
             backgroundColor: 'rgba(255,255,255,0.12)',
             color: 'rgba(255,255,255,0.35)',
@@ -212,9 +216,13 @@ const theme = createTheme({
           backgroundColor: tokens.accentBlue,
           color: '#FFFFFF',
           fontWeight: 600,
-          '&:hover': { backgroundColor: tokens.accentBlueHover, boxShadow: '0 4px 12px rgba(0,132,255,0.3)' },
+          boxShadow: '0 4px 14px rgba(30,134,255,0.35)',
+          '&:hover': {
+            backgroundColor: tokens.accentBlueHover,
+            boxShadow: '0 6px 20px rgba(30,134,255,0.45)',
+          },
           '&:disabled': {
-            backgroundColor: 'rgba(0,132,255,0.25)',
+            backgroundColor: 'rgba(30,134,255,0.25)',
             color: 'rgba(255,255,255,0.35)',
           },
         },
@@ -222,24 +230,24 @@ const theme = createTheme({
           backgroundColor: tokens.danger,
           color: '#FFFFFF',
           fontWeight: 600,
-          '&:hover': { backgroundColor: '#FF5C52', boxShadow: '0 4px 12px rgba(255,69,58,0.3)' },
+          '&:hover': { backgroundColor: '#FF5C52', boxShadow: '0 4px 14px rgba(255,69,58,0.35)' },
         },
         outlined: {
           backgroundColor: 'rgba(255,255,255,0.03)',
           color: tokens.ink,
           border: `1px solid ${tokens.hairline}`,
           '&:hover': {
-            backgroundColor: 'rgba(255,255,255,0.07)',
-            borderColor: 'rgba(255,255,255,0.16)',
+            backgroundColor: 'rgba(255,255,255,0.08)',
+            borderColor: 'rgba(255,255,255,0.18)',
           },
           '&:disabled': { color: 'rgba(255,255,255,0.3)' },
         },
         outlinedPrimary: {
-          backgroundColor: 'rgba(0,132,255,0.08)',
+          backgroundColor: 'rgba(30,134,255,0.08)',
           color: tokens.accentBlue,
-          border: '1px solid rgba(0,132,255,0.25)',
+          border: '1px solid rgba(30,134,255,0.28)',
           '&:hover': {
-            backgroundColor: 'rgba(0,132,255,0.15)',
+            backgroundColor: 'rgba(30,134,255,0.16)',
             borderColor: tokens.accentBlue,
           },
         },
@@ -275,10 +283,10 @@ const theme = createTheme({
         root: {
           backgroundColor: tokens.surface1,
           backgroundImage: 'none',
-          borderRadius: 14,
+          borderRadius: 16,
         },
         outlined: {
-          border: `1px solid ${tokens.hairline}`,
+          border: `1px solid ${tokens.hairlineSoft}`,
           boxShadow: lightEdge(0.04),
         },
       },
@@ -288,14 +296,14 @@ const theme = createTheme({
         paper: {
           backgroundColor: tokens.surfaceElevated,
           backgroundImage: 'none',
-          borderRadius: 16,
+          borderRadius: 18,
           border: `1px solid ${tokens.hairline}`,
-          boxShadow: '0 24px 64px rgba(0,0,0,0.65)',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.7)',
         },
       },
     },
     MuiBackdrop: {
-      styleOverrides: { root: { backgroundColor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)' } },
+      styleOverrides: { root: { backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' } },
     },
     MuiDialogTitle: {
       styleOverrides: {
@@ -312,11 +320,11 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundColor: tokens.surface1,
-          borderRadius: 9,
+          borderRadius: 10,
           color: tokens.ink,
           fontSize: 13.5,
           '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: tokens.hairline,
+            borderColor: tokens.hairlineSoft,
             transition: 'border-color 140ms ease, box-shadow 140ms ease',
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
@@ -343,9 +351,9 @@ const theme = createTheme({
     },
     MuiLinearProgress: {
       styleOverrides: {
-        root: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 100, height: 4, overflow: 'hidden' },
+        root: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 100, height: 6, overflow: 'hidden' },
         bar: {
-          background: 'linear-gradient(90deg, #0084FF 0%, #00B4D8 100%)',
+          background: 'linear-gradient(90deg, #1E86FF 0%, #00C6FF 100%)',
           borderRadius: 100,
         },
       },
@@ -355,9 +363,9 @@ const theme = createTheme({
         paper: {
           backgroundColor: tokens.surfaceElevated,
           backgroundImage: 'none',
-          borderRadius: 12,
+          borderRadius: 14,
           border: `1px solid ${tokens.hairline}`,
-          boxShadow: '0 16px 40px rgba(0,0,0,0.5)',
+          boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
         },
       },
     },
@@ -366,10 +374,10 @@ const theme = createTheme({
         root: {
           fontSize: 13,
           color: tokens.ink,
-          borderRadius: 6,
+          borderRadius: 8,
           margin: '2px 6px',
-          padding: '6px 10px',
-          '&.Mui-selected': { backgroundColor: 'rgba(0,132,255,0.14)' },
+          padding: '7px 12px',
+          '&.Mui-selected': { backgroundColor: 'rgba(30,134,255,0.16)' },
           '&:hover': { backgroundColor: 'rgba(255,255,255,0.06)' },
         },
       },
@@ -380,7 +388,7 @@ const theme = createTheme({
           borderColor: tokens.hairlineSoft,
           color: tokens.ink,
           fontSize: 13,
-          padding: '10px 16px',
+          padding: '11px 16px',
         },
         head: {
           color: tokens.inkMuted,
@@ -388,8 +396,8 @@ const theme = createTheme({
           fontSize: 12,
           letterSpacing: '0.02em',
           textTransform: 'uppercase',
-          borderBottom: `1px solid ${tokens.hairline}`,
-          backgroundColor: tokens.surface1,
+          borderBottom: `1px solid ${tokens.hairlineSoft}`,
+          backgroundColor: 'transparent',
         },
       },
     },
@@ -399,10 +407,10 @@ const theme = createTheme({
           backgroundColor: tokens.surfaceElevated,
           color: tokens.ink,
           border: `1px solid ${tokens.hairline}`,
-          borderRadius: 6,
+          borderRadius: 8,
           fontSize: 11.5,
           fontWeight: 500,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
         },
       },
     },

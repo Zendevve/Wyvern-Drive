@@ -21,6 +21,19 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Eliminate programmatic focus outlines on containers */
+main,
+main:focus,
+main:focus-visible,
+[tabindex="-1"],
+[tabindex="-1"]:focus,
+[tabindex="-1"]:focus-visible,
+div:focus,
+section:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* Precision First-Party Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

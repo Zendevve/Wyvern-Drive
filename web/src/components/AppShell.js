@@ -312,6 +312,9 @@ export default function AppShell({ title, children }) {
           p: { xs: 2, md: 3.5 },
           pt: isDesktop ? 3 : 9,
           maxWidth: 1600,
+          outline: 'none !important',
+          '&:focus': { outline: 'none !important' },
+          '&:focus-visible': { outline: 'none !important' },
         }}
       >
         {routeHeader}

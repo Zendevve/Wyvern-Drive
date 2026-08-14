@@ -16,7 +16,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSortDown, faSortUp } from '@fortawesome/free-solid-svg-icons';
 import { isPreviewableMime } from '../api/client';
 import { formatBytes } from './QuotaMeter';
-import { entryIcon } from './entryIcons';
+import { entryIcon, fileTypeLabel } from './entryIcons';
 import EntryActions from './EntryActions';
 
 function formatDate(value) {
@@ -63,7 +63,7 @@ function SortHeader({ label, field, sort, direction, onSort, align }) {
 }
 
 /**
- * First-Party Cloud File Ledger / Table View (Finder / Google Drive grade).
+ * File Ledger / Table View (matching reference Cloudy UI file list).
  */
 export default function EntryTable({
   entries,
@@ -88,8 +88,8 @@ export default function EntryTable({
       sx={{
         overflow: 'hidden',
         bgcolor: 'surface1',
-        borderRadius: '12px',
-        border: '1px solid hairlineSoft',
+        borderRadius: '16px',
+        borderColor: 'hairlineSoft',
       }}
     >
       <Table aria-label="Files and folders" size="small" sx={{ '& .MuiTableCell-root': { py: 1.25 } }}>
@@ -167,7 +167,7 @@ export default function EntryTable({
 function EntryRow({ entry, actions, selected, onToggleSelect, onContextMenu }) {
   const isFolder = entry.kind === 'folder';
   const previewable = !isFolder && isPreviewableMime(entry.mimeType);
-  const { icon, color } = entryIcon(entry);
+  const { icon, color, bg } = entryIcon(entry);
 
   const stop = (fn) => (event) => {
     event.stopPropagation();
@@ -201,16 +201,13 @@ function EntryRow({ entry, actions, selected, onToggleSelect, onContextMenu }) {
       onContextMenu={handleContextMenu}
       sx={{
         cursor: 'pointer',
-        bgcolor: selected ? 'rgba(0, 132, 255, 0.08)' : 'transparent',
+        bgcolor: selected ? 'rgba(30, 134, 255, 0.10)' : 'transparent',
         transition: 'background-color 100ms ease-out',
         '&:hover': {
-          bgcolor: selected ? 'rgba(0, 132, 255, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+          bgcolor: selected ? 'rgba(30, 134, 255, 0.15)' : 'rgba(255, 255, 255, 0.04)',
         },
         '&.Mui-selected': {
-          bgcolor: 'rgba(0, 132, 255, 0.08)',
-        },
-        '&.Mui-selected:hover': {
-          bgcolor: 'rgba(0, 132, 255, 0.12)',
+          bgcolor: 'rgba(30, 134, 255, 0.10)',
         },
         '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
       }}
@@ -226,69 +223,63 @@ function EntryRow({ entry, actions, selected, onToggleSelect, onContextMenu }) {
         />
       </TableCell>
       <TableCell>
-        {isFolder ? (
-          <Button
-            size="small"
-            onClick={stop(() => actions.onOpenFolder(entry))}
-            startIcon={
-              <Box
-                sx={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: '6px',
-                  bgcolor: 'rgba(0, 132, 255, 0.10)',
-                  border: '1px solid rgba(0, 132, 255, 0.20)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  mr: 0.5,
-                }}
-              >
-                <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" style={{ fontSize: 13 }} />
-              </Box>
-            }
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          {/* Vivid Color Badge Icon */}
+          <Box
             sx={{
-              textTransform: 'none',
-              fontWeight: 500,
-              fontSize: 13.5,
-              color: 'ink',
-              p: 0,
-              '&:hover': { color: 'accentBlue', bgcolor: 'transparent' },
+              width: 32,
+              height: 32,
+              borderRadius: '9px',
+              bgcolor: bg || 'rgba(255, 255, 255, 0.06)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
             }}
           >
-            {entry.name}
-          </Button>
-        ) : (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-            <Box
-              sx={{
-                width: 26,
-                height: 26,
-                borderRadius: '6px',
-                bgcolor: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid hairlineSoft',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" style={{ fontSize: 13 }} />
-            </Box>
+            <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" style={{ fontSize: 15 }} />
+          </Box>
+
+          <Box sx={{ minWidth: 0 }}>
+            {isFolder ? (
+              <Button
+                size="small"
+                onClick={stop(() => actions.onOpenFolder(entry))}
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: 13.5,
+                  color: 'ink',
+                  p: 0,
+                  minWidth: 0,
+                  '&:hover': { color: 'accentBlue', bgcolor: 'transparent' },
+                }}
+              >
+                {entry.name}
+              </Button>
+            ) : (
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{ fontWeight: 600, color: 'ink', fontSize: 13.5 }}
+              >
+                {entry.name}
+              </Typography>
+            )}
             <Typography
-              variant="body2"
-              sx={{ fontWeight: 500, color: 'ink', fontSize: 13.5 }}
+              variant="caption"
+              sx={{ color: 'inkMuted', fontSize: 11.5, display: 'block' }}
             >
-              {entry.name}
+              {fileTypeLabel(entry)}
             </Typography>
           </Box>
-        )}
+        </Box>
       </TableCell>
       <TableCell align="right">
         <Typography
           variant="body2"
           component="span"
-          sx={{ color: 'inkMuted', fontFamily: 'monospace', fontSize: 12.5 }}
+          sx={{ color: 'inkSecondary', fontFamily: 'monospace', fontSize: 12.5 }}
         >
           {isFolder ? '—' : formatBytes(entry.sizeBytes)}
         </Typography>

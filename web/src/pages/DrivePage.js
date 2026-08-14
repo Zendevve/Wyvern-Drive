@@ -45,6 +45,8 @@ import DropOverlay, { collectDroppedFiles } from '../components/DropOverlay';
 import EntryCards from '../components/EntryCards';
 import EntryGrid from '../components/EntryGrid';
 import EntryTable from '../components/EntryTable';
+import FolderCards from '../components/FolderCards';
+import StorageHub from '../components/StorageHub';
 import ErrorNotice from '../components/ErrorNotice';
 import FolderDialog from '../components/FolderDialog';
 import MoveDialog from '../components/MoveDialog';
@@ -52,7 +54,6 @@ import PreviewDialog from '../components/PreviewDialog';
 import ShareDialog from '../components/ShareDialog';
 import FileDetailsPanel from '../components/FileDetailsPanel';
 import ContextMenu from '../components/ContextMenu';
-import QuotaMeter from '../components/QuotaMeter';
 import { useMediaPlayer } from '../components/MediaPlayerProvider';
 import {
   api,
@@ -99,6 +100,7 @@ async function materializeFolderPicker(files, rootParentId) {
 export default function DrivePage() {
   const { user, drive, loading, refresh } = useAuth();
   const isDesktop = useMediaQuery('(min-width: 768px)');
+  const isWide = useMediaQuery('(min-width: 1100px)');
 
   const [trail, setTrail] = useState([]);
   const [entries, setEntries] = useState([]);
@@ -206,12 +208,10 @@ export default function DrivePage() {
     return loadEntries(currentParentId, search, sort, direction);
   }, [currentParentId, search, sort, direction, loadEntries]);
 
-  // Initial load and on parameter change
   useEffect(() => {
     loadEntries(currentParentId, search, sort, direction);
   }, [currentParentId, search, sort, direction, loadEntries]);
 
-  // Debounced search input sync
   useEffect(() => {
     const handle = setTimeout(() => {
       setSearch(searchInput.trim());
@@ -219,7 +219,6 @@ export default function DrivePage() {
     return () => clearTimeout(handle);
   }, [searchInput]);
 
-  // Subscribe to upload queue finishes so we can refresh the list
   useEffect(() => {
     const unsubscribe = subscribe((event) => {
       if (event.type === 'job-complete' || event.type === 'job-failed') {
@@ -230,7 +229,6 @@ export default function DrivePage() {
     return () => unsubscribe();
   }, [subscribe, reload, refresh]);
 
-  // Clear selections on folder navigation or search
   useEffect(() => {
     setSelectedIds(new Set());
   }, [currentParentId, search]);
@@ -312,6 +310,10 @@ export default function DrivePage() {
     singleSelected && singleSelected.kind !== 'folder' ? singleSelected : null;
   const singleSelectedFolder =
     singleSelected && singleSelected.kind === 'folder' ? singleSelected : null;
+
+  // Separate folders and files for the reference layout
+  const folderEntries = useMemo(() => entries.filter((e) => e.kind === 'folder'), [entries]);
+  const fileEntries = useMemo(() => entries.filter((e) => e.kind !== 'folder'), [entries]);
 
   const handleCreateFolder = async (name) => {
     try {
@@ -569,58 +571,83 @@ export default function DrivePage() {
       <Box sx={{ pb: { xs: 12, md: 2 } }}>
         {notice && <ErrorNotice error={notice} onRetry={reload} />}
 
-        {/* Global Toolbar Bar */}
+        {/* Reference Cloudy Top Greeting & Action Header */}
         <Box
-          component="section"
-          aria-label="Drive commands"
           sx={{
             display: 'flex',
-            flexWrap: 'wrap',
-            gap: 1.5,
-            mb: 2.5,
-            alignItems: 'center',
+            flexDirection: { xs: 'column', md: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'flex-start', md: 'center' },
+            gap: 2,
+            mb: 3.5,
           }}
         >
-          {/* Omni Search */}
-          <TextField
-            size="small"
-            placeholder="Search files and folders... (⌘K)"
-            value={searchInput}
-            inputRef={searchInputRef}
-            onChange={(e) => setSearchInput(e.target.value)}
-            disabled={entriesLoading}
-            sx={{
-              flexGrow: 1,
-              minWidth: 220,
-              maxWidth: { md: 340 },
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '8px',
-                bgcolor: 'surface1',
-                height: 38,
-              },
-            }}
-            inputProps={{ 'aria-label': 'Search files and folders' }}
-            InputProps={{
-              startAdornment: (
-                <Box
-                  component="span"
-                  sx={{ color: 'inkMuted', display: 'inline-flex', mr: 1, fontSize: 13 }}
-                >
-                  <FontAwesomeIcon icon={faMagnifyingGlass} aria-hidden="true" />
-                </Box>
-              ),
-            }}
-          />
+          {/* Greeting */}
+          <Box>
+            <Typography
+              variant="h2"
+              sx={{
+                fontWeight: 700,
+                color: 'ink',
+                fontSize: { xs: 22, md: 26 },
+                letterSpacing: '-0.02em',
+                lineHeight: 1.2,
+              }}
+            >
+              Hello, {user.username || 'Friend'} 👋
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'inkMuted', mt: 0.25, fontSize: 13.5 }}>
+              Welcome to your encrypted cloud drive
+            </Typography>
+          </Box>
 
-          {/* Primary Action Buttons */}
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Action Center: Search & Upload */}
+          <Box
+            component="section"
+            aria-label="Drive commands"
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1.25,
+              alignItems: 'center',
+              width: { xs: '100%', md: 'auto' },
+            }}
+          >
+            <TextField
+              size="small"
+              placeholder="Search files and folders... (⌘K)"
+              value={searchInput}
+              inputRef={searchInputRef}
+              onChange={(e) => setSearchInput(e.target.value)}
+              disabled={entriesLoading}
+              sx={{
+                minWidth: { xs: '100%', sm: 260 },
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '12px',
+                  bgcolor: 'surface1',
+                  height: 40,
+                },
+              }}
+              inputProps={{ 'aria-label': 'Search files and folders' }}
+              InputProps={{
+                startAdornment: (
+                  <Box
+                    component="span"
+                    sx={{ color: 'inkMuted', display: 'inline-flex', mr: 1, fontSize: 13 }}
+                  >
+                    <FontAwesomeIcon icon={faMagnifyingGlass} aria-hidden="true" />
+                  </Box>
+                ),
+              }}
+            />
+
             <Button
               variant="contained"
               color="primary"
               startIcon={<FontAwesomeIcon icon={faUpload} size="sm" />}
               onClick={() => fileInputRef.current && fileInputRef.current.click()}
               disabled={entriesLoading}
-              sx={{ height: 38, px: 2 }}
+              sx={{ height: 40, px: 2.25, borderRadius: '12px' }}
             >
               Upload
             </Button>
@@ -629,7 +656,7 @@ export default function DrivePage() {
               startIcon={<FontAwesomeIcon icon={faFolderTree} size="sm" />}
               onClick={() => folderInputRef.current && folderInputRef.current.click()}
               disabled={entriesLoading}
-              sx={{ height: 38, px: 1.75 }}
+              sx={{ height: 40, px: 1.75, borderRadius: '12px' }}
             >
               Upload folder
             </Button>
@@ -637,120 +664,102 @@ export default function DrivePage() {
               variant="outlined"
               startIcon={<FontAwesomeIcon icon={faFolderPlus} size="sm" />}
               onClick={() => setFolderDialogOpen(true)}
-              sx={{ height: 38, px: 1.75 }}
+              sx={{ height: 40, px: 1.75, borderRadius: '12px' }}
             >
               New folder
             </Button>
+
+            {isDesktop && (
+              <Box
+                sx={{
+                  display: 'inline-flex',
+                  p: '3px',
+                  bgcolor: 'surface1',
+                  border: '1px solid hairlineSoft',
+                  borderRadius: '10px',
+                  gap: '2px',
+                }}
+              >
+                <IconButton
+                  aria-label="List view"
+                  aria-pressed={view === 'list'}
+                  onClick={() => setView('list')}
+                  size="small"
+                  sx={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: '8px',
+                    color: view === 'list' ? 'ink' : 'inkMuted',
+                    bgcolor: view === 'list' ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+                  }}
+                >
+                  <FontAwesomeIcon icon={faTableList} size="sm" />
+                </IconButton>
+                <IconButton
+                  aria-label="Grid view"
+                  aria-pressed={view === 'grid'}
+                  onClick={() => setView('grid')}
+                  size="small"
+                  sx={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: '8px',
+                    color: view === 'grid' ? 'ink' : 'inkMuted',
+                    bgcolor: view === 'grid' ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+                  }}
+                >
+                  <FontAwesomeIcon icon={faTableCellsLarge} size="sm" />
+                </IconButton>
+              </Box>
+            )}
+
+            {isDesktop && (
+              <Tooltip title={detailsOpen ? "Hide details (Alt+I)" : "View details & activity (Alt+I)"}>
+                <IconButton
+                  aria-label="Toggle details panel"
+                  aria-pressed={detailsOpen}
+                  onClick={() => setDetailsOpen(!detailsOpen)}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: '10px',
+                    bgcolor: detailsOpen ? 'rgba(30,134,255,0.18)' : 'surface1',
+                    color: detailsOpen ? 'accentBlue' : 'inkMuted',
+                    border: '1px solid',
+                    borderColor: detailsOpen ? 'accentBlue' : 'hairlineSoft',
+                    '&:hover': {
+                      bgcolor: detailsOpen ? 'rgba(30,134,255,0.28)' : 'surface2',
+                      color: 'ink',
+                    },
+                  }}
+                >
+                  <FontAwesomeIcon icon={faCircleInfo} />
+                </IconButton>
+              </Tooltip>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              data-testid="file-input"
+              onChange={handleFilesSelected}
+            />
+            <input
+              ref={folderInputRef}
+              type="file"
+              multiple
+              webkitdirectory=""
+              directory=""
+              hidden
+              data-testid="folder-input"
+              onChange={handleFolderSelected}
+            />
           </Box>
-
-          {/* View Switcher */}
-          {isDesktop && (
-            <Box
-              sx={{
-                display: 'inline-flex',
-                p: '3px',
-                bgcolor: 'surface1',
-                border: '1px solid hairlineSoft',
-                borderRadius: '8px',
-                gap: '2px',
-              }}
-            >
-              <IconButton
-                aria-label="List view"
-                aria-pressed={view === 'list'}
-                onClick={() => setView('list')}
-                size="small"
-                sx={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '6px',
-                  color: view === 'list' ? 'ink' : 'inkMuted',
-                  bgcolor: view === 'list' ? 'rgba(255, 255, 255, 0.10)' : 'transparent',
-                }}
-              >
-                <FontAwesomeIcon icon={faTableList} size="sm" />
-              </IconButton>
-              <IconButton
-                aria-label="Grid view"
-                aria-pressed={view === 'grid'}
-                onClick={() => setView('grid')}
-                size="small"
-                sx={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '6px',
-                  color: view === 'grid' ? 'ink' : 'inkMuted',
-                  bgcolor: view === 'grid' ? 'rgba(255, 255, 255, 0.10)' : 'transparent',
-                }}
-              >
-                <FontAwesomeIcon icon={faTableCellsLarge} size="sm" />
-              </IconButton>
-            </Box>
-          )}
-
-          {/* Details Inspector Toggle */}
-          {isDesktop && (
-            <Tooltip title={detailsOpen ? "Hide details (Alt+I)" : "View details & activity (Alt+I)"}>
-              <IconButton
-                aria-label="Toggle details panel"
-                aria-pressed={detailsOpen}
-                onClick={() => setDetailsOpen(!detailsOpen)}
-                sx={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: '8px',
-                  bgcolor: detailsOpen ? 'rgba(0,132,255,0.15)' : 'surface1',
-                  color: detailsOpen ? 'accentBlue' : 'inkMuted',
-                  border: '1px solid',
-                  borderColor: detailsOpen ? 'accentBlue' : 'hairlineSoft',
-                  '&:hover': {
-                    bgcolor: detailsOpen ? 'rgba(0,132,255,0.25)' : 'surface2',
-                    color: 'ink',
-                  },
-                }}
-              >
-                <FontAwesomeIcon icon={faCircleInfo} />
-              </IconButton>
-            </Tooltip>
-          )}
-
-          {/* Quota Mini Widget */}
-          <Box
-            sx={{
-              ml: 'auto',
-              width: 220,
-              display: isDesktop ? 'block' : 'none',
-              bgcolor: 'surface1',
-              border: '1px solid hairlineSoft',
-              borderRadius: '10px',
-              px: 2,
-              py: 1,
-            }}
-          >
-            <QuotaMeter drive={drive} />
-          </Box>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            hidden
-            data-testid="file-input"
-            onChange={handleFilesSelected}
-          />
-          <input
-            ref={folderInputRef}
-            type="file"
-            multiple
-            webkitdirectory=""
-            directory=""
-            hidden
-            data-testid="folder-input"
-            onChange={handleFolderSelected}
-          />
         </Box>
 
-        {/* Selection Action Bar */}
+        {/* Selection Action Shelf */}
         {isDesktop && selectedIds.size > 0 && (
           <Paper
             elevation={2}
@@ -758,10 +767,10 @@ export default function DrivePage() {
             sx={{
               bgcolor: 'surfaceElevated',
               border: '1px solid hairlineSoft',
-              borderRadius: '10px',
-              px: 2,
-              py: 1,
-              mb: 2,
+              borderRadius: '12px',
+              px: 2.5,
+              py: 1.25,
+              mb: 2.5,
               display: 'flex',
               flexWrap: 'wrap',
               gap: 1,
@@ -837,8 +846,8 @@ export default function DrivePage() {
           </Paper>
         )}
 
-        {/* 3-Pane Workspace: Left Content + Right Inspector */}
-        <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start' }}>
+        {/* 3-Pane Layout: Left Main Workspace + Right Storage / Inspector Hub */}
+        <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
           <Box
             data-testid="drive-content-pane"
             sx={{ flexGrow: 1, minWidth: 0, position: 'relative' }}
@@ -847,6 +856,15 @@ export default function DrivePage() {
             onDrop={handleDrop}
             onContextMenu={handleCanvasContextMenu}
           >
+            {dragging && (
+              <DropOverlay
+                active={dragging}
+                onDrop={handleDrop}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+              />
+            )}
+
             <Breadcrumbs trail={trail} onNavigate={navigateTo} />
 
             {search && (
@@ -865,7 +883,7 @@ export default function DrivePage() {
               <Paper
                 elevation={0}
                 variant="outlined"
-                sx={{ p: 2, bgcolor: 'surface1', borderRadius: '12px', borderColor: 'hairlineSoft' }}
+                sx={{ p: 2, bgcolor: 'surface1', borderRadius: '16px', borderColor: 'hairlineSoft' }}
                 data-testid="entries-loading"
                 aria-label="Loading entries"
               >
@@ -883,7 +901,7 @@ export default function DrivePage() {
                     sx={{
                       p: 2.5,
                       mb: 2.5,
-                      borderRadius: '12px',
+                      borderRadius: '14px',
                       bgcolor: 'surface1',
                       borderColor: 'hairlineSoft',
                       display: 'flex',
@@ -893,7 +911,7 @@ export default function DrivePage() {
                     }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <FontAwesomeIcon icon={faFolderOpen} color="#0084FF" style={{ fontSize: 20 }} />
+                      <FontAwesomeIcon icon={faFolderOpen} color="#FFB020" style={{ fontSize: 20 }} />
                       <Typography variant="body2" sx={{ color: 'inkSecondary' }}>
                         Drag and drop files or folders anywhere onto the page to upload instantly.
                       </Typography>
@@ -916,7 +934,7 @@ export default function DrivePage() {
                   data-testid="ready-spotlight"
                   sx={{
                     p: { xs: 4, md: 6 },
-                    borderRadius: '16px',
+                    borderRadius: '18px',
                     bgcolor: 'surface1',
                     borderColor: 'hairlineSoft',
                     textAlign: 'center',
@@ -932,14 +950,14 @@ export default function DrivePage() {
                       width: 64,
                       height: 64,
                       borderRadius: '16px',
-                      bgcolor: 'rgba(0, 132, 255, 0.10)',
-                      border: '1px solid rgba(0, 132, 255, 0.20)',
+                      bgcolor: 'rgba(255, 176, 32, 0.12)',
+                      border: '1px solid rgba(255, 176, 32, 0.25)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    <FontAwesomeIcon icon={faFolderOpen} color="#0084FF" style={{ fontSize: 28 }} />
+                    <FontAwesomeIcon icon={faFolderOpen} color="#FFB020" style={{ fontSize: 28 }} />
                   </Box>
                   <Typography variant="h5" sx={{ fontWeight: 600, color: 'ink' }}>
                     {search ? 'No matches found' : trail.length > 0 ? 'This folder is empty' : 'Your drive is ready'}
@@ -955,45 +973,68 @@ export default function DrivePage() {
                       color="primary"
                       startIcon={<FontAwesomeIcon icon={faUpload} size="sm" />}
                       onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                      sx={{ mt: 1, px: 3, height: 38 }}
+                      sx={{ mt: 1, px: 3, height: 40, borderRadius: '12px' }}
                     >
                       Upload files
                     </Button>
                   )}
                 </Paper>
               </>
-            ) : !isDesktop ? (
-              <EntryCards
-                entries={entries}
-                actions={actions}
-                selectedIds={selectedIds}
-                onToggleSelect={toggleSelect}
-                onContextMenu={handleItemContextMenu}
-              />
-            ) : view === 'grid' ? (
-              <EntryGrid
-                entries={entries}
-                actions={actions}
-                selectedIds={selectedIds}
-                onToggleSelect={toggleSelect}
-                onContextMenu={handleItemContextMenu}
-              />
             ) : (
-              <EntryTable
-                entries={entries}
-                sort={sort}
-                direction={direction}
-                onSort={handleSort}
-                actions={actions}
-                selectedIds={selectedIds}
-                onToggleSelect={toggleSelect}
-                onToggleSelectAll={toggleSelectAll}
-                onContextMenu={handleItemContextMenu}
-              />
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {/* Golden Folders Row (if any subfolders exist) */}
+                {folderEntries.length > 0 && (
+                  <FolderCards
+                    folders={folderEntries}
+                    onOpenFolder={openFolder}
+                    onNewFolder={() => setFolderDialogOpen(true)}
+                    onContextMenu={handleItemContextMenu}
+                  />
+                )}
+
+                {/* Recent / All Files Section */}
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'ink', fontSize: 15 }}>
+                      Recent Files ({fileEntries.length > 0 ? fileEntries.length : entries.length})
+                    </Typography>
+                  </Box>
+
+                  {!isDesktop ? (
+                    <EntryCards
+                      entries={entries}
+                      actions={actions}
+                      selectedIds={selectedIds}
+                      onToggleSelect={toggleSelect}
+                      onContextMenu={handleItemContextMenu}
+                    />
+                  ) : view === 'grid' ? (
+                    <EntryGrid
+                      entries={entries}
+                      actions={actions}
+                      selectedIds={selectedIds}
+                      onToggleSelect={toggleSelect}
+                      onContextMenu={handleItemContextMenu}
+                    />
+                  ) : (
+                    <EntryTable
+                      entries={entries}
+                      sort={sort}
+                      direction={direction}
+                      onSort={handleSort}
+                      actions={actions}
+                      selectedIds={selectedIds}
+                      onToggleSelect={toggleSelect}
+                      onToggleSelectAll={toggleSelectAll}
+                      onContextMenu={handleItemContextMenu}
+                    />
+                  )}
+                </Box>
+              </Box>
             )}
           </Box>
 
-          {/* Right Inspector Panel */}
+          {/* Right Hub: Details Inspector if open/selected, otherwise Storage Hub widget on wide desktop */}
           {isDesktop && detailsOpen && (
             <FileDetailsPanel
               open={detailsOpen}
@@ -1004,6 +1045,15 @@ export default function DrivePage() {
               actions={actions}
               onPreview={setPreviewEntry}
               onPlayTrack={playTrack}
+            />
+          )}
+
+          {isWide && !detailsOpen && (
+            <StorageHub
+              drive={drive}
+              totalFiles={fileEntries.length}
+              totalFolders={folderEntries.length}
+              onUploadClick={() => fileInputRef.current && fileInputRef.current.click()}
             />
           )}
         </Box>
@@ -1025,14 +1075,6 @@ export default function DrivePage() {
         onCopy={setCopyEntry}
         onDelete={setDeleteEntry}
         onShowDetails={() => setDetailsOpen(true)}
-      />
-
-      {/* Full-Screen Drag & Drop Overlay */}
-      <DropOverlay
-        open={dragging}
-        onDrop={handleDrop}
-        onDragLeave={handleDragLeave}
-        onDragOver={handleDragOver}
       />
 
       {/* QuickLook Carousel Previewer */}

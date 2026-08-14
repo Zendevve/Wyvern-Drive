@@ -20,7 +20,7 @@ function formatDate(value) {
 }
 
 /**
- * First-Party Cloud File Grid View (Finder / Google Drive tile grade).
+ * File Grid / Tile View (matching Cloudy reference UI).
  */
 export default function EntryGrid({
   entries,
@@ -56,7 +56,7 @@ export default function EntryGrid({
 function GridCard({ entry, actions, selected, onToggleSelect, onContextMenu }) {
   const isFolder = entry.kind === 'folder';
   const previewable = !isFolder && isPreviewableMime(entry.mimeType);
-  const { icon, color } = entryIcon(entry);
+  const { icon, color, bg } = entryIcon(entry);
   const meta = isFolder
     ? fileTypeLabel(entry)
     : `${formatBytes(entry.sizeBytes)} • ${formatDate(entry.updatedAt)}`;
@@ -97,19 +97,20 @@ function GridCard({ entry, actions, selected, onToggleSelect, onContextMenu }) {
       onContextMenu={handleContextMenu}
       sx={{
         position: 'relative',
-        borderRadius: '12px',
-        p: 1.5,
+        borderRadius: '16px',
+        p: 2,
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
-        bgcolor: selected ? 'rgba(0, 132, 255, 0.08)' : 'surface1',
+        bgcolor: selected ? 'rgba(30, 134, 255, 0.10)' : 'surface1',
         borderColor: selected ? 'accentBlue' : 'hairlineSoft',
-        boxShadow: selected ? '0 0 0 1px #0084FF' : 'none',
-        transition: 'all 120ms ease-out',
+        boxShadow: selected ? '0 0 0 1px #1E86FF, 0 8px 24px rgba(30, 134, 255, 0.15)' : 'none',
+        transition: 'all 140ms ease-out',
         '&:hover': {
-          bgcolor: selected ? 'rgba(0, 132, 255, 0.12)' : 'surface2',
+          bgcolor: selected ? 'rgba(30, 134, 255, 0.15)' : 'surface2',
           borderColor: selected ? 'accentBlue' : 'rgba(255,255,255,0.14)',
-          transform: 'translateY(-1px)',
+          transform: 'translateY(-2px)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
         },
         '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
       }}
@@ -129,12 +130,11 @@ function GridCard({ entry, actions, selected, onToggleSelect, onContextMenu }) {
           sx={{
             fontSize: 10,
             fontWeight: 700,
-            color: 'inkMuted',
-            bgcolor: 'rgba(255,255,255,0.04)',
-            border: '1px solid hairlineSoft',
+            color: color,
+            bgcolor: bg || 'rgba(255,255,255,0.06)',
             px: 0.75,
-            py: 0.2,
-            borderRadius: '4px',
+            py: 0.25,
+            borderRadius: '5px',
             fontFamily: 'monospace',
           }}
         >
@@ -149,16 +149,16 @@ function GridCard({ entry, actions, selected, onToggleSelect, onContextMenu }) {
           alignItems: 'center',
           justifyContent: 'center',
           height: 84,
-          bgcolor: isFolder ? 'rgba(0, 132, 255, 0.04)' : 'rgba(255, 255, 255, 0.02)',
+          bgcolor: bg || 'rgba(255, 255, 255, 0.02)',
           border: '1px solid hairlineSoft',
-          borderRadius: '8px',
-          my: 0.75,
+          borderRadius: '12px',
+          my: 1,
         }}
       >
         <FontAwesomeIcon
           icon={icon}
           color={color}
-          style={{ fontSize: 32 }}
+          style={{ fontSize: 34 }}
           aria-hidden="true"
         />
       </Box>
@@ -192,7 +192,7 @@ function GridCard({ entry, actions, selected, onToggleSelect, onContextMenu }) {
           <Typography
             variant="body2"
             sx={{
-              fontWeight: 500,
+              fontWeight: 600,
               color: 'ink',
               fontSize: 13,
               lineHeight: 1.3,
