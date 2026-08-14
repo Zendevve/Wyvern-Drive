@@ -1,6 +1,0 @@
-write:
-  create-empty-file: true
-file-cache:
-  enable-parallel-downloads: true
-  max-size-mb: 100
-  write-buffer-size: 0

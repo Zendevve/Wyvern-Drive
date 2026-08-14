@@ -1,3 +1,0 @@
-metrics:
-  stackdriver-export-interval: 10s
-  cloud-metrics-export-interval-secs: 100

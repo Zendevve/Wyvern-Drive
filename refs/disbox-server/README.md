@@ -1,2 +1,0 @@
-# server
-The Disbox server.

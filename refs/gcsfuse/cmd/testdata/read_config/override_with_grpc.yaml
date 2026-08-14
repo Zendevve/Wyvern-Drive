@@ -1,4 +1,0 @@
-read:
-  inactive-stream-timeout: 30s
-gcs-connection:
-  client-protocol: grpc

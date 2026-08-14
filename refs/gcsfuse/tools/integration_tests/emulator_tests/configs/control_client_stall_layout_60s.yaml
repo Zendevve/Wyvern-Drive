@@ -1,8 +1,0 @@
-proxyType: grpc
-targetHost: "localhost:8888"
-retryConfig:
-- method: GetStorageLayout
-  retryInstruction: "stall-for-60s"
-  retryCount: 1
-  skipCount: 0
-

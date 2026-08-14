@@ -1,4 +1,0 @@
-write:
-  create-empty-file: true
-file-cache:
-  max-size-mb: -100

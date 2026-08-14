@@ -1,2 +1,0 @@
-gcs-connection:
-  limit-bytes-per-sec: -1

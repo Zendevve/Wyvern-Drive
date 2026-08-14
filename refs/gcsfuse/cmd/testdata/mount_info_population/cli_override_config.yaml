@@ -1,5 +1,0 @@
-app-name: config-app
-file-system:
-  gid: 1002
-logging:
-  severity: error

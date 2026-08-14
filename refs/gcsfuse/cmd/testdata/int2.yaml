@@ -1,2 +1,0 @@
-gcs-connection:
-  max-conns-per-host: -1

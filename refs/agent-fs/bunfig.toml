@@ -1,6 +1,0 @@
-[install]
-peer = false
-
-[test]
-coverageReporter = ["text"]
-coverageThreshold = { line = 60 }

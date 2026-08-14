@@ -1,3 +1,0 @@
-logging:
-  log-rotate:
-    backup-file-count: 0

@@ -1,4 +1,0 @@
-logging:
-  file-path: /var/log/gcsfuse.log
-  format: json
-
