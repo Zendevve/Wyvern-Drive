@@ -4,12 +4,10 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFolder } from '@fortawesome/free-solid-svg-icons';
 
 /**
- * Wyvern Drive brand lockup: the folder glyph in a surface2 circle plus
- * the wordmark. `compact` is the rail/app-bar size; `align` controls the
- * text alignment for full-width contexts.
+ * Wyvern Drive brand lockup: first-party cloud mark + wordmark.
  */
 export default function BrandLockup({ compact = false, align = 'left' }) {
-  const size = compact ? 30 : 38;
+  const size = compact ? 28 : 34;
   return (
     <Box
       sx={{
@@ -28,22 +26,23 @@ export default function BrandLockup({ compact = false, align = 'left' }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          bgcolor: 'surface2',
-          border: '1px solid hairline',
-          borderRadius: '10px',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+          bgcolor: 'rgba(0, 132, 255, 0.12)',
+          border: '1px solid rgba(0, 132, 255, 0.28)',
+          borderRadius: '9px',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12), 0 2px 8px rgba(0, 132, 255, 0.15)',
         }}
         aria-hidden="true"
       >
-        <FontAwesomeIcon icon={faFolder} color="#0099FF" size="sm" />
+        <FontAwesomeIcon icon={faFolder} color="#0084FF" size="sm" />
       </Box>
       <Typography
         variant={compact ? 'subtitle2' : 'h6'}
         noWrap
         sx={{
           fontFamily: "'Mona Sans Variable', sans-serif",
-          fontWeight: 500,
-          letterSpacing: '-0.5px',
+          fontWeight: 600,
+          fontSize: compact ? 15 : 17,
+          letterSpacing: '-0.02em',
           color: 'ink',
         }}
       >

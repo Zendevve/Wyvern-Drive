@@ -21,12 +21,8 @@ function formatDate(value) {
 /**
  * Stacked accessible cards used below 768px. Receives the exact same
  * row/action model as EntryTable so mobile and desktop behave identically.
- * Action buttons stay always visible here — touch has no hover state, and
- * the cards have no surface onClick (only onDoubleClick), so EntryActions
- * runs with stopPropagation={false} exactly like the previous no-stop
- * handlers.
  */
-export default function EntryCards({ entries, actions, onPreview }) {
+export default function EntryCards({ entries, actions, onPreview, onContextMenu }) {
   const handlePreview = onPreview || (actions && actions.onPreview);
   return (
     <List data-testid="entry-cards" aria-label="Files and folders" disablePadding>
@@ -37,10 +33,20 @@ export default function EntryCards({ entries, actions, onPreview }) {
         const meta = isFolder
           ? fileTypeLabel(entry)
           : `${formatBytes(entry.sizeBytes)} · ${formatDate(entry.updatedAt)}`;
+
+        const handleContextMenu = (e) => {
+          if (onContextMenu) {
+            e.preventDefault();
+            e.stopPropagation();
+            onContextMenu(e, entry);
+          }
+        };
+
         return (
           <ListItem key={entry.id} disableGutters disablePadding sx={{ mb: 1 }}>
             <Card
               variant="outlined"
+              onContextMenu={handleContextMenu}
               onDoubleClick={() => {
                 if (isFolder) {
                   actions.onOpenFolder(entry);

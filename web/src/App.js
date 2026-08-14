@@ -5,6 +5,8 @@ import CssBaseline from '@mui/material/CssBaseline';
 import theme from './theme';
 import { AuthProvider } from './auth/AuthProvider';
 import UploadProvider from './upload/UploadProvider';
+import { MediaPlayerProvider } from './components/MediaPlayerProvider';
+import MediaDock from './components/MediaDock';
 import { api } from './api/client';
 import ScreenLoader from './components/ScreenLoader';
 import LoginPage from './pages/LoginPage';
@@ -67,17 +69,20 @@ export default function App() {
         <SetupGate>
           <AuthProvider>
             <UploadProvider>
-            <Routes>
-              {/* Reached only when setup is complete; /setup lives at /login. */}
-              <Route path="/setup" element={<Navigate to="/login" replace />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/connect" element={<WebhookSetupPage />} />
-              <Route path="/drive" element={<DrivePage />} />
-              <Route path="/trash" element={<TrashPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/share/:token" element={<SharePage />} />
-              <Route path="*" element={<Navigate to="/drive" replace />} />
-            </Routes>
+              <MediaPlayerProvider>
+                <Routes>
+                  {/* Reached only when setup is complete; /setup lives at /login. */}
+                  <Route path="/setup" element={<Navigate to="/login" replace />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/connect" element={<WebhookSetupPage />} />
+                  <Route path="/drive" element={<DrivePage />} />
+                  <Route path="/trash" element={<TrashPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/share/:token" element={<SharePage />} />
+                  <Route path="*" element={<Navigate to="/drive" replace />} />
+                </Routes>
+                <MediaDock />
+              </MediaPlayerProvider>
             </UploadProvider>
           </AuthProvider>
         </SetupGate>

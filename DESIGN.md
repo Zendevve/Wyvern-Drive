@@ -1,23 +1,22 @@
 ---
 name: Wyvern Drive
-description: A self-hosted Discord-backed personal cloud drive wearing Framer's dark-canvas world.
+description: A self-hosted Discord-backed personal cloud drive with a tier-1 OS-grade dark interface (Linear / Apple iCloud / Google Drive grade).
 colors:
-  canvas: "#0E0E10"
-  surface-1: "#1A1A1D"
-  surface-2: "#242428"
-  ink: "#FFFFFF"
-  ink-muted: "#999999"
-  accent-blue: "#0099FF"
-  focus-ring: "rgba(0,153,255,0.15)"
+  canvas: "#0A0B0D"
+  sidebar: "#0F1013"
+  surface-1: "#15171C"
+  surface-2: "#1D2027"
+  surface-elevated: "#262A34"
+  ink: "#F5F6F8"
+  ink-secondary: "#9DA3AE"
+  ink-muted: "#686E7B"
+  accent-blue: "#0084FF"
+  focus-ring: "rgba(0,132,255,0.25)"
   hairline: "rgba(255,255,255,0.08)"
-  hairline-soft: "rgba(255,255,255,0.06)"
-  success: "#3AC36F"
-  danger: "#FF5C5C"
-  warning: "#F5A524"
-  violet-base: "#7C3AED"
-  magenta-base: "#DB2777"
-  orange-base: "#F97316"
-  coral-base: "#FB7185"
+  hairline-soft: "rgba(255,255,255,0.04)"
+  success: "#30D158"
+  danger: "#FF453A"
+  warning: "#FF9F0A"
 typography:
   display:
     fontFamily: "'Mona Sans Variable', 'Inter Variable', sans-serif"

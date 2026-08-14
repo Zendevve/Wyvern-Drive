@@ -18,12 +18,14 @@ import {
   Skeleton,
   Snackbar,
   TextField,
+  Tooltip,
   Typography,
   useMediaQuery,
 } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowRightArrowLeft,
+  faCircleInfo,
   faDownload,
   faFolderOpen,
   faFolderPlus,
@@ -48,7 +50,10 @@ import FolderDialog from '../components/FolderDialog';
 import MoveDialog from '../components/MoveDialog';
 import PreviewDialog from '../components/PreviewDialog';
 import ShareDialog from '../components/ShareDialog';
+import FileDetailsPanel from '../components/FileDetailsPanel';
+import ContextMenu from '../components/ContextMenu';
 import QuotaMeter from '../components/QuotaMeter';
+import { useMediaPlayer } from '../components/MediaPlayerProvider';
 import {
   api,
   archiveUrl,
@@ -58,17 +63,12 @@ import { useAuth } from '../auth/AuthProvider';
 import { useUploads } from '../upload/UploadProvider';
 import DialogTransition from '../motion/DialogTransition';
 import ScreenLoader from '../components/ScreenLoader';
-import { gradients } from '../theme';
 
 /**
- * Materialize an <input webkitdirectory> selection into upload pairs. The
- * picker returns a flat FileList where each file carries its position in
- * webkitRelativePath ("folder/sub/file.txt"); this creates the folder chain
- * on the server (once per folder, via a path cache) and resolves each file
- * to the folder id it belongs in.
+ * Materialize an <input webkitdirectory> selection into upload pairs.
  */
 async function materializeFolderPicker(files, rootParentId) {
-  const folderIds = new Map(); // relative dir path -> created folder id
+  const folderIds = new Map();
   const pairs = [];
   for (const file of files) {
     const relativePath = String(file.webkitRelativePath || file.name);
@@ -100,7 +100,7 @@ export default function DrivePage() {
   const { user, drive, loading, refresh } = useAuth();
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
-  const [trail, setTrail] = useState([]); // { id, name } ancestors; [] = root
+  const [trail, setTrail] = useState([]);
   const [entries, setEntries] = useState([]);
   const [entriesLoading, setEntriesLoading] = useState(true);
   const [entriesError, setEntriesError] = useState(null);
@@ -113,6 +113,7 @@ export default function DrivePage() {
 
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [renameEntry, setRenameEntry] = useState(null);
@@ -123,6 +124,14 @@ export default function DrivePage() {
   const [shareEntry, setShareEntry] = useState(null);
   const [previewEntry, setPreviewEntry] = useState(null);
 
+  // 3rd Pane Inspector Details Panel
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // Context Menu State
+  const [contextMenu, setContextMenu] = useState(null);
+
+  const { playTrack } = useMediaPlayer();
+
   const [view, setView] = useState(() => {
     try {
       return localStorage.getItem('wyvern.view') === 'grid' ? 'grid' : 'list';
@@ -130,8 +139,7 @@ export default function DrivePage() {
       return 'list';
     }
   });
-  // One-time first-run tip: shown only while the drive root is empty and the
-  // user has not dismissed it. Auto-hides once the drive has entries.
+
   const [dragHintDismissed, setDragHintDismissed] = useState(() => {
     try {
       return localStorage.getItem('wyvern-drag-hint-dismissed') === '1';
@@ -139,24 +147,31 @@ export default function DrivePage() {
       return false;
     }
   });
+
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [dragging, setDragging] = useState(false);
-  const [dropCount, setDropCount] = useState(0);
 
-  useEffect(() => {
+  const dismissDragHint = () => {
+    setDragHintDismissed(true);
     try {
-      localStorage.setItem('wyvern.view', view);
+      localStorage.setItem('wyvern-drag-hint-dismissed', '1');
     } catch {
-      // Storage may be unavailable; the view still works for this session.
+      // localStorage may be unavailable in private mode
     }
-  }, [view]);
+  };
 
-  const currentParentId = trail.length > 0 ? trail[trail.length - 1].id : null;
+  const currentFolder = trail.length > 0 ? trail[trail.length - 1] : null;
+  const currentParentId = currentFolder ? currentFolder.id : null;
 
-  // The upload queue lives in the app-level UploadProvider: enqueue jobs
-  // here and let the provider's global transfer console track them across
-  // navigation. `subscribe` lets this page refresh when a job settles.
   const { enqueueJobPairs, subscribe } = useUploads();
+
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const loadEntries = useCallback(
     async (parentId, query, sortField, sortDirection) => {
@@ -170,328 +185,256 @@ export default function DrivePage() {
           sort: sortField,
           direction: sortDirection,
         });
-        setEntries(data.entries || []);
+        if (mountedRef.current) {
+          setEntries(data.entries || []);
+        }
       } catch (err) {
-        setEntriesError(err);
-        setEntries([]);
+        if (mountedRef.current) {
+          setEntriesError(err);
+          setEntries([]);
+        }
       } finally {
-        setEntriesLoading(false);
+        if (mountedRef.current) {
+          setEntriesLoading(false);
+        }
       }
     },
     []
   );
 
+  const reload = useCallback(() => {
+    return loadEntries(currentParentId, search, sort, direction);
+  }, [currentParentId, search, sort, direction, loadEntries]);
+
+  // Initial load and on parameter change
   useEffect(() => {
     loadEntries(currentParentId, search, sort, direction);
   }, [currentParentId, search, sort, direction, loadEntries]);
 
-  // Debounce the search box into the server query parameter.
+  // Debounced search input sync
   useEffect(() => {
-    const timer = setTimeout(() => setSearch(searchInput.trim()), 300);
-    return () => clearTimeout(timer);
+    const handle = setTimeout(() => {
+      setSearch(searchInput.trim());
+    }, 300);
+    return () => clearTimeout(handle);
   }, [searchInput]);
 
-  const reload = useCallback(() => {
-    loadEntries(currentParentId, search, sort, direction);
-  }, [loadEntries, currentParentId, search, sort, direction]);
-
-  const refreshQuota = useCallback(async () => {
-    try {
-      await refresh();
-    } catch {
-      // Quota refresh is best-effort.
-    }
-  }, [refresh]);
-
-  // Refresh the manifest when an upload settles. The queue outlives this
-  // page (the provider owns it), so jobs that started before a navigation
-  // complete after DrivePage remounts; mirror the pre-provider flow by
-  // reloading entries and quota after each done job.
+  // Subscribe to upload queue finishes so we can refresh the list
   useEffect(() => {
-    const unsubscribe = subscribe(({ type, status }) => {
-      if (type === 'settled' && status === 'done') {
+    const unsubscribe = subscribe((event) => {
+      if (event.type === 'job-complete' || event.type === 'job-failed') {
         reload();
-        refreshQuota();
+        refresh();
       }
     });
-    return unsubscribe;
-  }, [subscribe, reload, refreshQuota]);
+    return () => unsubscribe();
+  }, [subscribe, reload, refresh]);
 
-  const toggleSelect = useCallback((id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
-  const toggleSelectAll = useCallback((ids, checked) => {
-    setSelectedIds(checked ? new Set(ids) : new Set());
-  }, []);
-
-  const clearSelection = useCallback(() => {
+  // Clear selections on folder navigation or search
+  useEffect(() => {
     setSelectedIds(new Set());
-  }, []);
+  }, [currentParentId, search]);
 
-  const dismissDragHint = useCallback(() => {
-    setDragHintDismissed(true);
-    try {
-      localStorage.setItem('wyvern-drag-hint-dismissed', '1');
-    } catch {
-      // Storage may be unavailable; the hint stays dismissed for this session.
-    }
-  }, []);
-
-  const openFolder = useCallback(
-    (entry) => {
-      clearSelection();
-      setTrail((prev) => [...prev, { id: entry.id, name: entry.name }]);
-    },
-    [clearSelection]
-  );
-
-  const navigateTo = useCallback(
-    (folderId) => {
-      clearSelection();
-      setTrail((prev) => {
-        if (folderId === null) {
-          return [];
-        }
-        const index = prev.findIndex((part) => part.id === folderId);
-        if (index === -1) {
-          return prev;
-        }
-        return prev.slice(0, index + 1);
-      });
-    },
-    [clearSelection]
-  );
-
-  const handleSort = useCallback((field) => {
-    setSort((prevSort) => {
-      if (prevSort === field) {
-        setDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
-        return prevSort;
-      }
+  const handleSort = (field) => {
+    if (sort === field) {
+      setDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSort(field);
       setDirection('asc');
-      return field;
-    });
+    }
+  };
+
+  const navigateTo = (folderId) => {
+    if (folderId === null) {
+      setTrail([]);
+      return;
+    }
+    const index = trail.findIndex((f) => f.id === folderId);
+    if (index !== -1) {
+      setTrail(trail.slice(0, index + 1));
+    }
+  };
+
+  const openFolder = useCallback((folder) => {
+    setTrail((prev) => [...prev, { id: folder.id, name: folder.name }]);
   }, []);
 
-  const handleFilesSelected = useCallback(
-    (event) => {
-      const files = Array.from(event.target.files || []);
-      event.target.value = '';
-      // Resolve the target folder at enqueue time (the provider is
-      // page-agnostic) so uploads land where the user started them.
-      enqueueJobPairs(
-        files.map((file) => ({ file, parentId: currentParentId }))
-      );
-    },
-    [enqueueJobPairs, currentParentId]
-  );
+  const handleFilesSelected = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      const pairs = files.map((file) => ({ file, parentId: currentParentId }));
+      enqueueJobPairs(pairs);
+    }
+    e.target.value = '';
+  };
 
-  const handleFolderSelected = useCallback(
-    async (event) => {
-      const files = Array.from(event.target.files || []);
-      event.target.value = '';
-      if (files.length === 0) {
-        return;
-      }
+  const handleFolderSelected = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
       try {
         const pairs = await materializeFolderPicker(files, currentParentId);
-        enqueueJobPairs(pairs);
+        if (pairs.length > 0) {
+          enqueueJobPairs(pairs);
+        }
       } catch (err) {
         setNotice(err);
       }
-    },
-    [currentParentId, enqueueJobPairs]
-  );
+    }
+    e.target.value = '';
+  };
 
-  const runMutation = useCallback(async (fn) => {
-    try {
-      await fn();
-      setNotice(null);
-      return true;
-    } catch (err) {
-      setNotice(err);
-      return false;
+  const toggleSelect = (id) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
+  const toggleSelectAll = useCallback((ids, selectAll) => {
+    if (selectAll) {
+      setSelectedIds(new Set(ids));
+    } else {
+      setSelectedIds(new Set());
     }
   }, []);
 
-  const handleCreateFolder = useCallback(
-    async (name) => {
-      try {
-        await api.createFolder(currentParentId, name);
-        setNotice(null);
-        await reload();
-        return true;
-      } catch (err) {
-        setNotice(err);
-        throw err;
-      }
-    },
-    [currentParentId, reload]
-  );
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
-  const handleRename = useCallback(
-    async (entry, name) => {
-      try {
-        await api.updateEntry(entry.id, { name });
-        setNotice(null);
-        await reload();
-        return true;
-      } catch (err) {
-        setNotice(err);
-        throw err;
-      }
-    },
-    [reload]
-  );
+  const selectedEntries = useMemo(() => {
+    return entries.filter((entry) => selectedIds.has(entry.id));
+  }, [entries, selectedIds]);
 
-  const handleMove = useCallback(
-    async (entry, targetParentId) => {
-      if (targetParentId === (entry.parentId == null ? null : entry.parentId)) {
-        return true; // No-op move to the current parent.
-      }
-      const ok = await runMutation(() =>
-        api.updateEntry(entry.id, { parentId: targetParentId })
-      );
-      if (ok) {
-        await reload();
-      }
-      return ok;
-    },
-    [runMutation, reload]
-  );
+  const singleSelected = selectedEntries.length === 1 ? selectedEntries[0] : null;
+  const singleSelectedFile =
+    singleSelected && singleSelected.kind !== 'folder' ? singleSelected : null;
+  const singleSelectedFolder =
+    singleSelected && singleSelected.kind === 'folder' ? singleSelected : null;
 
-  // Copy is instant server-side (chunk rows reference existing blocks), so
-  // the duplicate appears immediately and quota grows by the copied bytes.
-  // The target folder comes from the copy dialog (defaults to the current
-  // parent, which reproduces the old one-click duplicate-in-place behavior).
-  const handleCopy = useCallback(
-    async (entry, targetParentId) => {
-      const ok = await runMutation(() =>
-        api.copyEntry(entry.id, targetParentId)
-      );
-      if (ok) {
-        await reload();
-        await refreshQuota();
-      }
-      return ok;
-    },
-    [runMutation, reload, refreshQuota]
-  );
-
-  const confirmDelete = useCallback(async () => {
-    if (!deleteEntry) {
-      return;
+  const handleCreateFolder = async (name) => {
+    try {
+      await api.createFolder(currentParentId, name);
+      setFolderDialogOpen(false);
+      reload();
+    } catch (err) {
+      setNotice(err);
+      throw err;
     }
-    const entry = deleteEntry;
-    const ok = await runMutation(() => api.deleteEntry(entry.id));
-    setDeleteEntry(null);
-    if (ok) {
-      await reload();
-      await refreshQuota();
-      clearSelection();
-      setDeletedEntries((prev) => [...prev, entry]);
-    }
-  }, [deleteEntry, runMutation, reload, refreshQuota, clearSelection]);
+  };
 
-  // Undo from the "Moved to Trash" snackbar: restore every queued entry
-  // straight back to its original parent and refresh. Failures are
-  // swallowed — the Trash page remains the authoritative recovery path.
-  const handleUndoDelete = useCallback(async () => {
-    if (deletedEntries.length === 0) {
-      return;
+  const handleRename = async (name) => {
+    if (!renameEntry) return;
+    try {
+      await api.renameEntry(renameEntry.id, name);
+      setRenameEntry(null);
+      reload();
+    } catch (err) {
+      setNotice(err);
+      throw err;
     }
-    const entries = deletedEntries;
-    setDeletedEntries([]);
-    await Promise.all(
-      entries.map(async (entry) => {
-        try {
-          await api.trash.restore(entry.id);
-        } catch {
-          // Best-effort restore from the snackbar.
-        }
-      })
-    );
-    await reload();
-    await refreshQuota();
-  }, [deletedEntries, reload, refreshQuota]);
+  };
+
+  const handleMove = async (targetParentId) => {
+    if (!moveEntry) return;
+    try {
+      await api.moveEntry(moveEntry.id, targetParentId);
+      setMoveEntry(null);
+      reload();
+    } catch (err) {
+      setNotice(err);
+      throw err;
+    }
+  };
+
+  const handleCopy = async (targetParentId) => {
+    if (!copyEntry) return;
+    try {
+      await api.copyEntry(copyEntry.id, targetParentId);
+      setCopyEntry(null);
+      reload();
+      refresh();
+    } catch (err) {
+      setNotice(err);
+      throw err;
+    }
+  };
+
+  const handleDeleteConfirmed = async () => {
+    if (!deleteEntry) return;
+    try {
+      await api.deleteEntry(deleteEntry.id);
+      setDeletedEntries([deleteEntry]);
+      setDeleteEntry(null);
+      reload();
+      refresh();
+    } catch (err) {
+      setNotice(err);
+    }
+  };
+
+  const handleBulkDelete = useCallback(async () => {
+    const toDelete = selectedEntries;
+    if (toDelete.length === 0) return;
+    try {
+      for (const item of toDelete) {
+        await api.deleteEntry(item.id);
+      }
+      setDeletedEntries(toDelete);
+      setSelectedIds(new Set());
+      reload();
+      refresh();
+    } catch (err) {
+      setNotice(err);
+    }
+  }, [selectedEntries, reload, refresh]);
+
+  const handleUndoDelete = async () => {
+    if (deletedEntries.length === 0) return;
+    try {
+      for (const item of deletedEntries) {
+        await api.restoreEntry(item.id);
+      }
+      setDeletedEntries([]);
+      reload();
+      refresh();
+    } catch (err) {
+      setNotice(err);
+    }
+  };
 
   const actions = useMemo(
     () => ({
       onOpenFolder: openFolder,
+      onPreview: setPreviewEntry,
       onShare: setShareEntry,
       onRename: setRenameEntry,
       onMove: setMoveEntry,
       onCopy: setCopyEntry,
       onDelete: setDeleteEntry,
-      onPreview: setPreviewEntry,
     }),
     [openFolder]
   );
 
-  // Exactly one selected entry (if any) — the object the single-item
-  // selection bar actions operate on.
-  const singleSelected = useMemo(() => {
-    if (selectedIds.size !== 1) {
-      return null;
-    }
-    const id = [...selectedIds][0];
-    return entries.find((entry) => entry.id === id) || null;
-  }, [selectedIds, entries]);
-
-  const singleSelectedFile =
-    singleSelected && singleSelected.kind !== 'folder' ? singleSelected : null;
-
-  const singleSelectedFolder =
-    singleSelected && singleSelected.kind === 'folder' ? singleSelected : null;
-
-  const handleBulkDelete = useCallback(async () => {
-    for (const id of [...selectedIds]) {
-      const ok = await runMutation(() => api.deleteEntry(id));
-      if (!ok) {
-        break;
-      }
-    }
-    await reload();
-    await refreshQuota();
-    clearSelection();
-  }, [selectedIds, runMutation, reload, refreshQuota, clearSelection]);
-
-  const handleDragOver = useCallback(
-    (event) => {
-      event.preventDefault();
-      if (!entriesLoading) {
-        setDragging(true);
-      }
-    },
-    [entriesLoading]
-  );
+  const handleDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragging(true);
+  }, []);
 
   const handleDragLeave = useCallback((event) => {
     event.preventDefault();
-    if (
-      !event.relatedTarget ||
-      !event.currentTarget.contains(event.relatedTarget)
-    ) {
-      setDragging(false);
-    }
+    event.stopPropagation();
+    setDragging(false);
   }, []);
 
   const handleDrop = useCallback(
     async (event) => {
       event.preventDefault();
+      event.stopPropagation();
       setDragging(false);
       try {
-        // Folder drops are walked as trees (folders created server-side as
-        // the walk descends); plain file drops fall back to the flat list.
         const pairs = await collectDroppedFiles(
           event.dataTransfer,
           api.createFolder,
@@ -499,7 +442,6 @@ export default function DrivePage() {
         );
         if (pairs.length > 0) {
           enqueueJobPairs(pairs);
-          setDropCount((c) => c + 1);
         }
       } catch (err) {
         setNotice(err);
@@ -508,474 +450,695 @@ export default function DrivePage() {
     [currentParentId, enqueueJobPairs]
   );
 
+  const handleItemContextMenu = useCallback((event, entry) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!selectedIds.has(entry.id)) {
+      setSelectedIds(new Set([entry.id]));
+    }
+    setContextMenu({
+      mouseX: event.clientX + 2,
+      mouseY: event.clientY - 6,
+      entry,
+      isCanvas: false,
+    });
+  }, [selectedIds]);
+
+  const handleCanvasContextMenu = useCallback((event) => {
+    const isDirect =
+      event.target === event.currentTarget ||
+      event.target.getAttribute('data-testid') === 'drive-content-pane' ||
+      event.target.getAttribute('data-testid') === 'entry-grid';
+    if (isDirect) {
+      event.preventDefault();
+      setContextMenu({
+        mouseX: event.clientX + 2,
+        mouseY: event.clientY - 6,
+        entry: null,
+        isCanvas: true,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (
+        e.target.tagName === 'INPUT' ||
+        e.target.tagName === 'TEXTAREA' ||
+        e.target.isContentEditable ||
+        previewEntry !== null ||
+        folderDialogOpen ||
+        renameEntry !== null ||
+        moveEntry !== null ||
+        copyEntry !== null ||
+        shareEntry !== null ||
+        deleteEntry !== null
+      ) {
+        return;
+      }
+
+      if (e.key === ' ' || e.code === 'Space') {
+        if (singleSelectedFile) {
+          e.preventDefault();
+          setPreviewEntry(singleSelectedFile);
+        }
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedIds.size > 0) {
+          e.preventDefault();
+          if (singleSelected) {
+            setDeleteEntry(singleSelected);
+          } else {
+            handleBulkDelete();
+          }
+        }
+      } else if (e.key === 'F2') {
+        if (singleSelected) {
+          e.preventDefault();
+          setRenameEntry(singleSelected);
+        }
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        toggleSelectAll(entries.map((item) => item.id), true);
+      } else if (e.altKey && (e.key === 'i' || e.key === 'I')) {
+        e.preventDefault();
+        setDetailsOpen((prev) => !prev);
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+        }
+      } else if (e.key === 'Escape') {
+        if (contextMenu) {
+          setContextMenu(null);
+        } else if (selectedIds.size > 0) {
+          clearSelection();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    singleSelected,
+    singleSelectedFile,
+    selectedIds,
+    entries,
+    previewEntry,
+    folderDialogOpen,
+    renameEntry,
+    moveEntry,
+    copyEntry,
+    shareEntry,
+    deleteEntry,
+    contextMenu,
+    handleBulkDelete,
+    toggleSelectAll,
+    clearSelection,
+  ]);
+
   if (loading) {
     return <ScreenLoader />;
   }
 
   if (!user) {
-    return null; // AuthProvider redirects to /login.
+    return null;
   }
 
   return (
     <AppShell title="Drive">
-      {/* Bottom padding keeps the fixed transfer console from covering the
-          last rows of the manifest, especially on small screens. */}
       <Box sx={{ pb: { xs: 12, md: 2 } }}>
-      {notice && <ErrorNotice error={notice} onRetry={reload} />}
+        {notice && <ErrorNotice error={notice} onRetry={reload} />}
 
-      {/* Command row: search spans the primary column; the white Upload pill
-          leads, charcoal secondary pills follow; the circular view toggle
-          and quota cell sit in utility slots. Below 768px the search stacks
-          full-width and the actions wrap without horizontal overflow. */}
-      <Box
-        component="section"
-        aria-label="Drive commands"
-        sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 1.5,
-          mb: 3,
-          alignItems: 'center',
-        }}
-      >
-        <TextField
-          size="small"
-          placeholder="Search files and folders..."
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          disabled={entriesLoading}
-          sx={{
-            flexGrow: 1,
-            minWidth: 240,
-            maxWidth: { md: 360 },
-            '& .MuiOutlinedInput-root': {
-              borderRadius: '100px',
-              bgcolor: 'surface1',
-            },
-          }}
-          inputProps={{ 'aria-label': 'Search files and folders' }}
-          InputProps={{
-            startAdornment: (
-              <Box
-                component="span"
-                sx={{ color: 'inkMuted', display: 'inline-flex', mr: 0.5 }}
-              >
-                <FontAwesomeIcon icon={faMagnifyingGlass} aria-hidden="true" />
-              </Box>
-            ),
-          }}
-        />
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Button
-            variant="contained"
-            startIcon={<FontAwesomeIcon icon={faUpload} />}
-            onClick={() => fileInputRef.current && fileInputRef.current.click()}
-            disabled={entriesLoading}
-            sx={{ height: 38, px: 2.25 }}
-          >
-            Upload
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<FontAwesomeIcon icon={faFolderTree} />}
-            onClick={() => folderInputRef.current && folderInputRef.current.click()}
-            disabled={entriesLoading}
-            sx={{ height: 38, px: 2 }}
-          >
-            Upload folder
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<FontAwesomeIcon icon={faFolderPlus} />}
-            onClick={() => setFolderDialogOpen(true)}
-            sx={{ height: 38, px: 2 }}
-          >
-            New folder
-          </Button>
-        </Box>
-        {isDesktop && (
-          <Box
-            sx={{
-              display: 'inline-flex',
-              p: '3px',
-              bgcolor: 'surface1',
-              border: '1px solid hairline',
-              borderRadius: '100px',
-              gap: '2px',
-            }}
-          >
-            <IconButton
-              aria-label="List view"
-              aria-pressed={view === 'list'}
-              onClick={() => setView('list')}
-              sx={{
-                width: 32,
-                height: 32,
-                borderRadius: '100px',
-                color: view === 'list' ? 'ink' : 'inkMuted',
-                bgcolor: view === 'list' ? 'surface2' : 'transparent',
-                boxShadow: view === 'list' ? 'inset 0 1px 0 rgba(255,255,255,0.08)' : 'none',
-              }}
-            >
-              <FontAwesomeIcon icon={faTableList} size="sm" />
-            </IconButton>
-            <IconButton
-              aria-label="Grid view"
-              aria-pressed={view === 'grid'}
-              onClick={() => setView('grid')}
-              sx={{
-                width: 32,
-                height: 32,
-                borderRadius: '100px',
-                color: view === 'grid' ? 'ink' : 'inkMuted',
-                bgcolor: view === 'grid' ? 'surface2' : 'transparent',
-                boxShadow: view === 'grid' ? 'inset 0 1px 0 rgba(255,255,255,0.08)' : 'none',
-              }}
-            >
-              <FontAwesomeIcon icon={faTableCellsLarge} size="sm" />
-            </IconButton>
-          </Box>
-        )}
+        {/* Global Toolbar Bar */}
         <Box
+          component="section"
+          aria-label="Drive commands"
           sx={{
-            ml: 'auto',
-            width: 220,
-            display: isDesktop ? 'block' : 'none',
-            bgcolor: 'surface1',
-            border: '1px solid hairline',
-            borderRadius: '14px',
-            px: 2,
-            py: 1.25,
-          }}
-        >
-          <QuotaMeter drive={drive} />
-        </Box>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          hidden
-          data-testid="file-input"
-          onChange={handleFilesSelected}
-        />
-        <input
-          ref={folderInputRef}
-          type="file"
-          multiple
-          webkitdirectory=""
-          directory=""
-          hidden
-          data-testid="folder-input"
-          onChange={handleFolderSelected}
-        />
-      </Box>
-
-      {isDesktop && selectedIds.size > 0 && (
-        <Paper
-          elevation={3}
-          data-testid="selection-bar"
-          sx={{
-            bgcolor: 'surface2',
-            borderRadius: '20px',
-            px: 3,
-            py: 1.5,
-            mb: 2,
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 1,
+            gap: 1.5,
+            mb: 2.5,
             alignItems: 'center',
           }}
         >
-          <Typography
-            variant="caption"
-            component="span"
-            sx={{ color: 'ink', whiteSpace: 'nowrap', mr: 1 }}
-          >
-            {selectedIds.size} selected
-          </Typography>
-          <Button
-            variant="outlined"
+          {/* Omni Search */}
+          <TextField
             size="small"
-            startIcon={<FontAwesomeIcon icon={faDownload} />}
-            disabled={!(singleSelectedFile || singleSelectedFolder)}
-            onClick={() => {
-              if (singleSelectedFolder) {
-                window.location.href = archiveUrl(singleSelectedFolder.id);
-              } else if (singleSelectedFile) {
-                window.location.href = downloadUrl(singleSelectedFile.id);
-              }
+            placeholder="Search files and folders... (⌘K)"
+            value={searchInput}
+            inputRef={searchInputRef}
+            onChange={(e) => setSearchInput(e.target.value)}
+            disabled={entriesLoading}
+            sx={{
+              flexGrow: 1,
+              minWidth: 220,
+              maxWidth: { md: 340 },
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '8px',
+                bgcolor: 'surface1',
+                height: 38,
+              },
             }}
-          >
-            Download
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<FontAwesomeIcon icon={faShareNodes} />}
-            disabled={!singleSelectedFile}
-            onClick={() => singleSelectedFile && setShareEntry(singleSelectedFile)}
-          >
-            Share
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<FontAwesomeIcon icon={faPen} />}
-            disabled={!singleSelected}
-            onClick={() => singleSelected && setRenameEntry(singleSelected)}
-          >
-            Rename
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<FontAwesomeIcon icon={faArrowRightArrowLeft} />}
-            disabled={!singleSelected}
-            onClick={() => singleSelected && setMoveEntry(singleSelected)}
-          >
-            Move
-          </Button>
-          <Button
-            size="small"
-            color="error"
-            startIcon={<FontAwesomeIcon icon={faTrash} />}
-            onClick={handleBulkDelete}
-          >
-            Delete
-          </Button>
-          <IconButton
-            aria-label="Clear selection"
-            onClick={clearSelection}
-            sx={{ ml: 'auto', width: 40, height: 40, borderRadius: '50%' }}
-          >
-            <FontAwesomeIcon icon={faXmark} />
-          </IconButton>
-        </Paper>
-      )}
-
-      <Box
-        position="relative"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        <Breadcrumbs trail={trail} onNavigate={navigateTo} />
-
-        {search && (
-          <Typography
-            variant="h6"
-            sx={{ fontWeight: 600, mb: 1 }}
-            data-testid="search-results-header"
-          >
-            Search results for &quot;{search}&quot;
-          </Typography>
-        )}
-
-        {entriesError && <ErrorNotice error={entriesError} onRetry={reload} />}
-
-        {entriesLoading ? (
-          <Paper
-            elevation={0}
-            sx={{ p: 2 }}
-            data-testid="entries-loading"
-            aria-label="Loading entries"
-          >
-            {[0, 1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} variant="rectangular" height={48} sx={{ mb: 1 }} />
-            ))}
-          </Paper>
-        ) : entries.length === 0 ? (
-          <>
-            {trail.length === 0 && !dragHintDismissed && (
-              <Paper
-                elevation={0}
-                variant="outlined"
-                data-testid="drag-drop-hint"
-                sx={{
-                  mt: 3,
-                  mx: 'auto',
-                  maxWidth: 560,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                  px: 2,
-                  py: 1.5,
-                  bgcolor: 'surface1',
-                  borderColor: 'hairline',
-                }}
-              >
-                <Typography variant="body2" sx={{ flexGrow: 1, color: 'inkMuted' }}>
-                  Tip: drag files anywhere on the page to upload
-                </Typography>
-                <IconButton
-                  aria-label="Dismiss tip"
-                  size="small"
-                  onClick={dismissDragHint}
+            inputProps={{ 'aria-label': 'Search files and folders' }}
+            InputProps={{
+              startAdornment: (
+                <Box
+                  component="span"
+                  sx={{ color: 'inkMuted', display: 'inline-flex', mr: 1, fontSize: 13 }}
                 >
-                  <FontAwesomeIcon icon={faXmark} />
-                </IconButton>
-              </Paper>
-            )}
+                  <FontAwesomeIcon icon={faMagnifyingGlass} aria-hidden="true" />
+                </Box>
+              ),
+            }}
+          />
+
+          {/* Primary Action Buttons */}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<FontAwesomeIcon icon={faUpload} size="sm" />}
+              onClick={() => fileInputRef.current && fileInputRef.current.click()}
+              disabled={entriesLoading}
+              sx={{ height: 38, px: 2 }}
+            >
+              Upload
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<FontAwesomeIcon icon={faFolderTree} size="sm" />}
+              onClick={() => folderInputRef.current && folderInputRef.current.click()}
+              disabled={entriesLoading}
+              sx={{ height: 38, px: 1.75 }}
+            >
+              Upload folder
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<FontAwesomeIcon icon={faFolderPlus} size="sm" />}
+              onClick={() => setFolderDialogOpen(true)}
+              sx={{ height: 38, px: 1.75 }}
+            >
+              New folder
+            </Button>
+          </Box>
+
+          {/* View Switcher */}
+          {isDesktop && (
             <Box
-              data-testid="empty-state"
               sx={{
-                background: gradients.violet,
-                borderRadius: '30px',
-                p: 8,
-                mt: 3,
-                textAlign: 'center',
-                maxWidth: 560,
-                mx: 'auto',
+                display: 'inline-flex',
+                p: '3px',
+                bgcolor: 'surface1',
+                border: '1px solid hairlineSoft',
+                borderRadius: '8px',
+                gap: '2px',
               }}
             >
-              <FontAwesomeIcon
-                icon={faFolderOpen}
-                size="4x"
-                color="#FFFFFF"
-                aria-hidden="true"
-              />
-              <Typography variant="h2" sx={{ mt: 3, color: '#FFFFFF' }}>
-                Your space is ready
-              </Typography>
-              <Typography
-                variant="caption"
-                component="p"
-                sx={{ mt: 1, mb: 3, color: 'rgba(255,255,255,0.85)' }}
-              >
-                Your files are encrypted before they&apos;re stored — only
-                you can see them.
-              </Typography>
-              <Button
-                variant="contained"
-                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+              <IconButton
+                aria-label="List view"
+                aria-pressed={view === 'list'}
+                onClick={() => setView('list')}
+                size="small"
                 sx={{
-                  bgcolor: 'rgba(255,255,255,0.14)',
-                  color: '#FFFFFF',
-                  border: '1px solid rgba(255,255,255,0.35)',
-                  borderRadius: '100px',
+                  width: 32,
+                  height: 32,
+                  borderRadius: '6px',
+                  color: view === 'list' ? 'ink' : 'inkMuted',
+                  bgcolor: view === 'list' ? 'rgba(255, 255, 255, 0.10)' : 'transparent',
+                }}
+              >
+                <FontAwesomeIcon icon={faTableList} size="sm" />
+              </IconButton>
+              <IconButton
+                aria-label="Grid view"
+                aria-pressed={view === 'grid'}
+                onClick={() => setView('grid')}
+                size="small"
+                sx={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '6px',
+                  color: view === 'grid' ? 'ink' : 'inkMuted',
+                  bgcolor: view === 'grid' ? 'rgba(255, 255, 255, 0.10)' : 'transparent',
+                }}
+              >
+                <FontAwesomeIcon icon={faTableCellsLarge} size="sm" />
+              </IconButton>
+            </Box>
+          )}
+
+          {/* Details Inspector Toggle */}
+          {isDesktop && (
+            <Tooltip title={detailsOpen ? "Hide details (Alt+I)" : "View details & activity (Alt+I)"}>
+              <IconButton
+                aria-label="Toggle details panel"
+                aria-pressed={detailsOpen}
+                onClick={() => setDetailsOpen(!detailsOpen)}
+                sx={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: '8px',
+                  bgcolor: detailsOpen ? 'rgba(0,132,255,0.15)' : 'surface1',
+                  color: detailsOpen ? 'accentBlue' : 'inkMuted',
+                  border: '1px solid',
+                  borderColor: detailsOpen ? 'accentBlue' : 'hairlineSoft',
                   '&:hover': {
-                    bgcolor: 'rgba(255,255,255,0.22)',
+                    bgcolor: detailsOpen ? 'rgba(0,132,255,0.25)' : 'surface2',
+                    color: 'ink',
                   },
                 }}
               >
-                Upload your first file
-              </Button>
-            </Box>
-          </>
-        ) : isDesktop ? (
-          view === 'grid' ? (
-            <EntryGrid
-              entries={entries}
-              actions={actions}
-              selectedIds={selectedIds}
-              onToggleSelect={toggleSelect}
-            />
-          ) : (
-            <EntryTable
-              entries={entries}
-              sort={sort}
-              direction={direction}
-              onSort={handleSort}
-              actions={actions}
-              selectedIds={selectedIds}
-              onToggleSelect={toggleSelect}
-              onToggleSelectAll={toggleSelectAll}
-            />
-          )
-        ) : (
-          <EntryCards entries={entries} actions={actions} />
+                <FontAwesomeIcon icon={faCircleInfo} />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* Quota Mini Widget */}
+          <Box
+            sx={{
+              ml: 'auto',
+              width: 220,
+              display: isDesktop ? 'block' : 'none',
+              bgcolor: 'surface1',
+              border: '1px solid hairlineSoft',
+              borderRadius: '10px',
+              px: 2,
+              py: 1,
+            }}
+          >
+            <QuotaMeter drive={drive} />
+          </Box>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            data-testid="file-input"
+            onChange={handleFilesSelected}
+          />
+          <input
+            ref={folderInputRef}
+            type="file"
+            multiple
+            webkitdirectory=""
+            directory=""
+            hidden
+            data-testid="folder-input"
+            onChange={handleFolderSelected}
+          />
+        </Box>
+
+        {/* Selection Action Bar */}
+        {isDesktop && selectedIds.size > 0 && (
+          <Paper
+            elevation={2}
+            data-testid="selection-bar"
+            sx={{
+              bgcolor: 'surfaceElevated',
+              border: '1px solid hairlineSoft',
+              borderRadius: '10px',
+              px: 2,
+              py: 1,
+              mb: 2,
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1,
+              alignItems: 'center',
+            }}
+          >
+            <Typography
+              variant="caption"
+              component="span"
+              sx={{ color: 'ink', whiteSpace: 'nowrap', mr: 1, fontWeight: 600, fontSize: 13 }}
+            >
+              {selectedIds.size} selected
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FontAwesomeIcon icon={faDownload} size="xs" />}
+              disabled={!(singleSelectedFile || singleSelectedFolder)}
+              onClick={() => {
+                if (singleSelectedFolder) {
+                  window.location.href = archiveUrl(singleSelectedFolder.id);
+                } else if (singleSelectedFile) {
+                  window.location.href = downloadUrl(singleSelectedFile.id);
+                }
+              }}
+            >
+              Download
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FontAwesomeIcon icon={faShareNodes} size="xs" />}
+              disabled={!singleSelectedFile}
+              onClick={() => singleSelectedFile && setShareEntry(singleSelectedFile)}
+            >
+              Share
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FontAwesomeIcon icon={faPen} size="xs" />}
+              disabled={!singleSelected}
+              onClick={() => singleSelected && setRenameEntry(singleSelected)}
+            >
+              Rename
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FontAwesomeIcon icon={faArrowRightArrowLeft} size="xs" />}
+              disabled={!singleSelected}
+              onClick={() => singleSelected && setMoveEntry(singleSelected)}
+            >
+              Move
+            </Button>
+            <Button
+              size="small"
+              color="error"
+              variant="outlined"
+              startIcon={<FontAwesomeIcon icon={faTrash} size="xs" />}
+              onClick={handleBulkDelete}
+            >
+              Delete
+            </Button>
+            <IconButton
+              aria-label="Clear selection"
+              size="small"
+              onClick={clearSelection}
+              sx={{ ml: 'auto', width: 32, height: 32 }}
+            >
+              <FontAwesomeIcon icon={faXmark} size="sm" />
+            </IconButton>
+          </Paper>
         )}
 
-        <DropOverlay active={dragging} dropCount={dropCount} />
+        {/* 3-Pane Workspace: Left Content + Right Inspector */}
+        <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start' }}>
+          <Box
+            data-testid="drive-content-pane"
+            sx={{ flexGrow: 1, minWidth: 0, position: 'relative' }}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onContextMenu={handleCanvasContextMenu}
+          >
+            <Breadcrumbs trail={trail} onNavigate={navigateTo} />
+
+            {search && (
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 600, mb: 1.5, fontSize: 16 }}
+                data-testid="search-results-header"
+              >
+                Search results for &quot;{search}&quot;
+              </Typography>
+            )}
+
+            {entriesError && <ErrorNotice error={entriesError} onRetry={reload} />}
+
+            {entriesLoading ? (
+              <Paper
+                elevation={0}
+                variant="outlined"
+                sx={{ p: 2, bgcolor: 'surface1', borderRadius: '12px', borderColor: 'hairlineSoft' }}
+                data-testid="entries-loading"
+                aria-label="Loading entries"
+              >
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <Skeleton key={i} variant="rectangular" height={44} sx={{ mb: 1, borderRadius: '8px' }} />
+                ))}
+              </Paper>
+            ) : entries.length === 0 ? (
+              <>
+                {trail.length === 0 && !dragHintDismissed && (
+                  <Paper
+                    elevation={0}
+                    variant="outlined"
+                    data-testid="drag-drop-hint"
+                    sx={{
+                      p: 2.5,
+                      mb: 2.5,
+                      borderRadius: '12px',
+                      bgcolor: 'surface1',
+                      borderColor: 'hairlineSoft',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 2,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <FontAwesomeIcon icon={faFolderOpen} color="#0084FF" style={{ fontSize: 20 }} />
+                      <Typography variant="body2" sx={{ color: 'inkSecondary' }}>
+                        Drag and drop files or folders anywhere onto the page to upload instantly.
+                      </Typography>
+                    </Box>
+                    <IconButton
+                      size="small"
+                      aria-label="Dismiss drag-drop hint"
+                      onClick={dismissDragHint}
+                      sx={{ color: 'inkMuted' }}
+                    >
+                      <FontAwesomeIcon icon={faXmark} size="sm" />
+                    </IconButton>
+                  </Paper>
+                )}
+
+                {/* Empty State Spotlight Card */}
+                <Paper
+                  elevation={0}
+                  variant="outlined"
+                  data-testid="ready-spotlight"
+                  sx={{
+                    p: { xs: 4, md: 6 },
+                    borderRadius: '16px',
+                    bgcolor: 'surface1',
+                    borderColor: 'hairlineSoft',
+                    textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 2,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: '16px',
+                      bgcolor: 'rgba(0, 132, 255, 0.10)',
+                      border: '1px solid rgba(0, 132, 255, 0.20)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faFolderOpen} color="#0084FF" style={{ fontSize: 28 }} />
+                  </Box>
+                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'ink' }}>
+                    {search ? 'No matches found' : trail.length > 0 ? 'This folder is empty' : 'Your drive is ready'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'inkSecondary', maxWidth: 420 }}>
+                    {search
+                      ? `No files or folders matched "${search}".`
+                      : 'Drop files and folders directly here or use the upload button above to get started.'}
+                  </Typography>
+                  {!search && (
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      startIcon={<FontAwesomeIcon icon={faUpload} size="sm" />}
+                      onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                      sx={{ mt: 1, px: 3, height: 38 }}
+                    >
+                      Upload files
+                    </Button>
+                  )}
+                </Paper>
+              </>
+            ) : !isDesktop ? (
+              <EntryCards
+                entries={entries}
+                actions={actions}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+                onContextMenu={handleItemContextMenu}
+              />
+            ) : view === 'grid' ? (
+              <EntryGrid
+                entries={entries}
+                actions={actions}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+                onContextMenu={handleItemContextMenu}
+              />
+            ) : (
+              <EntryTable
+                entries={entries}
+                sort={sort}
+                direction={direction}
+                onSort={handleSort}
+                actions={actions}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+                onToggleSelectAll={toggleSelectAll}
+                onContextMenu={handleItemContextMenu}
+              />
+            )}
+          </Box>
+
+          {/* Right Inspector Panel */}
+          {isDesktop && detailsOpen && (
+            <FileDetailsPanel
+              open={detailsOpen}
+              onClose={() => setDetailsOpen(false)}
+              selectedEntries={selectedEntries}
+              currentFolder={currentFolder}
+              drive={drive}
+              actions={actions}
+              onPreview={setPreviewEntry}
+              onPlayTrack={playTrack}
+            />
+          )}
+        </Box>
       </Box>
 
+      {/* Floating Right-Click Context Menu */}
+      <ContextMenu
+        contextMenu={contextMenu}
+        onClose={() => setContextMenu(null)}
+        onUploadFiles={() => fileInputRef.current && fileInputRef.current.click()}
+        onUploadFolder={() => folderInputRef.current && folderInputRef.current.click()}
+        onNewFolder={() => setFolderDialogOpen(true)}
+        onOpenFolder={openFolder}
+        onPreview={setPreviewEntry}
+        onPlayTrack={playTrack}
+        onShare={setShareEntry}
+        onRename={setRenameEntry}
+        onMove={setMoveEntry}
+        onCopy={setCopyEntry}
+        onDelete={setDeleteEntry}
+        onShowDetails={() => setDetailsOpen(true)}
+      />
+
+      {/* Full-Screen Drag & Drop Overlay */}
+      <DropOverlay
+        open={dragging}
+        onDrop={handleDrop}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+      />
+
+      {/* QuickLook Carousel Previewer */}
+      <PreviewDialog
+        entry={previewEntry}
+        allEntries={entries}
+        onClose={() => setPreviewEntry(null)}
+        onNavigate={(nextEntry) => setPreviewEntry(nextEntry)}
+        onPlayTrack={playTrack}
+        onShare={setShareEntry}
+      />
+
+      {/* Create Folder Dialog */}
       <FolderDialog
         open={folderDialogOpen}
-        title="New folder"
-        description="Folders can contain files and other folders."
-        label="Folder name"
-        confirmLabel="Create folder"
-        onSubmit={handleCreateFolder}
         onClose={() => setFolderDialogOpen(false)}
+        onSubmit={handleCreateFolder}
       />
+
+      {/* Rename Dialog */}
       <FolderDialog
         open={renameEntry !== null}
         title="Rename"
-        description="Choose a new name for this item."
-        label="Name"
-        initialName={renameEntry ? renameEntry.name : ''}
-        confirmLabel="Rename"
-        onSubmit={(name) => handleRename(renameEntry, name)}
+        initialValue={renameEntry ? renameEntry.name : ''}
+        submitLabel="Save"
         onClose={() => setRenameEntry(null)}
+        onSubmit={handleRename}
       />
+
+      {/* Move Dialog */}
       <MoveDialog
         open={moveEntry !== null}
         entry={moveEntry}
-        mode="move"
-        currentParentId={moveEntry ? moveEntry.parentId : null}
         onClose={() => setMoveEntry(null)}
-        onMove={handleMove}
+        onSubmit={handleMove}
       />
+
+      {/* Copy Dialog */}
       <MoveDialog
         open={copyEntry !== null}
         entry={copyEntry}
-        mode="copy"
-        currentParentId={copyEntry ? currentParentId : null}
+        title="Make a copy"
+        actionLabel="Copy here"
+        actionTestId="copy-here"
         onClose={() => setCopyEntry(null)}
-        onMove={handleCopy}
+        onSubmit={handleCopy}
       />
+
+      {/* Share Dialog */}
       <ShareDialog
         open={shareEntry !== null}
         entry={shareEntry}
         onClose={() => setShareEntry(null)}
       />
-      <PreviewDialog
-        entry={previewEntry}
-        onClose={() => setPreviewEntry(null)}
-      />
+
+      {/* Delete Confirmation Dialog */}
       <Dialog
         open={deleteEntry !== null}
-        onClose={() => setDeleteEntry(null)}
         TransitionComponent={DialogTransition}
+        onClose={() => setDeleteEntry(null)}
+        aria-labelledby="delete-dialog-title"
       >
-        <DialogTitle>Delete {deleteEntry ? deleteEntry.name : ''}?</DialogTitle>
+        <DialogTitle id="delete-dialog-title">
+          Delete {deleteEntry && deleteEntry.name}?
+        </DialogTitle>
         <DialogContent>
-          <DialogContentText>
+          <DialogContentText sx={{ color: 'inkSecondary' }}>
             {deleteEntry && deleteEntry.kind === 'folder'
-              ? 'This folder and everything inside it will be moved to trash. You can restore it from the Trash page.'
-              : 'This file will be moved to trash. You can restore it from the Trash page.'}
+              ? 'This folder and all its contents will be moved to the trash.'
+              : 'This file will be moved to the trash.'}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteEntry(null)}>Cancel</Button>
           <Button
-            color="error"
             variant="contained"
-            onClick={confirmDelete}
+            color="error"
             data-testid="confirm-delete"
+            onClick={handleDeleteConfirmed}
           >
             Delete
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Undo Delete Toast */}
       <Snackbar
         open={deletedEntries.length > 0}
-        autoHideDuration={5000}
+        autoHideDuration={6000}
         onClose={() => setDeletedEntries([])}
-        message={`Moved ${deletedEntries.length} item${deletedEntries.length > 1 ? 's' : ''} to Trash`}
+        message={
+          deletedEntries.length === 1
+            ? `Deleted "${deletedEntries[0].name}"`
+            : `Deleted ${deletedEntries.length} items`
+        }
         action={
           <Button
-            color="secondary"
+            color="primary"
             size="small"
             onClick={handleUndoDelete}
-            data-testid="undo-delete"
+            sx={{ fontWeight: 600 }}
           >
             Undo
           </Button>
         }
-        data-testid="delete-snackbar"
       />
-      </Box>
     </AppShell>
   );
 }

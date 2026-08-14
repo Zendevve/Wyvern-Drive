@@ -1,180 +1,167 @@
 import { createTheme } from '@mui/material/styles';
 
-// Framer dark-canvas world — token anchors (see DESIGN.md).
-// Near-black canvas with a faint warmth; binary ink/ink-muted hierarchy;
-// accent blue is a signal color (links, focus, selection) and never a fill.
+// Tier-1 First-Party Cloud Storage Design Tokens (Linear/Apple/Framer grade).
 export const tokens = {
-  canvas: '#0E0E10',
-  surface1: '#1A1A1D',
-  surface2: '#242428',
-  ink: '#FFFFFF',
-  inkMuted: '#999999',
-  hairline: 'rgba(255,255,255,0.08)',
-  hairlineSoft: 'rgba(255,255,255,0.06)',
-  accentBlue: '#0099FF',
-  focusRing: 'rgba(0,153,255,0.15)',
-  success: '#3AC36F',
-  danger: '#FF5C5C',
-  warning: '#F5A524',
+  canvas: '#0A0B0D',         // Deep obsidian background
+  sidebar: '#0F1013',        // Distinct navigation rail surface
+  surface1: '#15171C',       // Primary container / row surface
+  surface2: '#1D2027',       // Elevated card / hover state
+  surfaceElevated: '#262A34',// Dialogs, popovers, menus
+  ink: '#F5F6F8',            // Pure white primary text
+  inkSecondary: '#9DA3AE',   // Crisp secondary text
+  inkMuted: '#686E7B',       // Muted captions and metadata
+  hairline: 'rgba(255, 255, 255, 0.08)',
+  hairlineSoft: 'rgba(255, 255, 255, 0.04)',
+  accentBlue: '#0084FF',     // Tier-1 signal blue for focus, active, selection
+  accentBlueHover: '#1A90FF',
+  focusRing: 'rgba(0, 132, 255, 0.25)',
+  selectionBg: 'rgba(0, 132, 255, 0.10)',
+  success: '#30D158',
+  danger: '#FF453A',
+  warning: '#FF9F0A',
 };
 
-// Gradient spotlight cards — the brand's scarce atmosphere device. The
-// drive empty state is the one place they appear.
 export const gradients = {
-  violet:
-    'linear-gradient(140deg, #5B21B6 0%, #7C3AED 48%, #A78BFA 100%)',
-  magenta:
-    'linear-gradient(140deg, #A21CAF 0%, #DB2777 55%, #F472B6 100%)',
-  orange:
-    'linear-gradient(140deg, #C2410C 0%, #F97316 55%, #FDBA74 100%)',
-  coral:
-    'linear-gradient(140deg, #BE123C 0%, #FB7185 60%, #FDA4AF 100%)',
+  violet: 'linear-gradient(135deg, #4C1D95 0%, #6D28D9 50%, #8B5CF6 100%)',
+  blue: 'linear-gradient(135deg, #0066CC 0%, #0084FF 100%)',
 };
 
-const display = "'Mona Sans Variable', 'Inter Variable', sans-serif";
+const display = "'Mona Sans Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const body = "'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-// The Inter body voice: bespoke OpenType character variants.
 const bodyFeatures = "'cv01' 1, 'cv05' 1, 'cv09' 1, 'cv11' 1, 'ss03' 1, 'ss07' 1, 'dlig' 1";
 
-const lightEdge = (alphaTop = 0.10, drop = '0 10px 30px rgba(0,0,0,0.25)') =>
-  `inset 0 1px 0 rgba(255,255,255,${alphaTop}), ${drop}`;
+const lightEdge = (alpha = 0.08, drop = '0 12px 32px rgba(0,0,0,0.45)') =>
+  `inset 0 1px 0 rgba(255,255,255,${alpha}), ${drop}`;
 
 const theme = createTheme({
   palette: {
     mode: 'dark',
-    primary: { main: tokens.accentBlue }, // links, focus, selection — not fills
-    background: { default: tokens.canvas, paper: tokens.canvas },
+    primary: { main: tokens.accentBlue },
+    background: { default: tokens.canvas, paper: tokens.surface1 },
     divider: tokens.hairline,
     text: {
       primary: tokens.ink,
-      secondary: tokens.inkMuted,
-      disabled: 'rgba(255,255,255,0.35)',
+      secondary: tokens.inkSecondary,
+      disabled: tokens.inkMuted,
     },
     success: { main: tokens.success },
     error: { main: tokens.danger },
     warning: { main: tokens.warning },
     info: { main: tokens.accentBlue },
-    // World tokens, addressable from sx via theme.palette.*
     canvas: tokens.canvas,
+    sidebar: tokens.sidebar,
     surface1: tokens.surface1,
     surface2: tokens.surface2,
+    surfaceElevated: tokens.surfaceElevated,
     ink: tokens.ink,
+    inkSecondary: tokens.inkSecondary,
     inkMuted: tokens.inkMuted,
     hairline: tokens.hairline,
     hairlineSoft: tokens.hairlineSoft,
     focusRing: tokens.focusRing,
     accentBlue: tokens.accentBlue,
-    // Legacy Signal Deck aliases, remapped onto the Framer world so existing
-    // consumers keep resolving (signal → accent blue, surface3 → surface2).
+    selectionBg: tokens.selectionBg,
     surface3: tokens.surface2,
     signal: tokens.accentBlue,
     signalSoft: tokens.focusRing,
-    dangerSoft: 'rgba(255,92,92,0.10)',
-    successSoft: 'rgba(58,195,111,0.10)',
-    steel: tokens.inkMuted,
+    dangerSoft: 'rgba(255,69,58,0.12)',
+    successSoft: 'rgba(48,209,88,0.12)',
+    steel: tokens.inkSecondary,
   },
-  shape: { borderRadius: 10 }, // Framer `rounded.md` as the utility default
-  spacing: 5, // Framer base unit: 5/10/15/20/30 instead of 4/8/16/24
+  shape: { borderRadius: 10 },
+  spacing: 6,
   typography: {
     fontFamily: body,
-    // Letter-spacing scales with size, hard: posters up top, comfortable body.
     h1: {
-      // display-hero — poster headline (login)
       fontFamily: display,
-      fontWeight: 500,
-      fontSize: 62,
-      lineHeight: 1.0,
-      letterSpacing: '-3.1px',
+      fontWeight: 600,
+      fontSize: 48,
+      lineHeight: 1.1,
+      letterSpacing: '-0.03em',
     },
     h2: {
-      // display — page titles
       fontFamily: display,
-      fontWeight: 500,
-      fontSize: 32,
-      lineHeight: 1.13,
-      letterSpacing: '-1.0px',
+      fontWeight: 600,
+      fontSize: 28,
+      lineHeight: 1.2,
+      letterSpacing: '-0.02em',
     },
     h3: {
-      // headline — dialog titles (Inter tier per the brief)
-      fontWeight: 700,
-      fontSize: 22,
-      lineHeight: 1.2,
-      letterSpacing: '-0.8px',
+      fontWeight: 600,
+      fontSize: 20,
+      lineHeight: 1.25,
+      letterSpacing: '-0.015em',
       fontFeatureSettings: bodyFeatures,
     },
     h4: {
-      // subhead
-      fontWeight: 400,
-      fontSize: 24,
+      fontWeight: 600,
+      fontSize: 18,
       lineHeight: 1.3,
-      letterSpacing: '-0.01px',
+      letterSpacing: '-0.01em',
       fontFeatureSettings: bodyFeatures,
     },
     h5: {
-      // body-lg
-      fontWeight: 400,
-      fontSize: 18,
-      lineHeight: 1.3,
-      letterSpacing: '-0.18px',
+      fontWeight: 600,
+      fontSize: 16,
+      lineHeight: 1.35,
+      letterSpacing: '-0.01em',
       fontFeatureSettings: bodyFeatures,
     },
     h6: {
       fontWeight: 600,
-      fontSize: 16,
-      lineHeight: 1.25,
-      letterSpacing: '-0.16px',
+      fontSize: 15,
+      lineHeight: 1.4,
+      letterSpacing: '-0.01em',
       fontFeatureSettings: bodyFeatures,
     },
     body1: {
-      // body
       fontWeight: 400,
-      fontSize: 15,
-      lineHeight: 1.3,
-      letterSpacing: '-0.15px',
+      fontSize: 14,
+      lineHeight: 1.5,
+      letterSpacing: '-0.005em',
       fontFeatureSettings: bodyFeatures,
     },
     body2: {
-      // body-sm
-      fontWeight: 500,
-      fontSize: 14,
-      lineHeight: 1.4,
-      letterSpacing: '-0.14px',
+      fontWeight: 400,
+      fontSize: 13,
+      lineHeight: 1.45,
+      letterSpacing: '-0.005em',
       fontFeatureSettings: bodyFeatures,
     },
     caption: {
       fontWeight: 500,
-      fontSize: 13,
-      lineHeight: 1.2,
-      letterSpacing: '-0.13px',
+      fontSize: 12,
+      lineHeight: 1.3,
+      letterSpacing: '0.01em',
       fontFeatureSettings: bodyFeatures,
     },
     overline: {
-      // micro
-      fontWeight: 400,
-      fontSize: 12,
+      fontWeight: 600,
+      fontSize: 11,
       lineHeight: 1.2,
-      letterSpacing: '-0.12px',
+      letterSpacing: '0.04em',
+      textTransform: 'uppercase',
       fontFeatureSettings: bodyFeatures,
     },
     subtitle1: {
       fontWeight: 500,
       fontSize: 15,
-      lineHeight: 1.3,
-      letterSpacing: '-0.15px',
+      lineHeight: 1.35,
+      letterSpacing: '-0.01em',
       fontFeatureSettings: bodyFeatures,
     },
     subtitle2: {
       fontWeight: 600,
-      fontSize: 14,
+      fontSize: 13,
       lineHeight: 1.4,
-      letterSpacing: '-0.14px',
+      letterSpacing: '-0.005em',
       fontFeatureSettings: bodyFeatures,
     },
     button: {
       fontWeight: 500,
-      fontSize: 14,
+      fontSize: 13.5,
       lineHeight: 1.0,
-      letterSpacing: '-0.14px',
+      letterSpacing: '-0.01em',
       textTransform: 'none',
       fontFeatureSettings: bodyFeatures,
     },
@@ -185,16 +172,18 @@ const theme = createTheme({
         body: {
           backgroundColor: tokens.canvas,
           color: tokens.ink,
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
         },
         '::selection': {
-          backgroundColor: 'rgba(0,153,255,0.30)', // blue selection halos
+          backgroundColor: 'rgba(0,132,255,0.35)',
         },
         ':focus-visible': {
-          outline: '2px solid rgba(0,153,255,0.55)',
+          outline: `2px solid ${tokens.accentBlue}`,
           outlineOffset: 2,
         },
         'input:focus-visible, textarea:focus-visible': {
-          outline: 'none', // MUI containers carry the blue ring instead
+          outline: 'none',
         },
       },
     },
@@ -202,106 +191,83 @@ const theme = createTheme({
       defaultProps: { disableElevation: true },
       styleOverrides: {
         root: {
-          borderRadius: 100, // pill — the brand's only CTA shape
-          padding: '10px 15px',
-          transition:
-            'transform 120ms ease, background-color 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease',
-          '&:active': { transform: 'scale(0.97)' }, // pressed = shrink, not darken
+          borderRadius: 8,
+          padding: '8px 16px',
+          fontWeight: 500,
+          transition: 'all 140ms ease-out',
+          '&:active': { transform: 'scale(0.98)' },
         },
-        sizeSmall: { padding: '6px 12px', fontSize: 13, letterSpacing: '-0.13px' },
-        // button-primary: white pill on canvas
+        sizeSmall: { padding: '5px 11px', fontSize: 12.5 },
         contained: {
           backgroundColor: tokens.ink,
-          color: tokens.canvas,
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.88)' },
+          color: '#0A0B0D',
+          fontWeight: 600,
+          '&:hover': { backgroundColor: '#FFFFFF', boxShadow: '0 2px 8px rgba(255,255,255,0.15)' },
           '&:disabled': {
-            backgroundColor: 'rgba(255,255,255,0.25)',
-            color: 'rgba(255,255,255,0.4)',
+            backgroundColor: 'rgba(255,255,255,0.12)',
+            color: 'rgba(255,255,255,0.35)',
           },
         },
         containedPrimary: {
-          backgroundColor: tokens.ink,
-          color: tokens.canvas,
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.88)' },
+          backgroundColor: tokens.accentBlue,
+          color: '#FFFFFF',
+          fontWeight: 600,
+          '&:hover': { backgroundColor: tokens.accentBlueHover, boxShadow: '0 4px 12px rgba(0,132,255,0.3)' },
           '&:disabled': {
-            backgroundColor: 'rgba(255,255,255,0.25)',
-            color: 'rgba(255,255,255,0.4)',
+            backgroundColor: 'rgba(0,132,255,0.25)',
+            color: 'rgba(255,255,255,0.35)',
           },
         },
         containedError: {
           backgroundColor: tokens.danger,
-          color: '#1A0A0A',
-          '&:hover': { backgroundColor: '#FF7575' },
+          color: '#FFFFFF',
+          fontWeight: 600,
+          '&:hover': { backgroundColor: '#FF5C52', boxShadow: '0 4px 12px rgba(255,69,58,0.3)' },
         },
-        // button-secondary: charcoal pill — never a bordered ghost
         outlined: {
-          backgroundColor: tokens.surface1,
+          backgroundColor: 'rgba(255,255,255,0.03)',
           color: tokens.ink,
           border: `1px solid ${tokens.hairline}`,
           '&:hover': {
-            backgroundColor: tokens.surface2,
-            borderColor: 'rgba(255,255,255,0.14)',
+            backgroundColor: 'rgba(255,255,255,0.07)',
+            borderColor: 'rgba(255,255,255,0.16)',
           },
-          '&:disabled': { color: 'rgba(255,255,255,0.4)' },
+          '&:disabled': { color: 'rgba(255,255,255,0.3)' },
         },
         outlinedPrimary: {
-          backgroundColor: tokens.surface1,
-          color: tokens.ink,
-          border: `1px solid ${tokens.hairline}`,
+          backgroundColor: 'rgba(0,132,255,0.08)',
+          color: tokens.accentBlue,
+          border: '1px solid rgba(0,132,255,0.25)',
           '&:hover': {
-            backgroundColor: tokens.surface2,
-            borderColor: 'rgba(255,255,255,0.14)',
+            backgroundColor: 'rgba(0,132,255,0.15)',
+            borderColor: tokens.accentBlue,
           },
         },
         outlinedError: {
           color: tokens.danger,
-          borderColor: 'rgba(255,92,92,0.35)',
+          borderColor: 'rgba(255,69,58,0.3)',
           '&:hover': {
-            backgroundColor: 'rgba(255,92,92,0.08)',
-            borderColor: 'rgba(255,92,92,0.5)',
-            color: '#FF7575',
+            backgroundColor: 'rgba(255,69,58,0.1)',
+            borderColor: tokens.danger,
           },
         },
         text: {
-          color: tokens.inkMuted,
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.04)', color: tokens.ink },
-        },
-        textPrimary: {
-          color: tokens.inkMuted,
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.04)', color: tokens.ink },
-        },
-        textError: {
-          color: tokens.danger,
-          '&:hover': { backgroundColor: 'rgba(255,92,92,0.08)', color: '#FF7575' },
-        },
-      },
-    },
-    // ButtonBase underpins every button/icon-button/menu/list control. Its
-    // reset sets `outline: 0` on the root, which masks the global
-    // `:focus-visible` ring from CssBaseline (same specificity, later order
-    // wins). Re-assert the blue ring on the keyboard-focus class so focus
-    // is always visible; it also gives programmatic-focus states a marker.
-    MuiButtonBase: {
-      styleOverrides: {
-        root: {
-          '&.Mui-focusVisible': {
-            outline: '2px solid rgba(0,153,255,0.55)',
-            outlineOffset: 2,
-          },
+          color: tokens.inkSecondary,
+          '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)', color: tokens.ink },
         },
       },
     },
     MuiIconButton: {
       styleOverrides: {
         root: {
-          borderRadius: '50%', // circular icon buttons
-          color: tokens.inkMuted,
-          transition: 'transform 120ms ease, background-color 150ms ease, color 150ms ease',
-          '&:active': { transform: 'scale(0.92)' }, // pressed = shrink, not darken
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.06)', color: tokens.ink },
-          '&.Mui-disabled': { color: 'rgba(255,255,255,0.3)' },
+          borderRadius: 8,
+          color: tokens.inkSecondary,
+          transition: 'all 120ms ease-out',
+          '&:hover': { backgroundColor: 'rgba(255,255,255,0.07)', color: tokens.ink },
+          '&:active': { transform: 'scale(0.94)' },
+          '&.Mui-disabled': { color: 'rgba(255,255,255,0.25)' },
         },
-        sizeSmall: { padding: 8 },
+        sizeSmall: { padding: 6 },
       },
     },
     MuiPaper: {
@@ -309,80 +275,67 @@ const theme = createTheme({
         root: {
           backgroundColor: tokens.surface1,
           backgroundImage: 'none',
-          borderRadius: 20, // `rounded.xl` — cards/dialogs
+          borderRadius: 14,
         },
-        outlined: { borderColor: tokens.hairline },
-        elevation1: { boxShadow: lightEdge() },
-        elevation2: { boxShadow: lightEdge() },
-        elevation3: { boxShadow: lightEdge(0.12, '0 16px 40px rgba(0,0,0,0.35)') },
-        elevation4: { boxShadow: lightEdge(0.12, '0 16px 48px rgba(0,0,0,0.45)') },
-        elevation8: { boxShadow: lightEdge(0.12, '0 24px 64px rgba(0,0,0,0.5)') },
-        elevation12: { boxShadow: lightEdge(0.12, '0 24px 64px rgba(0,0,0,0.5)') },
-        elevation16: { boxShadow: lightEdge(0.12, '0 24px 64px rgba(0,0,0,0.5)') },
-        elevation24: { boxShadow: lightEdge(0.12, '0 24px 64px rgba(0,0,0,0.5)') },
+        outlined: {
+          border: `1px solid ${tokens.hairline}`,
+          boxShadow: lightEdge(0.04),
+        },
       },
     },
     MuiDialog: {
       styleOverrides: {
         paper: {
-          backgroundColor: tokens.surface2,
+          backgroundColor: tokens.surfaceElevated,
           backgroundImage: 'none',
-          borderRadius: 20,
-          boxShadow: lightEdge(0.12, '0 24px 64px rgba(0,0,0,0.5)'),
+          borderRadius: 16,
+          border: `1px solid ${tokens.hairline}`,
+          boxShadow: '0 24px 64px rgba(0,0,0,0.65)',
         },
       },
     },
     MuiBackdrop: {
-      styleOverrides: { root: { backgroundColor: 'rgba(0,0,0,0.72)' } },
+      styleOverrides: { root: { backgroundColor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)' } },
     },
     MuiDialogTitle: {
       styleOverrides: {
-        root: { padding: '24px 24px 0', fontWeight: 700, fontSize: 22, letterSpacing: '-0.8px' },
+        root: { padding: '20px 24px 12px', fontWeight: 600, fontSize: 18, letterSpacing: '-0.015em' },
       },
     },
     MuiDialogContent: {
-      styleOverrides: { root: { padding: '16px 24px' } },
+      styleOverrides: { root: { padding: '12px 24px' } },
     },
     MuiDialogActions: {
-      styleOverrides: { root: { padding: '16px 24px 24px' } },
+      styleOverrides: { root: { padding: '16px 24px 20px', borderTop: `1px solid ${tokens.hairlineSoft}` } },
     },
-    MuiTextField: { defaultProps: { variant: 'outlined' } },
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
           backgroundColor: tokens.surface1,
-          borderRadius: 10, // `rounded.md`
+          borderRadius: 9,
           color: tokens.ink,
+          fontSize: 13.5,
           '& .MuiOutlinedInput-notchedOutline': {
             borderColor: tokens.hairline,
-            transition: 'border-color 150ms ease, box-shadow 150ms ease',
+            transition: 'border-color 140ms ease, box-shadow 140ms ease',
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'rgba(255,255,255,0.14)',
+            borderColor: 'rgba(255,255,255,0.18)',
           },
           '&.Mui-focused': {
-            boxShadow: `0 0 0 1px ${tokens.focusRing}`, // blue ring, same surface
+            boxShadow: `0 0 0 3px ${tokens.focusRing}`,
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'transparent',
+            borderColor: tokens.accentBlue,
           },
-          '&.Mui-disabled': { backgroundColor: 'rgba(255,255,255,0.03)' },
         },
-        input: { padding: '10px 14px' },
-        inputAdornedStart: { paddingLeft: 14 },
-      },
-    },
-    MuiInputLabel: {
-      styleOverrides: {
-        root: {
-          color: tokens.inkMuted,
-          '&.Mui-focused': { color: tokens.inkMuted },
-        },
+        input: { padding: '9px 13px' },
       },
     },
     MuiCheckbox: {
       styleOverrides: {
         root: {
+          color: tokens.inkMuted,
           '&.Mui-checked': { color: tokens.accentBlue },
           '&.MuiCheckbox-indeterminate': { color: tokens.accentBlue },
         },
@@ -390,140 +343,66 @@ const theme = createTheme({
     },
     MuiLinearProgress: {
       styleOverrides: {
-        root: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 100, height: 6, overflow: 'hidden' },
+        root: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 100, height: 4, overflow: 'hidden' },
         bar: {
-          background: 'linear-gradient(90deg, #0099FF 0%, #38BDF8 100%)',
+          background: 'linear-gradient(90deg, #0084FF 0%, #00B4D8 100%)',
           borderRadius: 100,
-        },
-      },
-    },
-    MuiLink: {
-      styleOverrides: {
-        root: {
-          color: tokens.accentBlue,
-          textDecoration: 'none',
-          '&:hover': { textDecoration: 'underline' },
-        },
-      },
-    },
-    MuiChip: {
-      styleOverrides: {
-        root: { borderRadius: 6, backgroundColor: tokens.surface1, color: tokens.ink },
-      },
-    },
-    MuiListItemButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: 10,
-          color: tokens.inkMuted,
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.04)', color: tokens.ink },
-          '&.Mui-selected': {
-            backgroundColor: tokens.surface2, // selected = lift, not color
-            color: tokens.ink,
-            '&:hover': { backgroundColor: tokens.surface2 },
-          },
-        },
-      },
-    },
-    MuiTableCell: {
-      styleOverrides: {
-        root: { borderColor: tokens.hairlineSoft, color: tokens.ink },
-        head: {
-          color: tokens.inkMuted,
-          fontWeight: 500,
-          fontSize: 13,
-          letterSpacing: '-0.13px',
-        },
-      },
-    },
-    MuiTooltip: {
-      styleOverrides: {
-        tooltip: {
-          backgroundColor: tokens.surface2,
-          color: tokens.ink,
-          borderRadius: 8,
-          fontSize: 12,
-          boxShadow: lightEdge(),
         },
       },
     },
     MuiMenu: {
       styleOverrides: {
         paper: {
-          backgroundColor: tokens.surface2,
+          backgroundColor: tokens.surfaceElevated,
           backgroundImage: 'none',
-          borderRadius: 15,
-          boxShadow: lightEdge(0.10, '0 16px 40px rgba(0,0,0,0.45)'),
+          borderRadius: 12,
+          border: `1px solid ${tokens.hairline}`,
+          boxShadow: '0 16px 40px rgba(0,0,0,0.5)',
         },
       },
     },
     MuiMenuItem: {
       styleOverrides: {
         root: {
+          fontSize: 13,
           color: tokens.ink,
-          '&.Mui-selected': { backgroundColor: 'rgba(0,153,255,0.12)' },
-          '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' },
+          borderRadius: 6,
+          margin: '2px 6px',
+          padding: '6px 10px',
+          '&.Mui-selected': { backgroundColor: 'rgba(0,132,255,0.14)' },
+          '&:hover': { backgroundColor: 'rgba(255,255,255,0.06)' },
         },
       },
     },
-    MuiDrawer: {
-      styleOverrides: { paper: { backgroundColor: tokens.canvas, backgroundImage: 'none' } },
-    },
-    MuiAppBar: {
+    MuiTableCell: {
       styleOverrides: {
         root: {
-          backgroundColor: tokens.canvas,
-          backgroundImage: 'none',
+          borderColor: tokens.hairlineSoft,
           color: tokens.ink,
-          boxShadow: 'none',
+          fontSize: 13,
+          padding: '10px 16px',
         },
-      },
-    },
-    MuiAlert: {
-      styleOverrides: {
-        root: {
-          borderRadius: 10,
+        head: {
+          color: tokens.inkMuted,
+          fontWeight: 600,
+          fontSize: 12,
+          letterSpacing: '0.02em',
+          textTransform: 'uppercase',
+          borderBottom: `1px solid ${tokens.hairline}`,
           backgroundColor: tokens.surface1,
-          backgroundImage: 'none',
-          color: tokens.ink,
-        },
-        standardError: {
-          backgroundColor: 'rgba(255,92,92,0.10)',
-          color: tokens.ink,
-          '& .MuiAlert-icon': { color: tokens.danger },
-        },
-        standardWarning: {
-          backgroundColor: 'rgba(245,165,36,0.10)',
-          color: tokens.ink,
-          '& .MuiAlert-icon': { color: tokens.warning },
-        },
-        standardSuccess: {
-          backgroundColor: 'rgba(58,195,111,0.10)',
-          color: tokens.ink,
-          '& .MuiAlert-icon': { color: tokens.success },
-        },
-        standardInfo: {
-          backgroundColor: 'rgba(0,153,255,0.10)',
-          color: tokens.ink,
-          '& .MuiAlert-icon': { color: tokens.accentBlue },
         },
       },
     },
-    MuiSkeleton: {
-      styleOverrides: { root: { backgroundColor: 'rgba(255,255,255,0.06)' } },
-    },
-    MuiDivider: { styleOverrides: { root: { borderColor: tokens.hairlineSoft } } },
-    MuiAvatar: {
-      styleOverrides: { root: { backgroundColor: tokens.surface2, color: tokens.ink } },
-    },
-    MuiSnackbarContent: {
+    MuiTooltip: {
       styleOverrides: {
-        root: {
-          backgroundColor: tokens.surface2,
-          backgroundImage: 'none',
+        tooltip: {
+          backgroundColor: tokens.surfaceElevated,
           color: tokens.ink,
-          borderRadius: 10,
-          boxShadow: lightEdge(0.12, '0 16px 48px rgba(0,0,0,0.45)'),
+          border: `1px solid ${tokens.hairline}`,
+          borderRadius: 6,
+          fontSize: 11.5,
+          fontWeight: 500,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
         },
       },
     },

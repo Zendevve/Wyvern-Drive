@@ -20,7 +20,12 @@ import { entryIcon } from './entryIcons';
 import EntryActions from './EntryActions';
 
 function formatDate(value) {
-  return new Date(value).toLocaleString();
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 function SortHeader({ label, field, sort, direction, onSort, align }) {
@@ -29,6 +34,7 @@ function SortHeader({ label, field, sort, direction, onSort, align }) {
     <TableCell
       align={align}
       aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+      sx={{ py: 1 }}
     >
       <Button
         size="small"
@@ -36,13 +42,18 @@ function SortHeader({ label, field, sort, direction, onSort, align }) {
         onClick={() => onSort(field)}
         endIcon={
           active ? (
-            <FontAwesomeIcon icon={direction === 'asc' ? faSortUp : faSortDown} />
+            <FontAwesomeIcon icon={direction === 'asc' ? faSortUp : faSortDown} style={{ fontSize: 11 }} />
           ) : null
         }
         sx={{
-          color: 'inkMuted',
-          fontWeight: active ? 600 : 500,
-          '&:hover': { color: 'ink' },
+          color: active ? 'ink' : 'inkMuted',
+          fontWeight: 600,
+          fontSize: 11.5,
+          p: 0,
+          minWidth: 0,
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          '&:hover': { color: 'ink', bgcolor: 'transparent' },
         }}
       >
         {label}
@@ -52,10 +63,7 @@ function SortHeader({ label, field, sort, direction, onSort, align }) {
 }
 
 /**
- * Desktop list view — a Framer ledger on a card surface. Header cells are
- * styled by the theme (inkMuted small caps-free labels); the selected row
- * lifts to surface2, and the action shelf stays hidden until the row is
- * hovered or focused (keyboard-reachable via Tab).
+ * First-Party Cloud File Ledger / Table View (Finder / Google Drive grade).
  */
 export default function EntryTable({
   entries,
@@ -66,6 +74,7 @@ export default function EntryTable({
   selectedIds = new Set(),
   onToggleSelect,
   onToggleSelectAll,
+  onContextMenu,
 }) {
   const allSelected =
     entries.length > 0 && entries.every((entry) => selectedIds.has(entry.id));
@@ -76,19 +85,26 @@ export default function EntryTable({
       component={Paper}
       data-testid="entry-table"
       variant="outlined"
-      sx={{ overflow: 'hidden', bgcolor: 'surface1' }}
+      sx={{
+        overflow: 'hidden',
+        bgcolor: 'surface1',
+        borderRadius: '12px',
+        border: '1px solid hairlineSoft',
+      }}
     >
-      <Table aria-label="Files and folders" sx={{ '& .MuiTableCell-root': { py: 1.5 } }}>
+      <Table aria-label="Files and folders" size="small" sx={{ '& .MuiTableCell-root': { py: 1.25 } }}>
         <TableHead>
           <TableRow
             sx={{
+              bgcolor: 'rgba(255, 255, 255, 0.02)',
               '& .MuiTableCell-head': {
                 color: 'inkMuted',
-                borderBottomColor: 'hairline',
+                borderBottom: '1px solid hairlineSoft',
+                py: 1,
               },
             }}
           >
-            <TableCell padding="checkbox">
+            <TableCell padding="checkbox" sx={{ pl: 2, width: 44 }}>
               <Checkbox
                 size="small"
                 checked={allSelected}
@@ -101,6 +117,7 @@ export default function EntryTable({
                   )
                 }
                 inputProps={{ 'aria-label': 'Select all' }}
+                sx={{ p: 0.5 }}
               />
             </TableCell>
             <SortHeader
@@ -125,7 +142,9 @@ export default function EntryTable({
               direction={direction}
               onSort={onSort}
             />
-            <TableCell align="right">Actions</TableCell>
+            <TableCell align="right" sx={{ pr: 2, width: 140 }}>
+              Actions
+            </TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -136,6 +155,7 @@ export default function EntryTable({
               actions={actions}
               selected={selectedIds.has(entry.id)}
               onToggleSelect={onToggleSelect}
+              onContextMenu={onContextMenu}
             />
           ))}
         </TableBody>
@@ -144,13 +164,11 @@ export default function EntryTable({
   );
 }
 
-function EntryRow({ entry, actions, selected, onToggleSelect }) {
+function EntryRow({ entry, actions, selected, onToggleSelect, onContextMenu }) {
   const isFolder = entry.kind === 'folder';
   const previewable = !isFolder && isPreviewableMime(entry.mimeType);
   const { icon, color } = entryIcon(entry);
 
-  // Every interactive control stops propagation so the row's click only
-  // toggles selection for clicks on the row surface itself.
   const stop = (fn) => (event) => {
     event.stopPropagation();
     if (fn) {
@@ -166,28 +184,45 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
     }
   };
 
+  const handleContextMenu = (e) => {
+    if (onContextMenu) {
+      e.preventDefault();
+      e.stopPropagation();
+      onContextMenu(e, entry);
+    }
+  };
+
   return (
     <TableRow
       hover
       selected={selected}
       onClick={() => onToggleSelect && onToggleSelect(entry.id)}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
       sx={{
         cursor: 'pointer',
-        bgcolor: 'canvas',
-        '&:hover': { bgcolor: 'surface1' },
-        '&.Mui-selected': { bgcolor: 'surface2' },
-        '&.Mui-selected:hover': { bgcolor: 'surface2' },
+        bgcolor: selected ? 'rgba(0, 132, 255, 0.08)' : 'transparent',
+        transition: 'background-color 100ms ease-out',
+        '&:hover': {
+          bgcolor: selected ? 'rgba(0, 132, 255, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+        },
+        '&.Mui-selected': {
+          bgcolor: 'rgba(0, 132, 255, 0.08)',
+        },
+        '&.Mui-selected:hover': {
+          bgcolor: 'rgba(0, 132, 255, 0.12)',
+        },
         '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
       }}
     >
-      <TableCell padding="checkbox">
+      <TableCell padding="checkbox" sx={{ pl: 2 }}>
         <Checkbox
           size="small"
           checked={selected}
           onChange={stop(() => onToggleSelect && onToggleSelect(entry.id))}
           onClick={stop()}
           inputProps={{ 'aria-label': `Select ${entry.name}` }}
+          sx={{ p: 0.5 }}
         />
       </TableCell>
       <TableCell>
@@ -198,37 +233,39 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
             startIcon={
               <Box
                 sx={{
-                  width: 28,
-                  height: 28,
+                  width: 26,
+                  height: 26,
                   borderRadius: '6px',
-                  bgcolor: 'surface2',
-                  border: '1px solid hairlineSoft',
+                  bgcolor: 'rgba(0, 132, 255, 0.10)',
+                  border: '1px solid rgba(0, 132, 255, 0.20)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   mr: 0.5,
                 }}
               >
-                <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" style={{ fontSize: 14 }} />
+                <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" style={{ fontSize: 13 }} />
               </Box>
             }
             sx={{
               textTransform: 'none',
-              fontWeight: 600,
+              fontWeight: 500,
+              fontSize: 13.5,
               color: 'ink',
-              '&:hover': { color: 'accentBlue' },
+              p: 0,
+              '&:hover': { color: 'accentBlue', bgcolor: 'transparent' },
             }}
           >
             {entry.name}
           </Button>
         ) : (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
             <Box
               sx={{
-                width: 28,
-                height: 28,
+                width: 26,
+                height: 26,
                 borderRadius: '6px',
-                bgcolor: 'surface2',
+                bgcolor: 'rgba(255, 255, 255, 0.04)',
                 border: '1px solid hairlineSoft',
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -236,9 +273,12 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
                 flexShrink: 0,
               }}
             >
-              <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" style={{ fontSize: 14 }} />
+              <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" style={{ fontSize: 13 }} />
             </Box>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: 'ink' }}>
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 500, color: 'ink', fontSize: 13.5 }}
+            >
               {entry.name}
             </Typography>
           </Box>
@@ -248,7 +288,7 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
         <Typography
           variant="body2"
           component="span"
-          sx={{ color: 'inkMuted', fontFamily: 'monospace', fontSize: 13 }}
+          sx={{ color: 'inkMuted', fontFamily: 'monospace', fontSize: 12.5 }}
         >
           {isFolder ? '—' : formatBytes(entry.sizeBytes)}
         </Typography>
@@ -257,7 +297,7 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
         <Typography
           variant="body2"
           component="span"
-          sx={{ color: 'inkMuted' }}
+          sx={{ color: 'inkMuted', fontSize: 12.5 }}
         >
           {formatDate(entry.updatedAt)}
         </Typography>
@@ -266,9 +306,10 @@ function EntryRow({ entry, actions, selected, onToggleSelect }) {
         align="right"
         className="row-actions"
         sx={{
+          pr: 2,
           whiteSpace: 'nowrap',
           opacity: 0,
-          transition: 'opacity 120ms ease',
+          transition: 'opacity 100ms ease-out',
         }}
       >
         <EntryActions

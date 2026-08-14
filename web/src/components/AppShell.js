@@ -27,13 +27,11 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
 import BrandLockup from './BrandLockup';
 
-const DRAWER_WIDTH = 240;
+const DRAWER_WIDTH = 230;
 
 /**
- * Responsive Framer-style shell: a fixed rail on desktop (wordmark band,
- * nav pill rows, bottom identity/logout zone); a temporary drawer plus
- * app bar below 768px. A keyboard skip link targets the main content
- * region, which carries a visible route header built from `title`.
+ * Tier-1 First-Party Cloud App Shell.
+ * Sleek macOS / Linear / Google Drive aesthetic.
  */
 export default function AppShell({ title, children }) {
   const { user, refresh } = useAuth();
@@ -64,20 +62,22 @@ export default function AppShell({ title, children }) {
   };
 
   const navContent = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'sidebar' }}>
+      {/* Brand Header */}
       <Box
         sx={{
-          px: 2,
-          height: 64,
+          px: 2.5,
+          height: 60,
           display: 'flex',
           alignItems: 'center',
-          borderBottom: 1,
-          borderColor: 'hairline',
+          borderBottom: '1px solid hairlineSoft',
         }}
       >
         <BrandLockup />
       </Box>
-      <List sx={{ px: 1.5, pt: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+
+      {/* Navigation List */}
+      <List sx={{ px: 1.5, pt: 2, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
         {navItems.map((item) => {
           const selected = location.pathname.startsWith(item.to);
           return (
@@ -87,33 +87,48 @@ export default function AppShell({ title, children }) {
                 onClick={() => go(item.to)}
                 aria-current={selected ? 'page' : undefined}
                 sx={{
-                  gap: 1.5,
-                  minHeight: 42,
-                  borderRadius: '12px',
-                  px: 2,
-                  color: selected ? 'ink' : 'inkMuted',
+                  gap: 1.25,
+                  minHeight: 38,
+                  borderRadius: '8px',
+                  px: 1.5,
+                  color: selected ? 'ink' : 'inkSecondary',
                   fontWeight: selected ? 600 : 500,
-                  bgcolor: selected ? 'surface2' : 'transparent',
-                  boxShadow: selected ? 'inset 0 1px 0 rgba(255,255,255,0.08)' : 'none',
-                  '&:hover': { bgcolor: selected ? 'surface2' : 'rgba(255,255,255,0.04)', color: 'ink' },
+                  bgcolor: selected ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+                  position: 'relative',
+                  transition: 'all 120ms ease-out',
+                  '&:hover': {
+                    bgcolor: selected ? 'rgba(255, 255, 255, 0.10)' : 'rgba(255, 255, 255, 0.04)',
+                    color: 'ink',
+                  },
                   '& .MuiListItemIcon-root': {
                     color: selected ? 'accentBlue' : 'inkMuted',
-                    minWidth: 'auto',
-                    width: 20,
+                    minWidth: 20,
                     justifyContent: 'center',
                   },
-                  '&:hover .MuiListItemIcon-root': { color: 'ink' },
                 }}
               >
+                {selected && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      left: -6,
+                      top: 8,
+                      bottom: 8,
+                      width: 3,
+                      bgcolor: 'accentBlue',
+                      borderRadius: '0 4px 4px 0',
+                    }}
+                  />
+                )}
                 <ListItemIcon>
-                  <FontAwesomeIcon icon={item.icon} />
+                  <FontAwesomeIcon icon={item.icon} size="sm" />
                 </ListItemIcon>
                 <ListItemText
                   primary={item.label}
                   primaryTypographyProps={{
-                    fontSize: 14,
+                    fontSize: 13.5,
                     fontWeight: selected ? 600 : 500,
-                    letterSpacing: '-0.14px',
+                    letterSpacing: '-0.01em',
                   }}
                 />
               </ListItemButton>
@@ -121,15 +136,17 @@ export default function AppShell({ title, children }) {
           );
         })}
       </List>
+
       <Box sx={{ flexGrow: 1 }} />
+
+      {/* User Footer */}
       <Box
         sx={{
-          borderTop: 1,
-          borderColor: 'hairline',
+          borderTop: '1px solid hairlineSoft',
           p: 1.5,
           display: 'flex',
           flexDirection: 'column',
-          gap: 1.5,
+          gap: 1,
         }}
       >
         {user && (
@@ -137,16 +154,23 @@ export default function AppShell({ title, children }) {
             sx={{
               display: 'flex',
               alignItems: 'center',
-              gap: 1.5,
-              p: 1.25,
-              bgcolor: 'surface1',
-              border: '1px solid hairline',
-              borderRadius: '14px',
+              gap: 1.25,
+              p: 1,
+              bgcolor: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid hairlineSoft',
+              borderRadius: '10px',
             }}
           >
             <Avatar
               src={user.avatarUrl || undefined}
-              sx={{ width: 32, height: 32, fontSize: 13, bgcolor: 'surface2', color: 'ink', border: '1px solid hairline' }}
+              sx={{
+                width: 28,
+                height: 28,
+                fontSize: 12,
+                bgcolor: 'surface2',
+                color: 'ink',
+                border: '1px solid hairlineSoft',
+              }}
             >
               {user.username ? user.username.charAt(0).toUpperCase() : ''}
             </Avatar>
@@ -154,45 +178,29 @@ export default function AppShell({ title, children }) {
               <Typography
                 variant="body2"
                 noWrap
-                sx={{ color: 'ink', fontWeight: 600, fontSize: 13, lineHeight: 1.2 }}
+                sx={{ color: 'ink', fontWeight: 600, fontSize: 12.5, lineHeight: 1.2 }}
               >
                 {user.username}
               </Typography>
               <Typography
                 variant="caption"
                 noWrap
-                sx={{ color: 'inkMuted', fontSize: 11, display: 'block', mt: 0.2 }}
+                sx={{ color: 'inkMuted', fontSize: 10.5, display: 'block' }}
               >
-                Discord Account
+                Encrypted Drive
               </Typography>
             </Box>
-          </Box>
-        )}
-        <List disablePadding>
-          <ListItem disablePadding>
-            <ListItemButton
+            <IconButton
+              size="small"
               onClick={handleLogout}
               data-testid="sidebar-logout"
-              sx={{
-                minHeight: 40,
-                borderRadius: '12px',
-                px: 1.5,
-                color: 'inkMuted',
-                '&:hover': { bgcolor: 'rgba(255,92,92,0.08)', color: 'error.main' },
-                '& .MuiListItemIcon-root': { color: 'inkMuted', minWidth: 'auto', width: 20, justifyContent: 'center' },
-                '&:hover .MuiListItemIcon-root': { color: 'error.main' },
-              }}
+              title="Log out"
+              sx={{ color: 'inkMuted', '&:hover': { color: 'error.main' }, p: 0.5 }}
             >
-              <ListItemIcon>
-                <FontAwesomeIcon icon={faRightFromBracket} />
-              </ListItemIcon>
-              <ListItemText
-                primary="Log out"
-                primaryTypographyProps={{ fontSize: 14, fontWeight: 500 }}
-              />
-            </ListItemButton>
-          </ListItem>
-        </List>
+              <FontAwesomeIcon icon={faRightFromBracket} size="xs" />
+            </IconButton>
+          </Box>
+        )}
       </Box>
     </Box>
   );
@@ -203,21 +211,20 @@ export default function AppShell({ title, children }) {
       sx={{
         display: 'flex',
         alignItems: 'center',
-        mb: 2.5,
+        justifyContent: 'space-between',
+        mb: 3,
         pb: 1.5,
-        borderBottom: 1,
-        borderColor: 'hairlineSoft',
+        borderBottom: '1px solid hairlineSoft',
       }}
     >
       <Typography
-        variant="body1"
+        variant="h5"
         component="h1"
         sx={{
-          fontFamily: 'Inter, sans-serif',
           color: 'ink',
           fontWeight: 600,
-          fontSize: 18,
-          lineHeight: 1.4,
+          fontSize: 20,
+          letterSpacing: '-0.015em',
         }}
       >
         {title}
@@ -226,7 +233,7 @@ export default function AppShell({ title, children }) {
   );
 
   return (
-    <Box sx={{ minHeight: '100vh' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'canvas' }}>
       <Box
         component="a"
         href="#main-content"
@@ -236,11 +243,10 @@ export default function AppShell({ title, children }) {
           left: 8,
           zIndex: 2000,
           transform: 'translateY(-200%)',
-          bgcolor: 'surface2',
+          bgcolor: 'surfaceElevated',
           color: 'ink',
-          border: 1,
-          borderColor: 'hairline',
-          borderRadius: '8px',
+          border: '1px solid hairline',
+          borderRadius: '6px',
           px: 2,
           py: 1,
           '&:focus': { transform: 'translateY(0)' },
@@ -259,9 +265,8 @@ export default function AppShell({ title, children }) {
             left: 0,
             width: DRAWER_WIDTH,
             zIndex: 1200,
-            bgcolor: 'canvas',
-            borderRight: 1,
-            borderColor: 'hairline',
+            bgcolor: 'sidebar',
+            borderRight: '1px solid hairlineSoft',
           }}
         >
           {navContent}
@@ -270,9 +275,9 @@ export default function AppShell({ title, children }) {
         <AppBar
           position="fixed"
           elevation={0}
-          sx={{ bgcolor: 'canvas', color: 'inherit' }}
+          sx={{ bgcolor: 'sidebar', borderBottom: '1px solid hairlineSoft' }}
         >
-          <Toolbar sx={{ minHeight: 56 }}>
+          <Toolbar sx={{ minHeight: 52 }}>
             <IconButton
               edge="start"
               color="inherit"
@@ -293,7 +298,7 @@ export default function AppShell({ title, children }) {
           variant="temporary"
           open={mobileOpen}
           onClose={() => setMobileOpen(false)}
-          sx={{ '& .MuiDrawer-paper': { width: DRAWER_WIDTH } }}
+          sx={{ '& .MuiDrawer-paper': { width: DRAWER_WIDTH, bgcolor: 'sidebar' } }}
         >
           {navContent}
         </Drawer>
@@ -303,9 +308,10 @@ export default function AppShell({ title, children }) {
         id="main-content"
         tabIndex={-1}
         sx={{
-          ml: isDesktop ? '240px' : 0,
-          p: { xs: 2, md: 3 },
-          pt: isDesktop ? 3 : 10,
+          ml: isDesktop ? `${DRAWER_WIDTH}px` : 0,
+          p: { xs: 2, md: 3.5 },
+          pt: isDesktop ? 3 : 9,
+          maxWidth: 1600,
         }}
       >
         {routeHeader}
