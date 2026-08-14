@@ -26,8 +26,9 @@ export default function StorageHub({
   totalFolders = 0,
   onUploadClick,
 }) {
-  const { queue } = useUploads();
-  const activeUpload = queue.find((j) => j.status === 'uploading');
+  const uploadCtx = useUploads();
+  const uploads = (uploadCtx && uploadCtx.uploads) || [];
+  const activeUpload = Array.isArray(uploads) ? uploads.find((j) => j.status === 'uploading') : null;
 
   const usedBytes = drive ? drive.usedBytes || 0 : 0;
   const quotaBytes = drive ? drive.quotaBytes || 10737418240 : 10737418240;
