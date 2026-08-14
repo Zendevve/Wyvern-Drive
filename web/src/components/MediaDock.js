@@ -1,231 +1,242 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Box,
   IconButton,
+  Paper,
   Slider,
   Typography,
 } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faChevronDown,
-  faChevronUp,
-  faMusic,
+  faBackward,
+  faForward,
   faPause,
   faPlay,
-  faRotateLeft,
-  faRotateRight,
   faVolumeHigh,
   faVolumeXmark,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { useMediaPlayer } from './MediaPlayerProvider';
 
-function formatTime(seconds) {
-  if (!seconds || Number.isNaN(seconds) || seconds < 0) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  const hrs = Math.floor(mins / 60);
-  const remMins = mins % 60;
-  if (hrs > 0) {
-    return `${hrs}:${remMins < 10 ? '0' : ''}${remMins}:${secs < 10 ? '0' : ''}${secs}`;
-  }
-  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+function formatTime(secs) {
+  if (isNaN(secs) || secs === 0) return '00:00';
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
 /**
- * First-Party Floating Dockable Audio & Media Player (Apple Music / Linear grade).
+ * system24 TUI Floating Audio Daemon Dock
  */
 export default function MediaDock() {
-  const {
-    currentTrack,
-    isPlaying,
-    duration,
-    currentTime,
-    volume,
-    isMuted,
-    isMinimized,
-    setIsMinimized,
-    setVolume,
-    setIsMuted,
-    togglePlay,
-    seek,
-    skip,
-    closePlayer,
-  } = useMediaPlayer();
+  const { currentTrack, isPlaying, togglePlay, stop, audioUrl } =
+    useMediaPlayer();
+  const audioRef = useRef(null);
+
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(0.85);
+  const [muted, setMuted] = useState(false);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (audioUrl) {
+      audio.src = audioUrl;
+      audio.load();
+      if (isPlaying) {
+        audio.play().catch(() => {});
+      }
+    } else {
+      audio.pause();
+      audio.src = '';
+    }
+  }, [audioUrl, isPlaying]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.play().catch(() => {});
+    } else {
+      audio.pause();
+    }
+  }, [isPlaying]);
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+      if (audioRef.current.duration) {
+        setDuration(audioRef.current.duration);
+      }
+    }
+  };
+
+  const handleSeek = (e, val) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = val;
+      setCurrentTime(val);
+    }
+  };
+
+  const handleVolume = (e, val) => {
+    setVolume(val);
+    if (audioRef.current) {
+      audioRef.current.volume = val;
+    }
+    if (muted && val > 0) setMuted(false);
+  };
+
+  const toggleMute = () => {
+    if (audioRef.current) {
+      audioRef.current.muted = !muted;
+      setMuted(!muted);
+    }
+  };
+
+  const skip = (secs) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = Math.max(
+        0,
+        Math.min(duration, audioRef.current.currentTime + secs)
+      );
+    }
+  };
 
   if (!currentTrack) return null;
 
   return (
-    <Box
-      data-testid="media-dock"
+    <Paper
+      elevation={0}
+      variant="outlined"
       sx={{
         position: 'fixed',
-        bottom: 20,
-        right: 20,
-        left: { xs: 16, sm: 'auto' },
-        width: { xs: 'auto', sm: isMinimized ? 300 : 400 },
+        bottom: 16,
+        right: 16,
+        width: 360,
         zIndex: 1400,
         bgcolor: 'surfaceElevated',
-        border: '1px solid hairline',
-        borderRadius: '12px',
-        boxShadow: '0 16px 48px rgba(0,0,0,0.65)',
-        backdropFilter: 'blur(20px)',
-        p: 1.75,
-        transition: 'all 160ms cubic-bezier(0.16, 1, 0.3, 1)',
+        borderColor: 'primary.main',
+        borderRadius: 0,
+        p: 1.5,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.85)',
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-        <Box
-          sx={{
-            width: 34,
-            height: 34,
-            borderRadius: '8px',
-            bgcolor: 'rgba(0, 132, 255, 0.12)',
-            border: '1px solid rgba(0, 132, 255, 0.25)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'accentBlue',
-            flexShrink: 0,
-          }}
-        >
-          <FontAwesomeIcon icon={faMusic} size="sm" />
-        </Box>
-        <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-          <Typography
-            variant="body2"
-            noWrap
-            sx={{ fontWeight: 600, color: 'ink', fontSize: 13, lineHeight: 1.2 }}
-          >
-            {currentTrack.name}
-          </Typography>
-          <Typography
-            variant="caption"
-            sx={{ color: 'inkMuted', fontSize: 11, fontFamily: 'monospace' }}
-          >
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </Typography>
-        </Box>
+      <audio
+        ref={audioRef}
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleTimeUpdate}
+        onEnded={stop}
+      />
+
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid', borderColor: 'divider', pb: 0.5 }}>
+        <Typography variant="overline" sx={{ color: 'primary.main', fontSize: 9.5, letterSpacing: '0.08ch' }}>
+          [ AUDIO_DAEMON // PLAYING ]
+        </Typography>
         <IconButton
           size="small"
-          aria-label={isMinimized ? 'Expand player' : 'Minimize player'}
-          onClick={() => setIsMinimized(!isMinimized)}
-          sx={{ color: 'inkMuted', p: 0.5 }}
-        >
-          <FontAwesomeIcon icon={isMinimized ? faChevronUp : faChevronDown} size="xs" />
-        </IconButton>
-        <IconButton
-          size="small"
-          aria-label="Close player"
-          onClick={closePlayer}
-          sx={{ color: 'inkMuted', '&:hover': { color: 'error.main' }, p: 0.5 }}
+          onClick={stop}
+          sx={{ color: 'text.disabled', p: 0.25 }}
         >
           <FontAwesomeIcon icon={faXmark} size="xs" />
         </IconButton>
       </Box>
 
-      {!isMinimized && (
-        <Box sx={{ mt: 1.25 }}>
-          {/* Scrubber slider */}
-          <Box sx={{ px: 0.5 }}>
-            <Slider
-              size="small"
-              value={currentTime}
-              max={duration || 100}
-              onChange={(_, val) => seek(val)}
-              aria-label="Audio scrubber"
-              sx={{
-                color: 'accentBlue',
-                height: 3,
-                py: 0.75,
-                '& .MuiSlider-thumb': {
-                  width: 10,
-                  height: 10,
-                  transition: '0.2s cubic-bezier(.47,1.64,.41,.8)',
-                  '&:hover, &.Mui-focusVisible': {
-                    boxShadow: '0 0 0 5px rgba(0, 132, 255, 0.2)',
-                  },
-                },
-                '& .MuiSlider-rail': {
-                  bgcolor: 'rgba(255,255,255,0.10)',
-                },
-              }}
-            />
-          </Box>
+      {/* Track Title */}
+      <Typography
+        variant="body2"
+        noWrap
+        sx={{
+          fontWeight: 600,
+          color: 'text.primary',
+          fontSize: 12,
+          fontFamily: "'DM Mono', monospace",
+        }}
+      >
+        &gt; {currentTrack.name}
+      </Typography>
 
-          {/* Controls row */}
-          <Box
+      {/* Scrubber */}
+      <Box sx={{ px: 0.5 }}>
+        <Slider
+          size="small"
+          value={currentTime}
+          max={duration || 100}
+          onChange={handleSeek}
+          sx={{
+            py: 0.5,
+            color: 'primary.main',
+            '& .MuiSlider-thumb': {
+              width: 10,
+              height: 10,
+              borderRadius: 0,
+            },
+            '& .MuiSlider-rail': {
+              borderRadius: 0,
+              bgcolor: 'bg1',
+            },
+            '& .MuiSlider-track': {
+              borderRadius: 0,
+            },
+          }}
+        />
+        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+          <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: 10, fontFamily: "'DM Mono', monospace" }}>
+            {formatTime(currentTime)}
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: 10, fontFamily: "'DM Mono', monospace" }}>
+            {formatTime(duration)}
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Controls */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <IconButton size="small" onClick={() => skip(-15)} title="Back 15s">
+            <FontAwesomeIcon icon={faBackward} size="xs" />
+          </IconButton>
+          <IconButton
+            size="small"
+            onClick={togglePlay}
             sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              mt: 0.5,
+              bgcolor: 'surface2',
+              color: 'primary.main',
+              border: '1px solid',
+              borderColor: 'primary.main',
+              p: 0.75,
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <IconButton
-                size="small"
-                aria-label="Skip backward 15 seconds"
-                title="Skip back 15s"
-                onClick={() => skip(-15)}
-                sx={{ color: 'inkSecondary', width: 28, height: 28 }}
-              >
-                <FontAwesomeIcon icon={faRotateLeft} size="xs" />
-              </IconButton>
-              <IconButton
-                size="small"
-                aria-label={isPlaying ? 'Pause' : 'Play'}
-                onClick={togglePlay}
-                sx={{
-                  bgcolor: 'ink',
-                  color: '#0A0B0D',
-                  width: 32,
-                  height: 32,
-                  '&:hover': { bgcolor: '#FFFFFF', transform: 'scale(1.04)' },
-                }}
-              >
-                <FontAwesomeIcon icon={isPlaying ? faPause : faPlay} size="xs" />
-              </IconButton>
-              <IconButton
-                size="small"
-                aria-label="Skip forward 15 seconds"
-                title="Skip forward 15s"
-                onClick={() => skip(15)}
-                sx={{ color: 'inkSecondary', width: 28, height: 28 }}
-              >
-                <FontAwesomeIcon icon={faRotateRight} size="xs" />
-              </IconButton>
-            </Box>
-
-            {/* Volume control */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, width: 100 }}>
-              <IconButton
-                size="small"
-                aria-label={isMuted ? 'Unmute' : 'Mute'}
-                onClick={() => setIsMuted(!isMuted)}
-                sx={{ color: 'inkMuted', p: 0.5 }}
-              >
-                <FontAwesomeIcon icon={isMuted ? faVolumeXmark : faVolumeHigh} size="xs" />
-              </IconButton>
-              <Slider
-                size="small"
-                value={isMuted ? 0 : volume * 100}
-                onChange={(_, val) => {
-                  setVolume(val / 100);
-                  if (isMuted) setIsMuted(false);
-                }}
-                aria-label="Volume"
-                sx={{
-                  color: 'inkSecondary',
-                  height: 3,
-                  '& .MuiSlider-thumb': { width: 8, height: 8 },
-                  '& .MuiSlider-rail': { bgcolor: 'rgba(255,255,255,0.10)' },
-                }}
-              />
-            </Box>
-          </Box>
+            <FontAwesomeIcon icon={isPlaying ? faPause : faPlay} size="xs" />
+          </IconButton>
+          <IconButton size="small" onClick={() => skip(15)} title="Forward 15s">
+            <FontAwesomeIcon icon={faForward} size="xs" />
+          </IconButton>
         </Box>
-      )}
-    </Box>
+
+        {/* Volume */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: 110 }}>
+          <IconButton size="small" onClick={toggleMute} sx={{ color: 'text.disabled', p: 0.25 }}>
+            <FontAwesomeIcon icon={muted ? faVolumeXmark : faVolumeHigh} size="xs" />
+          </IconButton>
+          <Slider
+            size="small"
+            value={muted ? 0 : volume}
+            max={1}
+            step={0.05}
+            onChange={handleVolume}
+            sx={{
+              color: 'text.secondary',
+              '& .MuiSlider-thumb': { width: 8, height: 8, borderRadius: 0 },
+            }}
+          />
+        </Box>
+      </Box>
+    </Paper>
   );
 }

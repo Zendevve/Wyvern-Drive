@@ -26,6 +26,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faArrowRightArrowLeft,
   faCircleInfo,
+  faCloudArrowUp,
   faDownload,
   faFolderOpen,
   faFolderPlus,
@@ -46,7 +47,6 @@ import EntryCards from '../components/EntryCards';
 import EntryGrid from '../components/EntryGrid';
 import EntryTable from '../components/EntryTable';
 import FolderCards from '../components/FolderCards';
-import StorageHub from '../components/StorageHub';
 import ErrorNotice from '../components/ErrorNotice';
 import FolderDialog from '../components/FolderDialog';
 import MoveDialog from '../components/MoveDialog';
@@ -65,9 +65,8 @@ import { useUploads } from '../upload/UploadProvider';
 import DialogTransition from '../motion/DialogTransition';
 import ScreenLoader from '../components/ScreenLoader';
 
-/**
- * Materialize an <input webkitdirectory> selection into upload pairs.
- */
+const DRAG_HINT_KEY = 'wyvern-drag-hint-dismissed';
+
 async function materializeFolderPicker(files, rootParentId) {
   const folderIds = new Map();
   const pairs = [];
@@ -100,13 +99,20 @@ async function materializeFolderPicker(files, rootParentId) {
 export default function DrivePage() {
   const { user, drive, loading, refresh } = useAuth();
   const isDesktop = useMediaQuery('(min-width: 768px)');
-  const isWide = useMediaQuery('(min-width: 1100px)');
 
   const [trail, setTrail] = useState([]);
   const [entries, setEntries] = useState([]);
   const [entriesLoading, setEntriesLoading] = useState(true);
   const [entriesError, setEntriesError] = useState(null);
   const [notice, setNotice] = useState(null);
+
+  const [dragHintDismissed, setDragHintDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(DRAG_HINT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -126,12 +132,8 @@ export default function DrivePage() {
   const [shareEntry, setShareEntry] = useState(null);
   const [previewEntry, setPreviewEntry] = useState(null);
 
-  // 3rd Pane Inspector Details Panel
   const [detailsOpen, setDetailsOpen] = useState(false);
-
-  // Context Menu State
   const [contextMenu, setContextMenu] = useState(null);
-
   const { playTrack } = useMediaPlayer();
 
   const [view, setView] = useState(() => {
@@ -142,25 +144,8 @@ export default function DrivePage() {
     }
   });
 
-  const [dragHintDismissed, setDragHintDismissed] = useState(() => {
-    try {
-      return localStorage.getItem('wyvern-drag-hint-dismissed') === '1';
-    } catch {
-      return false;
-    }
-  });
-
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [dragging, setDragging] = useState(false);
-
-  const dismissDragHint = () => {
-    setDragHintDismissed(true);
-    try {
-      localStorage.setItem('wyvern-drag-hint-dismissed', '1');
-    } catch {
-      // localStorage may be unavailable in private mode
-    }
-  };
 
   const currentFolder = trail.length > 0 ? trail[trail.length - 1] : null;
   const currentParentId = currentFolder ? currentFolder.id : null;
@@ -281,6 +266,15 @@ export default function DrivePage() {
     e.target.value = '';
   };
 
+  const handleDismissDragHint = () => {
+    setDragHintDismissed(true);
+    try {
+      localStorage.setItem(DRAG_HINT_KEY, '1');
+    } catch {
+      // ignore
+    }
+  };
+
   const toggleSelect = (id) => {
     const next = new Set(selectedIds);
     if (next.has(id)) {
@@ -311,7 +305,6 @@ export default function DrivePage() {
   const singleSelectedFolder =
     singleSelected && singleSelected.kind === 'folder' ? singleSelected : null;
 
-  // Separate folders and files for the reference layout
   const folderEntries = useMemo(() => entries.filter((e) => e.kind === 'folder'), [entries]);
   const fileEntries = useMemo(() => entries.filter((e) => e.kind !== 'folder'), [entries]);
 
@@ -329,7 +322,7 @@ export default function DrivePage() {
   const handleRename = async (name) => {
     if (!renameEntry) return;
     try {
-      await api.renameEntry(renameEntry.id, name);
+      await api.updateEntry(renameEntry.id, { name });
       setRenameEntry(null);
       reload();
     } catch (err) {
@@ -338,10 +331,9 @@ export default function DrivePage() {
     }
   };
 
-  const handleMove = async (targetParentId) => {
-    if (!moveEntry) return;
+  const handleMove = async (entry, targetParentId) => {
     try {
-      await api.moveEntry(moveEntry.id, targetParentId);
+      await api.updateEntry(entry.id, { parentId: targetParentId });
       setMoveEntry(null);
       reload();
     } catch (err) {
@@ -350,10 +342,9 @@ export default function DrivePage() {
     }
   };
 
-  const handleCopy = async (targetParentId) => {
-    if (!copyEntry) return;
+  const handleCopy = async (entry, targetParentId) => {
     try {
-      await api.copyEntry(copyEntry.id, targetParentId);
+      await api.copyEntry(entry.id, targetParentId);
       setCopyEntry(null);
       reload();
       refresh();
@@ -396,7 +387,7 @@ export default function DrivePage() {
     if (deletedEntries.length === 0) return;
     try {
       for (const item of deletedEntries) {
-        await api.restoreEntry(item.id);
+        await api.trash.restore(item.id);
       }
       setDeletedEntries([]);
       reload();
@@ -566,118 +557,113 @@ export default function DrivePage() {
     return null;
   }
 
+  const searchElement = (
+    <TextField
+      size="small"
+      placeholder="Search files and folders..."
+      value={searchInput}
+      inputRef={searchInputRef}
+      onChange={(e) => setSearchInput(e.target.value)}
+      disabled={entriesLoading}
+      fullWidth
+      inputProps={{ 'aria-label': 'Search files and folders' }}
+      InputProps={{
+        startAdornment: (
+          <Box
+            component="span"
+            sx={{ color: 'text.disabled', display: 'inline-flex', mr: 1, fontSize: 13 }}
+          >
+            <FontAwesomeIcon icon={faMagnifyingGlass} aria-hidden="true" />
+          </Box>
+        ),
+        endAdornment: searchInput ? (
+          <IconButton size="small" onClick={() => setSearchInput('')} sx={{ p: 0.25 }}>
+            <FontAwesomeIcon icon={faXmark} size="xs" />
+          </IconButton>
+        ) : null,
+      }}
+      sx={{
+        '& .MuiOutlinedInput-root': {
+          bgcolor: 'surface1',
+          height: 38,
+          borderRadius: 9999,
+          border: '1px solid',
+          borderColor: 'divider',
+          '&:hover': { borderColor: 'primary.main' },
+        },
+      }}
+    />
+  );
+
   return (
-    <AppShell title="Drive">
+    <AppShell
+      title="Drive"
+      searchSlot={searchElement}
+      onUploadFiles={() => fileInputRef.current && fileInputRef.current.click()}
+      onUploadFolder={() => folderInputRef.current && folderInputRef.current.click()}
+      onNewFolder={() => setFolderDialogOpen(true)}
+    >
       <Box sx={{ pb: { xs: 12, md: 2 } }}>
         {notice && <ErrorNotice error={notice} onRetry={reload} />}
 
-        {/* Reference Cloudy Top Greeting & Action Header */}
+        {/* Directory Sub-Header Toolbar (Breadcrumbs + Controls) */}
         <Box
           sx={{
             display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
             justifyContent: 'space-between',
-            alignItems: { xs: 'flex-start', md: 'center' },
-            gap: 2,
-            mb: 3.5,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 1.5,
+            mb: 2.5,
+            pb: 1.5,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
           }}
         >
-          {/* Greeting */}
-          <Box>
-            <Typography
-              variant="h2"
-              sx={{
-                fontWeight: 700,
-                color: 'ink',
-                fontSize: { xs: 22, md: 26 },
-                letterSpacing: '-0.02em',
-                lineHeight: 1.2,
-              }}
-            >
-              Hello, {user.username || 'Friend'} 👋
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'inkMuted', mt: 0.25, fontSize: 13.5 }}>
-              Welcome to your encrypted cloud drive
-            </Typography>
-          </Box>
+          {/* Breadcrumbs Navigation */}
+          <Breadcrumbs trail={trail} onNavigate={navigateTo} />
 
-          {/* Action Center: Search & Upload */}
-          <Box
-            component="section"
-            aria-label="Drive commands"
-            sx={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 1.25,
-              alignItems: 'center',
-              width: { xs: '100%', md: 'auto' },
-            }}
-          >
-            <TextField
-              size="small"
-              placeholder="Search files and folders... (⌘K)"
-              value={searchInput}
-              inputRef={searchInputRef}
-              onChange={(e) => setSearchInput(e.target.value)}
-              disabled={entriesLoading}
-              sx={{
-                minWidth: { xs: '100%', sm: 260 },
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  bgcolor: 'surface1',
-                  height: 40,
-                },
-              }}
-              inputProps={{ 'aria-label': 'Search files and folders' }}
-              InputProps={{
-                startAdornment: (
-                  <Box
-                    component="span"
-                    sx={{ color: 'inkMuted', display: 'inline-flex', mr: 1, fontSize: 13 }}
-                  >
-                    <FontAwesomeIcon icon={faMagnifyingGlass} aria-hidden="true" />
-                  </Box>
-                ),
-              }}
-            />
-
+          {/* Directory Toolbar Actions */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, ml: 'auto' }}>
+            {/* Quick Action Buttons for Toolbar */}
             <Button
-              variant="contained"
-              color="primary"
-              startIcon={<FontAwesomeIcon icon={faUpload} size="sm" />}
+              variant="outlined"
+              size="small"
+              startIcon={<FontAwesomeIcon icon={faUpload} size="xs" />}
               onClick={() => fileInputRef.current && fileInputRef.current.click()}
-              disabled={entriesLoading}
-              sx={{ height: 40, px: 2.25, borderRadius: '12px' }}
+              sx={{ display: { xs: 'none', md: 'inline-flex' }, borderRadius: 2 }}
             >
-              Upload
+              Upload files
             </Button>
             <Button
               variant="outlined"
-              startIcon={<FontAwesomeIcon icon={faFolderTree} size="sm" />}
+              size="small"
+              startIcon={<FontAwesomeIcon icon={faFolderTree} size="xs" />}
               onClick={() => folderInputRef.current && folderInputRef.current.click()}
-              disabled={entriesLoading}
-              sx={{ height: 40, px: 1.75, borderRadius: '12px' }}
+              sx={{ display: { xs: 'none', md: 'inline-flex' }, borderRadius: 2 }}
             >
               Upload folder
             </Button>
             <Button
               variant="outlined"
-              startIcon={<FontAwesomeIcon icon={faFolderPlus} size="sm" />}
+              size="small"
+              startIcon={<FontAwesomeIcon icon={faFolderPlus} size="xs" />}
               onClick={() => setFolderDialogOpen(true)}
-              sx={{ height: 40, px: 1.75, borderRadius: '12px' }}
+              sx={{ display: { xs: 'none', md: 'inline-flex' }, borderRadius: 2 }}
             >
               New folder
             </Button>
 
+            {/* View Switchers */}
             {isDesktop && (
               <Box
                 sx={{
                   display: 'inline-flex',
-                  p: '3px',
                   bgcolor: 'surface1',
-                  border: '1px solid hairlineSoft',
-                  borderRadius: '10px',
-                  gap: '2px',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 2,
+                  p: 0.25,
                 }}
               >
                 <IconButton
@@ -686,14 +672,15 @@ export default function DrivePage() {
                   onClick={() => setView('list')}
                   size="small"
                   sx={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: '8px',
-                    color: view === 'list' ? 'ink' : 'inkMuted',
-                    bgcolor: view === 'list' ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+                    width: 32,
+                    height: 32,
+                    borderRadius: 1.5,
+                    color: view === 'list' ? 'primary.main' : 'text.disabled',
+                    bgcolor: view === 'list' ? 'surface2' : 'transparent',
+                    boxShadow: view === 'list' ? '0 1px 4px rgba(0,0,0,0.3)' : 'none',
                   }}
                 >
-                  <FontAwesomeIcon icon={faTableList} size="sm" />
+                  <FontAwesomeIcon icon={faTableList} size="xs" />
                 </IconButton>
                 <IconButton
                   aria-label="Grid view"
@@ -701,86 +688,112 @@ export default function DrivePage() {
                   onClick={() => setView('grid')}
                   size="small"
                   sx={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: '8px',
-                    color: view === 'grid' ? 'ink' : 'inkMuted',
-                    bgcolor: view === 'grid' ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+                    width: 32,
+                    height: 32,
+                    borderRadius: 1.5,
+                    color: view === 'grid' ? 'primary.main' : 'text.disabled',
+                    bgcolor: view === 'grid' ? 'surface2' : 'transparent',
+                    boxShadow: view === 'grid' ? '0 1px 4px rgba(0,0,0,0.3)' : 'none',
                   }}
                 >
-                  <FontAwesomeIcon icon={faTableCellsLarge} size="sm" />
+                  <FontAwesomeIcon icon={faTableCellsLarge} size="xs" />
                 </IconButton>
               </Box>
             )}
 
+            {/* Inspector Toggle Button */}
             {isDesktop && (
-              <Tooltip title={detailsOpen ? "Hide details (Alt+I)" : "View details & activity (Alt+I)"}>
+              <Tooltip title={detailsOpen ? "Hide file details (Alt+I)" : "View file details (Alt+I)"}>
                 <IconButton
                   aria-label="Toggle details panel"
                   aria-pressed={detailsOpen}
                   onClick={() => setDetailsOpen(!detailsOpen)}
                   sx={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: '10px',
-                    bgcolor: detailsOpen ? 'rgba(30,134,255,0.18)' : 'surface1',
-                    color: detailsOpen ? 'accentBlue' : 'inkMuted',
+                    width: 36,
+                    height: 36,
+                    borderRadius: 2,
+                    bgcolor: detailsOpen ? 'rgba(37, 172, 232, 0.15)' : 'surface1',
+                    color: detailsOpen ? 'primary.main' : 'text.disabled',
                     border: '1px solid',
-                    borderColor: detailsOpen ? 'accentBlue' : 'hairlineSoft',
-                    '&:hover': {
-                      bgcolor: detailsOpen ? 'rgba(30,134,255,0.28)' : 'surface2',
-                      color: 'ink',
-                    },
+                    borderColor: detailsOpen ? 'rgba(37, 172, 232, 0.4)' : 'divider',
                   }}
                 >
-                  <FontAwesomeIcon icon={faCircleInfo} />
+                  <FontAwesomeIcon icon={faCircleInfo} size="sm" />
                 </IconButton>
               </Tooltip>
             )}
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              hidden
-              data-testid="file-input"
-              onChange={handleFilesSelected}
-            />
-            <input
-              ref={folderInputRef}
-              type="file"
-              multiple
-              webkitdirectory=""
-              directory=""
-              hidden
-              data-testid="folder-input"
-              onChange={handleFolderSelected}
-            />
           </Box>
         </Box>
 
-        {/* Selection Action Shelf */}
+        {/* Drag & Drop Hint Banner (if applicable) */}
+        {!dragHintDismissed && entries.length === 0 && trail.length === 0 && !search && (
+          <Paper
+            variant="outlined"
+            data-testid="drag-drop-hint"
+            sx={{
+              p: 1.5,
+              mb: 2,
+              borderRadius: 2,
+              bgcolor: 'rgba(37, 172, 232, 0.08)',
+              borderColor: 'rgba(37, 172, 232, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 2,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <FontAwesomeIcon icon={faCloudArrowUp} style={{ color: '#25ACE8', fontSize: 14 }} />
+              <Typography variant="body2" sx={{ color: 'text.primary', fontSize: 13 }}>
+                Tip: drag files anywhere on the page to upload
+              </Typography>
+            </Box>
+            <IconButton
+              size="small"
+              aria-label="Dismiss tip"
+              onClick={handleDismissDragHint}
+              sx={{ color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
+            >
+              <FontAwesomeIcon icon={faXmark} size="xs" />
+            </IconButton>
+          </Paper>
+        )}
+
+        {/* Search Results Header */}
+        {search && (
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 600, mb: 2, color: 'text.primary', fontSize: 15 }}
+            data-testid="search-results-header"
+          >
+            Search results for &quot;{search}&quot;
+          </Typography>
+        )}
+
+        {/* Contextual Selection Action Bar */}
         {isDesktop && selectedIds.size > 0 && (
           <Paper
-            elevation={2}
+            elevation={0}
             data-testid="selection-bar"
             sx={{
               bgcolor: 'surfaceElevated',
-              border: '1px solid hairlineSoft',
-              borderRadius: '12px',
+              border: '1px solid',
+              borderColor: 'primary.main',
+              borderRadius: 2.5,
               px: 2.5,
-              py: 1.25,
+              py: 1,
               mb: 2.5,
               display: 'flex',
               flexWrap: 'wrap',
-              gap: 1,
+              gap: 1.5,
               alignItems: 'center',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.6), 0 0 12px rgba(37, 172, 232, 0.2)',
             }}
           >
             <Typography
-              variant="caption"
+              variant="body2"
               component="span"
-              sx={{ color: 'ink', whiteSpace: 'nowrap', mr: 1, fontWeight: 600, fontSize: 13 }}
+              sx={{ color: 'primary.main', whiteSpace: 'nowrap', mr: 1, fontWeight: 600, fontSize: 13 }}
             >
               {selectedIds.size} selected
             </Typography>
@@ -839,14 +852,14 @@ export default function DrivePage() {
               aria-label="Clear selection"
               size="small"
               onClick={clearSelection}
-              sx={{ ml: 'auto', width: 32, height: 32 }}
+              sx={{ ml: 'auto', width: 28, height: 28, borderRadius: 1 }}
             >
-              <FontAwesomeIcon icon={faXmark} size="sm" />
+              <FontAwesomeIcon icon={faXmark} size="xs" />
             </IconButton>
           </Paper>
         )}
 
-        {/* 3-Pane Layout: Left Main Workspace + Right Storage / Inspector Hub */}
+        {/* Main 2-Pane Content Area: File Explorer + Optional Right Inspector */}
         <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
           <Box
             data-testid="drive-content-pane"
@@ -865,124 +878,89 @@ export default function DrivePage() {
               />
             )}
 
-            <Breadcrumbs trail={trail} onNavigate={navigateTo} />
-
-            {search && (
-              <Typography
-                variant="h6"
-                sx={{ fontWeight: 600, mb: 1.5, fontSize: 16 }}
-                data-testid="search-results-header"
-              >
-                Search results for &quot;{search}&quot;
-              </Typography>
-            )}
-
             {entriesError && <ErrorNotice error={entriesError} onRetry={reload} />}
 
             {entriesLoading ? (
               <Paper
                 elevation={0}
                 variant="outlined"
-                sx={{ p: 2, bgcolor: 'surface1', borderRadius: '16px', borderColor: 'hairlineSoft' }}
+                sx={{ p: 2, bgcolor: 'surface1', borderColor: 'divider', borderRadius: 2 }}
                 data-testid="entries-loading"
                 aria-label="Loading entries"
               >
                 {[0, 1, 2, 3, 4].map((i) => (
-                  <Skeleton key={i} variant="rectangular" height={44} sx={{ mb: 1, borderRadius: '8px' }} />
+                  <Skeleton key={i} variant="rectangular" height={40} sx={{ mb: 1, borderRadius: 1 }} />
                 ))}
               </Paper>
             ) : entries.length === 0 ? (
-              <>
-                {trail.length === 0 && !dragHintDismissed && (
-                  <Paper
-                    elevation={0}
-                    variant="outlined"
-                    data-testid="drag-drop-hint"
-                    sx={{
-                      p: 2.5,
-                      mb: 2.5,
-                      borderRadius: '14px',
-                      bgcolor: 'surface1',
-                      borderColor: 'hairlineSoft',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 2,
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <FontAwesomeIcon icon={faFolderOpen} color="#FFB020" style={{ fontSize: 20 }} />
-                      <Typography variant="body2" sx={{ color: 'inkSecondary' }}>
-                        Drag and drop files or folders anywhere onto the page to upload instantly.
-                      </Typography>
-                    </Box>
-                    <IconButton
-                      size="small"
-                      aria-label="Dismiss drag-drop hint"
-                      onClick={dismissDragHint}
-                      sx={{ color: 'inkMuted' }}
-                    >
-                      <FontAwesomeIcon icon={faXmark} size="sm" />
-                    </IconButton>
-                  </Paper>
-                )}
-
-                {/* Empty State Spotlight Card */}
-                <Paper
-                  elevation={0}
-                  variant="outlined"
-                  data-testid="ready-spotlight"
+              <Paper
+                elevation={0}
+                variant="outlined"
+                data-testid="empty-state"
+                sx={{
+                  p: { xs: 4, md: 6 },
+                  bgcolor: 'surface1',
+                  borderColor: 'divider',
+                  borderRadius: 3,
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 2,
+                  my: 3,
+                  background: 'radial-gradient(ellipse at top, rgba(37, 172, 232, 0.1) 0%, rgba(22, 25, 33, 0.6) 70%)',
+                  border: '1px solid rgba(37, 172, 232, 0.25)',
+                }}
+              >
+                <Box
                   sx={{
-                    p: { xs: 4, md: 6 },
-                    borderRadius: '18px',
-                    bgcolor: 'surface1',
-                    borderColor: 'hairlineSoft',
-                    textAlign: 'center',
+                    width: 56,
+                    height: 56,
+                    borderRadius: '50%',
+                    bgcolor: 'rgba(37, 172, 232, 0.15)',
+                    border: '1px solid rgba(37, 172, 232, 0.3)',
                     display: 'flex',
-                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 2,
+                    color: 'primary.main',
+                    boxShadow: '0 0 20px rgba(37, 172, 232, 0.25)',
                   }}
                 >
-                  <Box
+                  <FontAwesomeIcon icon={faFolderOpen} style={{ fontSize: 24, color: '#FBBF24' }} />
+                </Box>
+                <Box sx={{ maxWidth: 460 }}>
+                  <Typography variant="h5" component="h2" sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}>
+                    {search ? 'No files found' : trail.length > 0 ? 'This folder is empty' : 'Your space is ready'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary', lineHeight: 1.6 }}>
+                    {search
+                      ? `No entries matched your search "${search}".`
+                      : "Your files are encrypted before they're stored — only you can see them."}
+                  </Typography>
+                </Box>
+                {!search && (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="medium"
+                    startIcon={<FontAwesomeIcon icon={faUpload} size="sm" />}
+                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
                     sx={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: '16px',
-                      bgcolor: 'rgba(255, 176, 32, 0.12)',
-                      border: '1px solid rgba(255, 176, 32, 0.25)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                      mt: 1,
+                      px: 3,
+                      py: 1,
+                      borderRadius: 9999,
+                      boxShadow: '0 4px 16px rgba(37, 172, 232, 0.35)',
                     }}
                   >
-                    <FontAwesomeIcon icon={faFolderOpen} color="#FFB020" style={{ fontSize: 28 }} />
-                  </Box>
-                  <Typography variant="h5" sx={{ fontWeight: 600, color: 'ink' }}>
-                    {search ? 'No matches found' : trail.length > 0 ? 'This folder is empty' : 'Your drive is ready'}
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: 'inkSecondary', maxWidth: 420 }}>
-                    {search
-                      ? `No files or folders matched "${search}".`
-                      : 'Drop files and folders directly here or use the upload button above to get started.'}
-                  </Typography>
-                  {!search && (
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      startIcon={<FontAwesomeIcon icon={faUpload} size="sm" />}
-                      onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                      sx={{ mt: 1, px: 3, height: 40, borderRadius: '12px' }}
-                    >
-                      Upload files
-                    </Button>
-                  )}
-                </Paper>
-              </>
+                    Upload your first file
+                  </Button>
+                )}
+              </Paper>
             ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {/* Golden Folders Row (if any subfolders exist) */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {/* Folders Section */}
                 {folderEntries.length > 0 && (
                   <FolderCards
                     folders={folderEntries}
@@ -992,13 +970,16 @@ export default function DrivePage() {
                   />
                 )}
 
-                {/* Recent / All Files Section */}
+                {/* Files Section */}
                 <Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: 'ink', fontSize: 15 }}>
-                      Recent Files ({fileEntries.length > 0 ? fileEntries.length : entries.length})
+                  {folderEntries.length > 0 && (
+                    <Typography
+                      variant="overline"
+                      sx={{ color: 'text.disabled', fontSize: 11, letterSpacing: '0.06em', mb: 1, display: 'block' }}
+                    >
+                      Files ({fileEntries.length})
                     </Typography>
-                  </Box>
+                  )}
 
                   {!isDesktop ? (
                     <EntryCards
@@ -1034,7 +1015,7 @@ export default function DrivePage() {
             )}
           </Box>
 
-          {/* Right Hub: Details Inspector if open/selected, otherwise Storage Hub widget on wide desktop */}
+          {/* Right Inspector / Details Panel */}
           {isDesktop && detailsOpen && (
             <FileDetailsPanel
               open={detailsOpen}
@@ -1047,19 +1028,30 @@ export default function DrivePage() {
               onPlayTrack={playTrack}
             />
           )}
-
-          {isWide && !detailsOpen && (
-            <StorageHub
-              drive={drive}
-              totalFiles={fileEntries.length}
-              totalFolders={folderEntries.length}
-              onUploadClick={() => fileInputRef.current && fileInputRef.current.click()}
-            />
-          )}
         </Box>
+
+        {/* Hidden File / Folder Inputs */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          hidden
+          data-testid="file-input"
+          onChange={handleFilesSelected}
+        />
+        <input
+          ref={folderInputRef}
+          type="file"
+          multiple
+          webkitdirectory=""
+          directory=""
+          hidden
+          data-testid="folder-input"
+          onChange={handleFolderSelected}
+        />
       </Box>
 
-      {/* Floating Right-Click Context Menu */}
+      {/* Floating Context Menu */}
       <ContextMenu
         contextMenu={contextMenu}
         onClose={() => setContextMenu(null)}
@@ -1077,7 +1069,7 @@ export default function DrivePage() {
         onShowDetails={() => setDetailsOpen(true)}
       />
 
-      {/* QuickLook Carousel Previewer */}
+      {/* QuickLook Previewer Dialog */}
       <PreviewDialog
         entry={previewEntry}
         allEntries={entries}
@@ -1098,8 +1090,10 @@ export default function DrivePage() {
       <FolderDialog
         open={renameEntry !== null}
         title="Rename"
-        initialValue={renameEntry ? renameEntry.name : ''}
-        submitLabel="Save"
+        description="Enter a new name for this entry."
+        label="Name"
+        initialName={renameEntry ? renameEntry.name : ''}
+        confirmLabel="Rename"
         onClose={() => setRenameEntry(null)}
         onSubmit={handleRename}
       />
@@ -1108,19 +1102,19 @@ export default function DrivePage() {
       <MoveDialog
         open={moveEntry !== null}
         entry={moveEntry}
+        currentParentId={moveEntry ? moveEntry.parentId : currentParentId}
         onClose={() => setMoveEntry(null)}
-        onSubmit={handleMove}
+        onMove={handleMove}
       />
 
       {/* Copy Dialog */}
       <MoveDialog
         open={copyEntry !== null}
         entry={copyEntry}
-        title="Make a copy"
-        actionLabel="Copy here"
-        actionTestId="copy-here"
+        currentParentId={copyEntry ? copyEntry.parentId : currentParentId}
+        mode="copy"
         onClose={() => setCopyEntry(null)}
-        onSubmit={handleCopy}
+        onMove={handleCopy}
       />
 
       {/* Share Dialog */}
@@ -1138,13 +1132,13 @@ export default function DrivePage() {
         aria-labelledby="delete-dialog-title"
       >
         <DialogTitle id="delete-dialog-title">
-          Delete {deleteEntry && deleteEntry.name}?
+          Move {deleteEntry && deleteEntry.name} to Trash?
         </DialogTitle>
         <DialogContent>
-          <DialogContentText sx={{ color: 'inkSecondary' }}>
+          <DialogContentText sx={{ color: 'text.secondary' }}>
             {deleteEntry && deleteEntry.kind === 'folder'
-              ? 'This folder and all its contents will be moved to the trash.'
-              : 'This file will be moved to the trash.'}
+              ? 'This folder and all nested entries will be moved to trash.'
+              : 'This file will be moved to trash and can be restored later.'}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
@@ -1155,7 +1149,7 @@ export default function DrivePage() {
             data-testid="confirm-delete"
             onClick={handleDeleteConfirmed}
           >
-            Delete
+            Move to Trash
           </Button>
         </DialogActions>
       </Dialog>
@@ -1167,13 +1161,14 @@ export default function DrivePage() {
         onClose={() => setDeletedEntries([])}
         message={
           deletedEntries.length === 1
-            ? `Deleted "${deletedEntries[0].name}"`
-            : `Deleted ${deletedEntries.length} items`
+            ? `Moved "${deletedEntries[0].name}" to Trash`
+            : `Moved ${deletedEntries.length} items to Trash`
         }
         action={
           <Button
             color="primary"
             size="small"
+            data-testid="undo-delete"
             onClick={handleUndoDelete}
             sx={{ fontWeight: 600 }}
           >

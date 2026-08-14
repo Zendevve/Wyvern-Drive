@@ -65,7 +65,7 @@ export default function FolderDialog({
     >
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
-        <Typography variant="body2" color="inkMuted" sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
           {description}
         </Typography>
         {error && (
@@ -91,6 +91,7 @@ export default function FolderDialog({
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="contained"
+          color="primary"
           onClick={handleSubmit}
           disabled={busy}
           data-testid="folder-dialog-submit"

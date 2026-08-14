@@ -16,15 +16,16 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSortDown, faSortUp } from '@fortawesome/free-solid-svg-icons';
 import { isPreviewableMime } from '../api/client';
 import { formatBytes } from './QuotaMeter';
-import { entryIcon, fileTypeLabel } from './entryIcons';
+import { entryIcon } from './entryIcons';
 import EntryActions from './EntryActions';
 
 function formatDate(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleDateString(undefined, {
+  const d = new Date(value);
+  return d.toLocaleDateString(undefined, {
+    year: 'numeric',
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
   });
 }
 
@@ -46,14 +47,13 @@ function SortHeader({ label, field, sort, direction, onSort, align }) {
           ) : null
         }
         sx={{
-          color: active ? 'ink' : 'inkMuted',
+          color: active ? 'primary.main' : 'text.disabled',
           fontWeight: 600,
-          fontSize: 11.5,
+          fontSize: 12,
           p: 0,
           minWidth: 0,
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-          '&:hover': { color: 'ink', bgcolor: 'transparent' },
+          textTransform: 'none',
+          '&:hover': { color: 'text.primary', bgcolor: 'transparent' },
         }}
       >
         {label}
@@ -63,7 +63,7 @@ function SortHeader({ label, field, sort, direction, onSort, align }) {
 }
 
 /**
- * File Ledger / Table View (matching reference Cloudy UI file list).
+ * Cloud-Drive High Density File Ledger Table
  */
 export default function EntryTable({
   entries,
@@ -88,23 +88,24 @@ export default function EntryTable({
       sx={{
         overflow: 'hidden',
         bgcolor: 'surface1',
-        borderRadius: '16px',
-        borderColor: 'hairlineSoft',
+        borderRadius: 2,
+        borderColor: 'divider',
       }}
     >
       <Table aria-label="Files and folders" size="small" sx={{ '& .MuiTableCell-root': { py: 1.25 } }}>
         <TableHead>
           <TableRow
             sx={{
-              bgcolor: 'rgba(255, 255, 255, 0.02)',
+              bgcolor: 'sidebar',
               '& .MuiTableCell-head': {
-                color: 'inkMuted',
-                borderBottom: '1px solid hairlineSoft',
+                color: 'text.disabled',
+                borderBottom: '1px solid',
+                borderColor: 'divider',
                 py: 1,
               },
             }}
           >
-            <TableCell padding="checkbox" sx={{ pl: 2, width: 44 }}>
+            <TableCell padding="checkbox" sx={{ pl: 2, width: 40 }}>
               <Checkbox
                 size="small"
                 checked={allSelected}
@@ -117,7 +118,7 @@ export default function EntryTable({
                   )
                 }
                 inputProps={{ 'aria-label': 'Select all' }}
-                sx={{ p: 0.5 }}
+                sx={{ p: 0.25 }}
               />
             </TableCell>
             <SortHeader
@@ -142,8 +143,10 @@ export default function EntryTable({
               direction={direction}
               onSort={onSort}
             />
-            <TableCell align="right" sx={{ pr: 2, width: 140 }}>
-              Actions
+            <TableCell align="right" sx={{ pr: 2, width: 160 }}>
+              <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: 11, fontWeight: 600 }}>
+                Actions
+              </Typography>
             </TableCell>
           </TableRow>
         </TableHead>
@@ -167,7 +170,7 @@ export default function EntryTable({
 function EntryRow({ entry, actions, selected, onToggleSelect, onContextMenu }) {
   const isFolder = entry.kind === 'folder';
   const previewable = !isFolder && isPreviewableMime(entry.mimeType);
-  const { icon, color, bg } = entryIcon(entry);
+  const { icon, color } = entryIcon(entry);
 
   const stop = (fn) => (event) => {
     event.stopPropagation();
@@ -201,13 +204,13 @@ function EntryRow({ entry, actions, selected, onToggleSelect, onContextMenu }) {
       onContextMenu={handleContextMenu}
       sx={{
         cursor: 'pointer',
-        bgcolor: selected ? 'rgba(30, 134, 255, 0.10)' : 'transparent',
-        transition: 'background-color 100ms ease-out',
+        bgcolor: selected ? 'rgba(37, 172, 232, 0.12)' : 'transparent',
+        transition: 'background-color 80ms ease',
         '&:hover': {
-          bgcolor: selected ? 'rgba(30, 134, 255, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+          bgcolor: selected ? 'rgba(37, 172, 232, 0.18)' : 'surface2',
         },
         '&.Mui-selected': {
-          bgcolor: 'rgba(30, 134, 255, 0.10)',
+          bgcolor: 'rgba(37, 172, 232, 0.12)',
         },
         '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
       }}
@@ -219,25 +222,24 @@ function EntryRow({ entry, actions, selected, onToggleSelect, onContextMenu }) {
           onChange={stop(() => onToggleSelect && onToggleSelect(entry.id))}
           onClick={stop()}
           inputProps={{ 'aria-label': `Select ${entry.name}` }}
-          sx={{ p: 0.5 }}
+          sx={{ p: 0.25 }}
         />
       </TableCell>
       <TableCell>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          {/* Vivid Color Badge Icon */}
           <Box
             sx={{
-              width: 32,
-              height: 32,
-              borderRadius: '9px',
-              bgcolor: bg || 'rgba(255, 255, 255, 0.06)',
-              display: 'inline-flex',
+              width: 28,
+              height: 28,
+              borderRadius: '6px',
+              bgcolor: 'rgba(255, 255, 255, 0.04)',
+              display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
             }}
           >
-            <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" style={{ fontSize: 15 }} />
+            <FontAwesomeIcon icon={icon} color={color} style={{ fontSize: 14 }} />
           </Box>
 
           <Box sx={{ minWidth: 0 }}>
@@ -249,10 +251,10 @@ function EntryRow({ entry, actions, selected, onToggleSelect, onContextMenu }) {
                   textTransform: 'none',
                   fontWeight: 600,
                   fontSize: 13.5,
-                  color: 'ink',
+                  color: 'text.primary',
                   p: 0,
                   minWidth: 0,
-                  '&:hover': { color: 'accentBlue', bgcolor: 'transparent' },
+                  '&:hover': { color: 'primary.main', bgcolor: 'transparent' },
                 }}
               >
                 {entry.name}
@@ -261,17 +263,15 @@ function EntryRow({ entry, actions, selected, onToggleSelect, onContextMenu }) {
               <Typography
                 variant="body2"
                 noWrap
-                sx={{ fontWeight: 600, color: 'ink', fontSize: 13.5 }}
+                sx={{
+                  fontWeight: 500,
+                  color: 'text.primary',
+                  fontSize: 13.5,
+                }}
               >
                 {entry.name}
               </Typography>
             )}
-            <Typography
-              variant="caption"
-              sx={{ color: 'inkMuted', fontSize: 11.5, display: 'block' }}
-            >
-              {fileTypeLabel(entry)}
-            </Typography>
           </Box>
         </Box>
       </TableCell>
@@ -279,7 +279,7 @@ function EntryRow({ entry, actions, selected, onToggleSelect, onContextMenu }) {
         <Typography
           variant="body2"
           component="span"
-          sx={{ color: 'inkSecondary', fontFamily: 'monospace', fontSize: 12.5 }}
+          sx={{ color: 'text.secondary', fontSize: 13 }}
         >
           {isFolder ? '—' : formatBytes(entry.sizeBytes)}
         </Typography>
@@ -288,7 +288,7 @@ function EntryRow({ entry, actions, selected, onToggleSelect, onContextMenu }) {
         <Typography
           variant="body2"
           component="span"
-          sx={{ color: 'inkMuted', fontSize: 12.5 }}
+          sx={{ color: 'text.disabled', fontSize: 12.5 }}
         >
           {formatDate(entry.updatedAt)}
         </Typography>
@@ -300,7 +300,7 @@ function EntryRow({ entry, actions, selected, onToggleSelect, onContextMenu }) {
           pr: 2,
           whiteSpace: 'nowrap',
           opacity: 0,
-          transition: 'opacity 100ms ease-out',
+          transition: 'opacity 100ms ease',
         }}
       >
         <EntryActions

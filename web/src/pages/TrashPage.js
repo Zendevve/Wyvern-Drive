@@ -2,8 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -11,6 +9,13 @@ import {
   DialogContentText,
   DialogTitle,
   IconButton,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Typography,
 } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -25,18 +30,21 @@ import ScreenLoader from '../components/ScreenLoader';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthProvider';
 import { formatBytes } from '../components/QuotaMeter';
-import { entryIcon, fileTypeLabel } from '../components/entryIcons';
+import { entryIcon } from '../components/entryIcons';
 import DialogTransition from '../motion/DialogTransition';
 
-function formatDate(value) {
-  return new Date(value).toLocaleString();
+function formatDeletedDate(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  return `Deleted ${d.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })}`;
 }
 
 /**
- * Recycle bin: softly deleted entries, newest first (the server lazily
- * sweeps expired trash on every list). Restore puts an entry and its
- * subtree back; Delete forever hard-purges it; Empty trash purges the
- * root entries only, so children of a trashed folder go with their root.
+ * Cloud-Drive Trash Page
  */
 export default function TrashPage() {
   const { user, loading } = useAuth();
@@ -80,9 +88,7 @@ export default function TrashPage() {
   );
 
   const confirmPurge = useCallback(async () => {
-    if (!purgeEntry) {
-      return;
-    }
+    if (!purgeEntry) return;
     const entry = purgeEntry;
     setPurgeEntry(null);
     setBusy(true);
@@ -97,7 +103,6 @@ export default function TrashPage() {
     }
   }, [purgeEntry, loadTrash]);
 
-  // Children of trashed folders are listed but purged with their root.
   const rootEntries = useMemo(() => {
     const ids = new Set(entries.map((entry) => entry.id));
     return entries.filter(
@@ -120,32 +125,41 @@ export default function TrashPage() {
     }
   }, [rootEntries, loadTrash]);
 
-  if (loading) {
-    return <ScreenLoader />;
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+  if (loading) return <ScreenLoader />;
+  if (!user) return <Navigate to="/login" replace />;
 
   return (
     <AppShell title="Trash">
-      <Box data-testid="trash-page">
+      <Box data-testid="trash-page" sx={{ pb: 4 }}>
+        {/* Header Toolbar */}
         <Box
           sx={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'flex-end',
-            mb: 2,
+            justifyContent: 'space-between',
+            mb: 2.5,
+            pb: 1.5,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
           }}
         >
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 600, color: 'text.primary', fontSize: 18 }}>
+              Trash
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: 12 }}>
+              Items in trash are permanently deleted after 30 days
+            </Typography>
+          </Box>
           <Button
             variant="outlined"
             color="error"
-            startIcon={<FontAwesomeIcon icon={faTrashCan} />}
+            size="small"
+            startIcon={<FontAwesomeIcon icon={faTrashCan} size="xs" />}
             onClick={handleEmptyTrash}
             disabled={busy || entries.length === 0}
             data-testid="empty-trash"
+            sx={{ borderRadius: 2 }}
           >
             Empty trash
           </Button>
@@ -154,15 +168,11 @@ export default function TrashPage() {
         {notice && <ErrorNotice error={notice} />}
 
         {entriesLoading ? (
-          <Box
-            data-testid="trash-loading"
-            aria-label="Loading trash"
-            sx={{ display: 'flex', justifyContent: 'center', py: 6 }}
-          >
-            <CircularProgress />
+          <Box data-testid="trash-loading" sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+            <CircularProgress size={32} />
           </Box>
         ) : entries.length === 0 ? (
-          <Card
+          <Paper
             variant="outlined"
             elevation={0}
             data-testid="trash-empty"
@@ -170,133 +180,146 @@ export default function TrashPage() {
               maxWidth: 480,
               mx: 'auto',
               my: 6,
-              borderRadius: '24px',
+              p: 5,
               bgcolor: 'surface1',
-              borderColor: 'hairline',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 40px rgba(0,0,0,0.3)',
+              borderColor: 'divider',
+              borderRadius: 3,
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 2,
             }}
           >
-            <CardContent sx={{ p: 5, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <Box
-                sx={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: '50%',
-                  bgcolor: 'rgba(255,92,92,0.08)',
-                  border: '1px solid rgba(255,92,92,0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'danger',
-                  mb: 2,
-                }}
-              >
-                <FontAwesomeIcon icon={faTrashCan} size="lg" />
-              </Box>
-              <Typography variant="h6" sx={{ fontWeight: 600, color: 'ink', fontSize: 20, letterSpacing: '-0.4px' }}>
+            <Box
+              sx={{
+                width: 52,
+                height: 52,
+                borderRadius: '50%',
+                bgcolor: 'rgba(255, 255, 255, 0.04)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'text.disabled',
+              }}
+            >
+              <FontAwesomeIcon icon={faTrashCan} style={{ fontSize: 22 }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', fontSize: 16 }}>
                 Trash is empty
               </Typography>
-              <Typography
-                variant="body2"
-                sx={{ mt: 1, color: 'inkMuted', fontSize: 14, maxWidth: 320, lineHeight: 1.4 }}
-              >
-                Deleted files and folders appear here and can be restored anytime.
+              <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: 13, mt: 0.5 }}>
+                Items moved to trash will appear here before permanent deletion.
               </Typography>
-            </CardContent>
-          </Card>
+            </Box>
+          </Paper>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {entries.map((entry) => {
-              const isFolder = entry.kind === 'folder';
-              const { icon, color } = entryIcon(entry);
-              const meta = isFolder
-                ? `${fileTypeLabel(entry)} · deleted ${formatDate(entry.deletedAt)}`
-                : `${formatBytes(entry.sizeBytes)} · deleted ${formatDate(entry.deletedAt)}`;
-              return (
-                <Card
-                  key={entry.id}
-                  variant="outlined"
-                  elevation={0}
-                  sx={{ borderRadius: '15px', bgcolor: 'surface1' }}
-                >
-                  <CardContent
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.5,
-                      py: 1.5,
-                      '&:last-child': { pb: 1.5 },
-                    }}
-                  >
-                    <FontAwesomeIcon icon={icon} color={color} aria-hidden="true" />
-                    <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                      <Typography
-                        variant="body2"
-                        noWrap
-                        sx={{ fontWeight: 500, color: 'ink' }}
-                      >
-                        {entry.name}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        component="p"
-                        sx={{ color: 'inkMuted' }}
-                      >
-                        {meta}
-                      </Typography>
-                    </Box>
-                    <IconButton
-                      aria-label={`Restore ${entry.name}`}
-                      title="Restore"
-                      onClick={() => handleRestore(entry)}
-                      disabled={busy}
-                    >
-                      <FontAwesomeIcon icon={faRotateLeft} />
-                    </IconButton>
-                    <IconButton
-                      aria-label={`Delete forever ${entry.name}`}
-                      title="Delete forever"
-                      color="error"
-                      onClick={() => setPurgeEntry(entry)}
-                      disabled={busy}
-                      sx={{
-                        color: 'error.main',
-                        '&:hover': {
-                          color: '#FF7575',
-                          backgroundColor: 'rgba(255,92,92,0.08)',
-                        },
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faTrashCan} />
-                    </IconButton>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </Box>
+          <TableContainer
+            component={Paper}
+            variant="outlined"
+            sx={{ bgcolor: 'surface1', borderRadius: 2, borderColor: 'divider' }}
+          >
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: 'sidebar' }}>
+                  <TableCell sx={{ pl: 2 }}>Name</TableCell>
+                  <TableCell align="right">Size</TableCell>
+                  <TableCell>Date deleted</TableCell>
+                  <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {entries.map((entry) => {
+                  const isFolder = entry.kind === 'folder';
+                  const { icon, color } = entryIcon(entry);
+
+                  return (
+                    <TableRow key={entry.id} hover sx={{ '&:hover': { bgcolor: 'surface2' } }}>
+                      <TableCell sx={{ pl: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                          <Box
+                            sx={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: '6px',
+                              bgcolor: 'rgba(255, 255, 255, 0.04)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <FontAwesomeIcon icon={icon} color={color} style={{ fontSize: 13 }} />
+                          </Box>
+                          <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 500, fontSize: 13.5 }}>
+                            {entry.name}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: 13 }}>
+                          {isFolder ? '—' : formatBytes(entry.sizeBytes)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" sx={{ color: 'text.disabled', fontSize: 12.5 }}>
+                          {formatDeletedDate(entry.deletedAt)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>
+                        <Box sx={{ display: 'inline-flex', gap: 1 }}>
+                          <IconButton
+                            size="small"
+                            aria-label={`Restore ${entry.name}`}
+                            onClick={() => handleRestore(entry)}
+                            title="Restore"
+                            disabled={busy}
+                            sx={{ color: 'primary.main', '&:hover': { bgcolor: 'rgba(37, 172, 232, 0.15)' } }}
+                          >
+                            <FontAwesomeIcon icon={faRotateLeft} size="xs" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            aria-label={`Delete forever ${entry.name}`}
+                            onClick={() => setPurgeEntry(entry)}
+                            title="Delete forever"
+                            disabled={busy}
+                            sx={{ color: 'error.main', '&:hover': { bgcolor: 'rgba(248, 113, 113, 0.15)' } }}
+                          >
+                            <FontAwesomeIcon icon={faTrashCan} size="xs" />
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
       </Box>
 
+      {/* Purge Dialog */}
       <Dialog
         open={purgeEntry !== null}
-        onClose={() => setPurgeEntry(null)}
         TransitionComponent={DialogTransition}
+        onClose={() => setPurgeEntry(null)}
       >
-        <DialogTitle>Delete {purgeEntry ? purgeEntry.name : ''} forever?</DialogTitle>
+        <DialogTitle>Delete {purgeEntry && purgeEntry.name} forever?</DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            {purgeEntry && purgeEntry.kind === 'folder'
-              ? 'This folder and everything inside it will be permanently deleted from Discord storage. This cannot be undone.'
-              : 'This file will be permanently deleted from Discord storage. This cannot be undone.'}
+          <DialogContentText sx={{ color: 'text.secondary' }}>
+            This item will be deleted immediately and permanently. You can&apos;t undo this action.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPurgeEntry(null)}>Cancel</Button>
           <Button
-            color="error"
             variant="contained"
-            onClick={confirmPurge}
+            color="error"
             data-testid="confirm-purge"
+            onClick={confirmPurge}
+            disabled={busy}
           >
             Delete forever
           </Button>

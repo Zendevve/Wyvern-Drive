@@ -2,408 +2,304 @@ import React from 'react';
 import {
   Box,
   Button,
-  Divider,
   IconButton,
   Paper,
   Typography,
 } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faArrowRightArrowLeft,
-  faCircleCheck,
   faDownload,
   faEye,
-  faFolderOpen,
-  faHardDrive,
-  faLock,
-  faPen,
   faPlay,
   faShareNodes,
+  faShieldHalved,
   faTrash,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
-import { archiveUrl, downloadUrl, isPreviewableMime } from '../api/client';
+import {
+  archiveUrl,
+  downloadUrl,
+  isPreviewableMime,
+} from '../api/client';
 import { formatBytes } from './QuotaMeter';
 import { entryIcon, fileTypeLabel } from './entryIcons';
-import QuotaMeter from './QuotaMeter';
 
-function formatDate(value) {
+function formatTimestamp(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleString();
+  const d = new Date(value);
+  return d.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 /**
- * First-Party Cloud File Details & Inspector Panel (Finder / Google Drive grade).
+ * Cloud-Drive Metadata Inspector Panel
  */
 export default function FileDetailsPanel({
   open,
   onClose,
   selectedEntries = [],
   currentFolder,
-  drive,
   actions = {},
   onPreview,
   onPlayTrack,
 }) {
-  const isSingle = selectedEntries.length === 1;
+  if (!open) return null;
+
+  const single = selectedEntries.length === 1 ? selectedEntries[0] : null;
   const isMulti = selectedEntries.length > 1;
-  const entry = isSingle ? selectedEntries[0] : null;
+  const isFolder = single && single.kind === 'folder';
+  const isAudio =
+    single &&
+    !isFolder &&
+    ((single.mimeType && single.mimeType.startsWith('audio/')) ||
+      (single.name && single.name.toLowerCase().endsWith('.m4b')));
 
-  const isFolder = entry && entry.kind === 'folder';
-  const isAudio = entry && (entry.mimeType || '').startsWith('audio/');
-  const previewable = entry && !isFolder && isPreviewableMime(entry.mimeType);
+  const previewable = single && !isFolder && isPreviewableMime(single.mimeType);
 
-  const { icon, color } = entry ? entryIcon(entry) : { icon: faFolderOpen, color: '#0084FF' };
-
-  const chunkCount = entry && entry.sizeBytes
-    ? Math.max(1, Math.ceil(entry.sizeBytes / (8 * 1024 * 1024)))
-    : 0;
-
-  const totalSelectedSize = selectedEntries.reduce(
-    (acc, curr) => acc + (curr.sizeBytes || 0),
+  const totalSelectedBytes = selectedEntries.reduce(
+    (sum, e) => sum + (e.sizeBytes || 0),
     0
   );
 
-  if (!open) return null;
-
   return (
-    <Box
+    <Paper
+      elevation={0}
+      variant="outlined"
       data-testid="file-details-panel"
       sx={{
-        width: 300,
+        width: 320,
         flexShrink: 0,
+        borderRadius: 2.5,
         bgcolor: 'surface1',
-        borderLeft: '1px solid hairlineSoft',
-        p: 2,
+        borderColor: 'divider',
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
-        borderRadius: '12px',
+        height: 'fit-content',
+        maxHeight: 'calc(100vh - 120px)',
         overflowY: 'auto',
       }}
     >
-      {/* Header */}
+      {/* Panel Header */}
       <Box
         sx={{
+          px: 2.5,
+          py: 1.75,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          pb: 1.5,
-          borderBottom: '1px solid hairlineSoft',
         }}
       >
-        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'ink' }}>
-          {isSingle ? 'File Details' : isMulti ? 'Selection Info' : 'Drive Storage'}
+        <Typography variant="subtitle2" sx={{ color: 'text.primary', fontWeight: 600 }}>
+          Details
         </Typography>
         <IconButton
           size="small"
-          aria-label="Close details panel"
+          aria-label="Close inspector"
           onClick={onClose}
-          sx={{ color: 'inkMuted' }}
+          sx={{ width: 28, height: 28, borderRadius: 1 }}
         >
-          <FontAwesomeIcon icon={faXmark} size="sm" />
+          <FontAwesomeIcon icon={faXmark} size="xs" />
         </IconButton>
       </Box>
 
-      {/* Body */}
-      {isSingle && entry && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          {/* Preview Stage */}
-          <Paper
-            variant="outlined"
+      {/* Multi-Selection Mode */}
+      {isMulti && (
+        <Box sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box sx={{ p: 2, bgcolor: 'surface2', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+              {selectedEntries.length} items selected
+            </Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: 13, mt: 0.5 }}>
+              Total size: {formatBytes(totalSelectedBytes)}
+            </Typography>
+          </Box>
+
+          <Button
+            variant="contained"
+            color="error"
+            size="small"
+            startIcon={<FontAwesomeIcon icon={faTrash} size="xs" />}
+            onClick={() => actions.onDelete && actions.onDelete(selectedEntries)}
+            sx={{ borderRadius: 2 }}
+          >
+            Delete selected
+          </Button>
+        </Box>
+      )}
+
+      {/* Single Entry Mode */}
+      {single && (
+        <Box sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          {/* File Icon Stage */}
+          <Box
             sx={{
-              p: 2.5,
-              borderRadius: '10px',
-              bgcolor: 'rgba(255, 255, 255, 0.02)',
-              borderColor: 'hairlineSoft',
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 1.25,
+              height: 100,
+              bgcolor: 'surface2',
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: 'divider',
             }}
           >
-            <Box
-              sx={{
-                width: 52,
-                height: 52,
-                borderRadius: '10px',
-                bgcolor: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid hairlineSoft',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <FontAwesomeIcon icon={icon} color={color} style={{ fontSize: 26 }} />
-            </Box>
+            <FontAwesomeIcon
+              icon={entryIcon(single).icon}
+              color={entryIcon(single).color}
+              style={{ fontSize: 40 }}
+            />
+          </Box>
+
+          {/* Title & Type */}
+          <Box>
             <Typography
-              variant="body2"
+              variant="subtitle1"
               sx={{
                 fontWeight: 600,
-                color: 'ink',
-                textAlign: 'center',
+                color: 'text.primary',
+                fontSize: 14,
                 wordBreak: 'break-word',
-                fontSize: 13,
               }}
             >
-              {entry.name}
+              {single.name}
             </Typography>
-            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', justifyContent: 'center' }}>
-              <Typography
-                variant="caption"
-                sx={{
-                  bgcolor: 'rgba(0, 132, 255, 0.10)',
-                  color: 'accentBlue',
-                  px: 0.75,
-                  py: 0.2,
-                  borderRadius: '4px',
-                  fontWeight: 600,
-                  fontSize: 10.5,
-                }}
-              >
-                {fileTypeLabel(entry)}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{
-                  bgcolor: 'rgba(48, 209, 88, 0.10)',
-                  color: 'success.main',
-                  px: 0.75,
-                  py: 0.2,
-                  borderRadius: '4px',
-                  fontWeight: 600,
-                  fontSize: 10.5,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 0.5,
-                }}
-              >
-                <FontAwesomeIcon icon={faLock} size="xs" /> AES-256
-              </Typography>
-            </Box>
-          </Paper>
+            <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: 12 }}>
+              {fileTypeLabel(single)}
+            </Typography>
+          </Box>
 
           {/* Quick Actions */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {previewable && (
               <Button
                 variant="contained"
-                fullWidth
+                color="primary"
                 size="small"
                 startIcon={<FontAwesomeIcon icon={faEye} size="xs" />}
-                onClick={() => onPreview && onPreview(entry)}
-                sx={{ height: 34, fontSize: 13 }}
+                onClick={() => onPreview && onPreview(single)}
+                sx={{ borderRadius: 2 }}
               >
-                QuickLook
+                Preview
               </Button>
             )}
-            {isAudio && onPlayTrack && (
+
+            {isAudio && (
               <Button
                 variant="contained"
-                fullWidth
                 size="small"
                 startIcon={<FontAwesomeIcon icon={faPlay} size="xs" />}
-                onClick={() => onPlayTrack(entry)}
-                sx={{ height: 34, fontSize: 13 }}
+                onClick={() => onPlayTrack && onPlayTrack(single)}
+                sx={{
+                  borderRadius: 2,
+                  bgcolor: '#38BDF8',
+                  color: '#0C0E12',
+                  '&:hover': { bgcolor: '#7DD3FC' },
+                }}
               >
-                Play in Dock
+                Play Audio
               </Button>
             )}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.75 }}>
+
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FontAwesomeIcon icon={faDownload} size="xs" />}
+              onClick={() => {
+                if (isFolder) {
+                  window.location.href = archiveUrl(single.id);
+                } else {
+                  window.location.href = downloadUrl(single.id);
+                }
+              }}
+              sx={{ borderRadius: 2 }}
+            >
+              Download
+            </Button>
+
+            {!isFolder && (
               <Button
                 variant="outlined"
-                component="a"
                 size="small"
-                href={isFolder ? archiveUrl(entry.id) : downloadUrl(entry.id)}
-                startIcon={<FontAwesomeIcon icon={faDownload} size="xs" />}
-                sx={{ height: 32, fontSize: 12.5 }}
+                startIcon={<FontAwesomeIcon icon={faShareNodes} size="xs" />}
+                onClick={() => actions.onShare && actions.onShare(single)}
+                sx={{ borderRadius: 2 }}
               >
-                Download
+                Share
               </Button>
-              {!isFolder && actions.onShare && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<FontAwesomeIcon icon={faShareNodes} size="xs" />}
-                  onClick={() => actions.onShare(entry)}
-                  sx={{ height: 32, fontSize: 12.5 }}
-                >
-                  Share
-                </Button>
-              )}
-            </Box>
+            )}
           </Box>
 
-          <Divider sx={{ my: 0.5 }} />
-
-          {/* Properties */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-            <Typography variant="overline" sx={{ color: 'inkMuted', fontSize: 10.5 }}>
+          {/* Metadata Key-Value Table */}
+          <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <Typography variant="overline" sx={{ color: 'text.disabled', fontSize: 11, letterSpacing: '0.06em' }}>
               Properties
             </Typography>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="caption" color="inkMuted">Type</Typography>
-              <Typography variant="caption" sx={{ color: 'ink', fontWeight: 500 }}>
-                {entry.mimeType || (isFolder ? 'Folder' : 'File')}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Size
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 500 }}>
+                {isFolder ? '—' : formatBytes(single.sizeBytes)}
               </Typography>
             </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="caption" color="inkMuted">Size</Typography>
-              <Typography variant="caption" sx={{ color: 'ink', fontWeight: 600, fontFamily: 'monospace' }}>
-                {isFolder ? '—' : `${formatBytes(entry.sizeBytes)}`}
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Cipher
               </Typography>
-            </Box>
-
-            {!isFolder && (
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="caption" color="inkMuted">Discord Chunks</Typography>
-                <Typography variant="caption" sx={{ color: 'accentBlue', fontWeight: 600, fontFamily: 'monospace' }}>
-                  {chunkCount}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <FontAwesomeIcon icon={faShieldHalved} style={{ fontSize: 10, color: '#38BDF8' }} />
+                <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                  AES-256-GCM
                 </Typography>
               </Box>
-            )}
+            </Box>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="caption" color="inkMuted">Location</Typography>
-              <Typography variant="caption" sx={{ color: 'ink', fontWeight: 500, maxWidth: 150 }} noWrap>
-                {currentFolder ? currentFolder.name : 'Root'}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Storage
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.primary' }}>
+                Discord Webhook
               </Typography>
             </Box>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="caption" color="inkMuted">Modified</Typography>
-              <Typography variant="caption" sx={{ color: 'ink', fontWeight: 500 }}>
-                {formatDate(entry.updatedAt)}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                Modified
               </Typography>
-            </Box>
-          </Box>
-
-          <Divider sx={{ my: 0.5 }} />
-
-          {/* Actions */}
-          <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'space-between' }}>
-            {actions.onRename && (
-              <Button
-                size="small"
-                variant="text"
-                startIcon={<FontAwesomeIcon icon={faPen} size="xs" />}
-                onClick={() => actions.onRename(entry)}
-                sx={{ color: 'inkMuted', fontSize: 11.5, p: 0.5 }}
-              >
-                Rename
-              </Button>
-            )}
-            {actions.onMove && (
-              <Button
-                size="small"
-                variant="text"
-                startIcon={<FontAwesomeIcon icon={faArrowRightArrowLeft} size="xs" />}
-                onClick={() => actions.onMove(entry)}
-                sx={{ color: 'inkMuted', fontSize: 11.5, p: 0.5 }}
-              >
-                Move
-              </Button>
-            )}
-            {actions.onDelete && (
-              <Button
-                size="small"
-                variant="text"
-                color="error"
-                startIcon={<FontAwesomeIcon icon={faTrash} size="xs" />}
-                onClick={() => actions.onDelete(entry)}
-                sx={{ color: 'error.main', fontSize: 11.5, p: 0.5 }}
-              >
-                Delete
-              </Button>
-            )}
-          </Box>
-        </Box>
-      )}
-
-      {isMulti && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 2.5,
-              borderRadius: '10px',
-              bgcolor: 'rgba(255, 255, 255, 0.02)',
-              borderColor: 'hairlineSoft',
-              textAlign: 'center',
-            }}
-          >
-            <Typography variant="h6" sx={{ fontWeight: 600, color: 'ink', fontSize: 18 }}>
-              {selectedEntries.length} items
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'inkMuted', mt: 0.5, display: 'block', fontFamily: 'monospace' }}>
-              Total: {formatBytes(totalSelectedSize)}
-            </Typography>
-          </Paper>
-
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Typography variant="overline" sx={{ color: 'inkMuted', fontSize: 10.5 }}>
-              Selected items
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, maxHeight: 220, overflowY: 'auto' }}>
-              {selectedEntries.map((item) => (
-                <Box
-                  key={item.id}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    p: 0.75,
-                    bgcolor: 'rgba(255, 255, 255, 0.03)',
-                    borderRadius: '6px',
-                  }}
-                >
-                  <FontAwesomeIcon icon={entryIcon(item).icon} color={entryIcon(item).color} style={{ fontSize: 12 }} />
-                  <Typography variant="caption" noWrap sx={{ color: 'ink', flexGrow: 1 }}>
-                    {item.name}
-                  </Typography>
-                </Box>
-              ))}
+              <Typography variant="caption" sx={{ color: 'text.primary' }}>
+                {formatTimestamp(single.updatedAt)}
+              </Typography>
             </Box>
           </Box>
         </Box>
       )}
 
-      {!isSingle && !isMulti && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 2,
-              borderRadius: '10px',
-              bgcolor: 'rgba(255, 255, 255, 0.02)',
-              borderColor: 'hairlineSoft',
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <FontAwesomeIcon icon={faHardDrive} style={{ color: '#0084FF', fontSize: 13 }} />
-              <Typography variant="body2" sx={{ fontWeight: 600, color: 'ink', fontSize: 13 }}>
-                Cloud Drive
-              </Typography>
-            </Box>
-            <QuotaMeter drive={drive} />
-          </Paper>
-
-          <Box sx={{ p: 1.5, bgcolor: 'rgba(48, 209, 88, 0.05)', borderRadius: '8px', border: '1px solid rgba(48, 209, 88, 0.15)' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-              <FontAwesomeIcon icon={faCircleCheck} style={{ color: '#30D158', fontSize: 12 }} />
-              <Typography variant="caption" sx={{ fontWeight: 600, color: 'success.main', fontSize: 11.5 }}>
-                Discord AES-256 Encryption
-              </Typography>
-            </Box>
-            <Typography variant="caption" sx={{ color: 'inkMuted', display: 'block', mt: 0.5, fontSize: 10.5 }}>
-              Files are split, compressed, and encrypted at rest before Discord storage.
+      {/* No Selection (Folder Context) */}
+      {!single && !isMulti && (
+        <Box sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          <Box sx={{ p: 2, bgcolor: 'surface2', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="caption" sx={{ color: 'text.disabled', display: 'block' }}>
+              Current folder
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: 14, mt: 0.25 }}>
+              /{currentFolder ? currentFolder.name : 'root'}
             </Typography>
           </Box>
+          <Typography variant="caption" sx={{ color: 'text.disabled', lineHeight: 1.5 }}>
+            Select an item to view its details, encryption status, and quick actions.
+          </Typography>
         </Box>
       )}
-    </Box>
+    </Paper>
   );
 }

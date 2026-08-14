@@ -63,12 +63,14 @@ export default function UploadQueue({ jobs, onRetry, onRemove }) {
     >
       <Paper
         elevation={0}
+        variant="outlined"
         sx={{
-          borderRadius: '20px',
+          borderRadius: 0,
           overflow: 'hidden',
-          backgroundColor: 'surface2',
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.10), 0 10px 30px rgba(0,0,0,0.25)',
+          backgroundColor: 'surfaceElevated',
+          border: '1px solid',
+          borderColor: 'primary.main',
+          boxShadow: '0 12px 36px rgba(0,0,0,0.85)',
         }}
         style={{
           opacity: panelEnter,
@@ -83,7 +85,7 @@ export default function UploadQueue({ jobs, onRetry, onRemove }) {
         <Box
           sx={{
             px: 2,
-            py: 1.5,
+            py: 1,
             borderBottom: '1px solid',
             borderColor: 'divider',
             display: 'flex',
@@ -91,11 +93,11 @@ export default function UploadQueue({ jobs, onRetry, onRemove }) {
             justifyContent: 'space-between',
           }}
         >
-          <Typography variant="subtitle1" fontWeight={600}>
-            Uploads
+          <Typography variant="overline" sx={{ color: 'primary.main', fontSize: 10, letterSpacing: '0.08ch' }}>
+            [ TRANSFERS // QUEUE ]
           </Typography>
-          <Typography variant="caption" color="inkMuted">
-            {activeCount} active
+          <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: 10, fontFamily: "'DM Mono', monospace" }}>
+            {activeCount} ACTIVE
           </Typography>
         </Box>
         <List dense disablePadding>

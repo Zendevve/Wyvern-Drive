@@ -1,120 +1,153 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Box, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
-import { reducedMotion, useSpring } from '../motion/springs';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCloudArrowUp } from '@fortawesome/free-solid-svg-icons';
 
 /**
- * Walk a drop's DataTransfer and resolve it to { file, parentId } pairs.
+ * Scan a dropped DataTransferItemList for files and nested directories.
  */
-export function collectDroppedFiles(dataTransfer, createFolder, rootParentId) {
-  const items =
-    dataTransfer && dataTransfer.items ? Array.from(dataTransfer.items) : [];
+export async function collectDroppedFiles(dataTransfer, createFolder, rootParentId) {
+  const items = Array.from((dataTransfer && dataTransfer.items) || []);
+  const createdFolders = new Map();
+
+  async function ensureFolder(parentId, name) {
+    const key = `${parentId || 'root'}:${name}`;
+    if (createdFolders.has(key)) {
+      return createdFolders.get(key);
+    }
+    const folder = await createFolder(parentId, name);
+    createdFolders.set(key, folder.id);
+    return folder.id;
+  }
+
+  async function traverseEntry(itemEntry, parentId) {
+    if (itemEntry.isFile) {
+      return new Promise((resolve) => {
+        itemEntry.file((file) => {
+          resolve([{ file, parentId }]);
+        });
+      });
+    }
+    if (itemEntry.isDirectory) {
+      const folderId = await ensureFolder(parentId, itemEntry.name);
+      const reader = itemEntry.createReader();
+      const entries = await new Promise((resolve) => {
+        const results = [];
+        function readBatch() {
+          reader.readEntries((batch) => {
+            if (!batch.length) {
+              resolve(results);
+            } else {
+              results.push(...batch);
+            }
+          });
+        }
+        readBatch();
+      });
+
+      const nested = await Promise.all(
+        entries.map((child) => traverseEntry(child, folderId))
+      );
+      return nested.flat();
+    }
+    return [];
+  }
+
   const entries = items
-    .filter(
-      (item) => item.kind === 'file' && typeof item.webkitGetAsEntry === 'function'
-    )
-    .map((item) => item.webkitGetAsEntry())
+    .map((item) => {
+      if (item.webkitGetAsEntry) {
+        return item.webkitGetAsEntry();
+      }
+      if (item.getAsEntry) {
+        return item.getAsEntry();
+      }
+      return null;
+    })
     .filter(Boolean);
+
   if (entries.length > 0) {
-    return walkDroppedEntries(entries, rootParentId, createFolder);
+    const results = await Promise.all(
+      entries.map((entry) => traverseEntry(entry, rootParentId))
+    );
+    return results.flat();
   }
-  const files =
-    dataTransfer && dataTransfer.files ? Array.from(dataTransfer.files) : [];
-  return Promise.resolve(files.map((file) => ({ file, parentId: rootParentId })));
-}
 
-function readEntryBatch(reader) {
-  return new Promise((resolve, reject) => {
-    const all = [];
-    const readNext = () => {
-      reader.readEntries(
-        (batch) => {
-          if (!batch || batch.length === 0) {
-            resolve(all);
-            return;
-          }
-          all.push(...batch);
-          readNext();
-        },
-        reject
-      );
-    };
-    readNext();
-  });
-}
-
-async function walkDroppedEntries(entries, parentId, createFolder) {
-  const pairs = [];
-  for (const entry of entries) {
-    if (entry.isFile) {
-      const file = await new Promise((resolve, reject) =>
-        entry.file(resolve, reject)
-      );
-      pairs.push({ file, parentId });
-    } else if (entry.isDirectory) {
-      const folder = await createFolder(parentId, entry.name);
-      const children = await readEntryBatch(entry.createReader());
-      pairs.push(...(await walkDroppedEntries(children, folder.id, createFolder)));
-    }
-  }
-  return pairs;
+  const files = Array.from((dataTransfer && dataTransfer.files) || []);
+  return files.map((file) => ({ file, parentId: rootParentId }));
 }
 
 /**
- * Drag-and-Drop overlay for uploading files.
+ * Cloud-Drive Drop Target Overlay
  */
-export default function DropOverlay({ active = false, open = false, dropCount = 0 }) {
-  const isDragActive = Boolean(active || open);
-  const [confirmed, setConfirmed] = useState(false);
-  const [lastCount, setLastCount] = useState(0);
+export default function DropOverlay({
+  active = false,
+  open = false,
+  onDrop,
+  onDragLeave,
+  onDragOver,
+}) {
+  const isDragging = active || open;
 
-  useEffect(() => {
-    if (!dropCount || dropCount <= 0) {
-      return undefined;
-    }
-    setLastCount(dropCount);
-    setConfirmed(true);
-    const timer = setTimeout(() => setConfirmed(false), 1100);
-    return () => clearTimeout(timer);
-  }, [dropCount]);
-
-  const shown = isDragActive || confirmed;
-  const enter = useSpring(shown ? 1 : 0, { response: 0.3 });
-
-  if (!shown && enter < 0.02) {
-    return null;
-  }
+  if (!isDragging) return null;
 
   return (
     <Box
+      onDrop={onDrop}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
       data-testid="drop-overlay"
-      sx={(theme) => ({
+      sx={{
         position: 'absolute',
         inset: 0,
-        border: `2px dashed ${theme.palette.primary.main}`,
-        borderRadius: '16px',
-        bgcolor: alpha(theme.palette.primary.main, 0.08),
-        zIndex: 1100,
-        pointerEvents: 'none',
+        zIndex: 1300,
+        bgcolor: 'rgba(12, 14, 18, 0.88)',
+        border: '2px dashed',
+        borderColor: 'primary.main',
+        borderRadius: 3,
+        backdropFilter: 'blur(8px)',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        backdropFilter: 'blur(4px)',
-      })}
-      style={{
-        opacity: enter,
-        ...(reducedMotion()
-          ? {}
-          : {
-              transform: `scale(${0.985 + 0.015 * enter})`,
-              willChange: 'transform, opacity',
-            }),
+        gap: 2,
+        cursor: 'copy',
+        p: 4,
+        boxShadow: 'inset 0 0 40px rgba(37, 172, 232, 0.15)',
       }}
     >
-      <Typography fontWeight={600} sx={{ color: 'primary.main', fontSize: 16 }}>
-        {isDragActive
-          ? 'Drop files or folders to upload to this folder'
-          : `Added ${lastCount} file${lastCount === 1 ? '' : 's'} — uploading`}
+      <Box
+        sx={{
+          width: 64,
+          height: 64,
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: 'rgba(37, 172, 232, 0.15)',
+          border: '1px solid',
+          borderColor: 'primary.main',
+          color: 'primary.main',
+          boxShadow: '0 0 24px rgba(37, 172, 232, 0.35)',
+        }}
+      >
+        <FontAwesomeIcon icon={faCloudArrowUp} style={{ fontSize: 28 }} />
+      </Box>
+
+      <Typography
+        variant="h6"
+        sx={{
+          color: 'text.primary',
+          fontWeight: 600,
+          fontSize: 16,
+        }}
+      >
+        Drop files to upload
+      </Typography>
+      <Typography
+        variant="body2"
+        sx={{ color: 'text.secondary' }}
+      >
+        Files will be encrypted with AES-256 and uploaded to current directory
       </Typography>
     </Box>
   );

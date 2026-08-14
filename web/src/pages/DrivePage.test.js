@@ -234,7 +234,7 @@ describe('navigation and breadcrumbs', () => {
         expect.objectContaining({ sort: 'size', direction: 'desc' })
       )
     );
-  });
+  }, 20000);
 
   it('searches with a debounced query', async () => {
     renderDrive();

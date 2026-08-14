@@ -1,27 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 :root {
-  --color-canvas: #0A0B0D;
-  --color-sidebar: #0F1013;
-  --color-surface1: #15171C;
-  --color-surface2: #1D2027;
-  --color-surfaceElevated: #262A34;
-  --color-ink: #F5F6F8;
-  --color-inkSecondary: #9DA3AE;
-  --color-inkMuted: #686E7B;
-  --color-accentBlue: #0084FF;
-  --color-hairline: rgba(255, 255, 255, 0.08);
+  /* Dark Matter Theme CSS Variables */
+  --font: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --display-font: 'Mona Sans Variable', 'Inter Variable', sans-serif;
+  --code-font: 'DM Mono', monospace;
+  
+  --background-solid: #161921;
+  --background-solid-dark: #101218;
+  --background-solid-darker: #0c0e12;
+  --background-elevated: #1d222d;
+  --background-elevated-high: #242a38;
+  
+  --accent: 37, 172, 232;
+  --accent-hex: #25ace8;
+  --accent-alt: 29, 101, 134;
+  --accent-alt-hex: #1d6586;
+  
+  --border: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.04);
+  --border-hover: #25ace8;
+  --border-focus: rgba(37, 172, 232, 0.35);
+
+  --text-1: #f8fafc;
+  --text-2: #e2e8f0;
+  --text-3: #94a3b8;
+  --text-4: #64748b;
+  --text-5: #475569;
+
+  --green: #4ade80;
+  --yellow: #fbbf24;
+  --red: #f87171;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  background-color: var(--color-canvas);
-  color: var(--color-ink);
-  font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--background-solid-darker);
+  color: var(--text-1);
+  font-family: var(--font);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-/* Eliminate programmatic focus outlines on containers */
+/* Eliminate focus outlines on containers */
 main,
 main:focus,
 main:focus-visible,
@@ -34,14 +60,14 @@ section:focus {
   box-shadow: none !important;
 }
 
-/* Precision First-Party Scrollbars */
+/* Sleek Dark Matter Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--background-solid-darker);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -50,7 +76,7 @@ section:focus {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--accent-hex);
 }
 
 @media (prefers-reduced-motion: reduce) {

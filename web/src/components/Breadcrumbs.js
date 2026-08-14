@@ -2,31 +2,36 @@ import React from 'react';
 import {
   Box,
   Breadcrumbs as MuiBreadcrumbs,
-  Link,
+  Button,
   Typography,
 } from '@mui/material';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faChevronRight, faFolderOpen } from '@fortawesome/free-solid-svg-icons';
+import { faFolderOpen, faChevronRight } from '@fortawesome/free-solid-svg-icons';
 
-const crumbLinkSx = {
-  color: 'inkSecondary',
-  maxWidth: 220,
+const crumbBtnSx = {
+  color: 'text.secondary',
+  maxWidth: 240,
   display: 'inline-flex',
   alignItems: 'center',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
-  fontSize: 13.5,
+  fontSize: 14,
   fontWeight: 500,
-  borderRadius: '6px',
   px: 1,
   py: 0.5,
-  transition: 'all 120ms ease-out',
-  '&:hover': { color: 'ink', bgcolor: 'rgba(255,255,255,0.06)' },
+  borderRadius: 1,
+  minWidth: 0,
+  textTransform: 'none',
+  transition: 'all 120ms ease',
+  '&:hover': {
+    color: 'text.primary',
+    bgcolor: 'surface2',
+  },
 };
 
 /**
- * First-Party Cloud Breadcrumbs Path Bar.
+ * Cloud-Drive Interactive Breadcrumbs Path Bar
  */
 export default function Breadcrumbs({ trail, onNavigate }) {
   const parts = trail || [];
@@ -35,36 +40,30 @@ export default function Breadcrumbs({ trail, onNavigate }) {
       sx={{
         display: 'inline-flex',
         alignItems: 'center',
-        bgcolor: 'rgba(255, 255, 255, 0.03)',
-        border: '1px solid hairlineSoft',
-        borderRadius: '8px',
-        px: 1.5,
         py: 0.5,
-        mb: 2,
       }}
     >
       <MuiBreadcrumbs
         aria-label="breadcrumb"
-        separator={<FontAwesomeIcon icon={faChevronRight} style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }} />}
+        separator={
+          <FontAwesomeIcon
+            icon={faChevronRight}
+            style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.3)' }}
+          />
+        }
       >
-        <Box
-          component="span"
-          sx={{ display: 'inline-flex', alignItems: 'center' }}
+        <Button
+          size="small"
+          onClick={() => onNavigate(null)}
+          sx={crumbBtnSx}
         >
-          <Link
-            component="button"
-            underline="none"
-            sx={crumbLinkSx}
-            onClick={() => onNavigate(null)}
-          >
-            <FontAwesomeIcon
-              icon={faFolderOpen}
-              aria-hidden="true"
-              style={{ fontSize: 13, marginRight: 6, color: '#0084FF' }}
-            />
-            My Drive
-          </Link>
-        </Box>
+          <FontAwesomeIcon
+            icon={faFolderOpen}
+            aria-hidden="true"
+            style={{ fontSize: 13, marginRight: 8, color: '#FBBF24' }}
+          />
+          My drive
+        </Button>
         {parts.map((part, index) => {
           const isLast = index === parts.length - 1;
           if (isLast) {
@@ -73,25 +72,24 @@ export default function Breadcrumbs({ trail, onNavigate }) {
                 key={part.id}
                 color="text.primary"
                 fontWeight={600}
-                fontSize={13.5}
+                fontSize={14}
                 aria-current="page"
                 noWrap
-                sx={{ maxWidth: 260, px: 1, py: 0.5 }}
+                sx={{ maxWidth: 280, px: 1, py: 0.5 }}
               >
                 {part.name}
               </Typography>
             );
           }
           return (
-            <Link
-              component="button"
+            <Button
               key={part.id}
-              underline="none"
-              sx={crumbLinkSx}
+              size="small"
+              sx={crumbBtnSx}
               onClick={() => onNavigate(part.id)}
             >
               {part.name}
-            </Link>
+            </Button>
           );
         })}
       </MuiBreadcrumbs>

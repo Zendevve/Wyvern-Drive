@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Box,
+  Button,
   IconButton,
   Paper,
   Typography,
@@ -9,11 +10,11 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faEllipsisVertical,
   faFolder,
-  faPlus,
+  faFolderPlus,
 } from '@fortawesome/free-solid-svg-icons';
 
 /**
- * Pinned / Top Folder Tiles (matching Cloudy reference UI).
+ * Cloud-Drive Folders Quick-Access Section
  */
 export default function FolderCards({
   folders = [],
@@ -24,34 +25,38 @@ export default function FolderCards({
   if (!folders || folders.length === 0) return null;
 
   return (
-    <Box sx={{ mb: 3.5 }}>
+    <Box sx={{ mb: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-        <Typography variant="h6" sx={{ fontWeight: 600, color: 'ink', fontSize: 15, display: 'flex', alignItems: 'center', gap: 1 }}>
-          Folders
-          {onNewFolder && (
-            <IconButton
-              size="small"
-              onClick={onNewFolder}
-              title="Create new folder"
-              sx={{
-                width: 24,
-                height: 24,
-                bgcolor: 'rgba(30, 134, 255, 0.12)',
-                color: 'accentBlue',
-                '&:hover': { bgcolor: 'rgba(30, 134, 255, 0.24)' },
-              }}
-            >
-              <FontAwesomeIcon icon={faPlus} size="xs" />
-            </IconButton>
-          )}
+        <Typography
+          variant="overline"
+          sx={{ color: 'text.disabled', fontSize: 11, letterSpacing: '0.06em' }}
+        >
+          Folders ({folders.length})
         </Typography>
+        {onNewFolder && (
+          <Button
+            size="small"
+            onClick={onNewFolder}
+            startIcon={<FontAwesomeIcon icon={faFolderPlus} size="xs" />}
+            sx={{
+              fontSize: 12,
+              py: 0.25,
+              px: 1,
+              color: 'text.secondary',
+              textTransform: 'none',
+              '&:hover': { color: 'primary.main' },
+            }}
+          >
+            New folder
+          </Button>
+        )}
       </Box>
 
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-          gap: 2,
+          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+          gap: 1.5,
         }}
       >
         {folders.map((folder) => (
@@ -61,67 +66,52 @@ export default function FolderCards({
             onClick={() => onOpenFolder(folder)}
             onContextMenu={(e) => onContextMenu && onContextMenu(e, folder)}
             sx={{
-              p: 2,
-              borderRadius: '14px',
+              p: 1.5,
+              borderRadius: 2,
               bgcolor: 'surface1',
-              borderColor: 'hairlineSoft',
+              borderColor: 'divider',
               cursor: 'pointer',
               display: 'flex',
-              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               gap: 1.5,
-              position: 'relative',
-              transition: 'all 140ms ease-out',
+              transition: 'all 120ms ease',
               '&:hover': {
                 bgcolor: 'surface2',
-                borderColor: 'rgba(255, 176, 32, 0.35)',
-                transform: 'translateY(-2px)',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                borderColor: 'rgba(37, 172, 232, 0.4)',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                '& .folder-title': { color: 'primary.main' },
               },
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box
-                sx={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: '10px',
-                  bgcolor: 'rgba(255, 176, 32, 0.12)',
-                  border: '1px solid rgba(255, 176, 32, 0.25)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#FFB020',
-                }}
-              >
-                <FontAwesomeIcon icon={faFolder} style={{ fontSize: 18 }} />
-              </Box>
-              <IconButton
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onContextMenu) onContextMenu(e, folder);
-                }}
-                sx={{ color: 'inkMuted', p: 0.5 }}
-              >
-                <FontAwesomeIcon icon={faEllipsisVertical} size="xs" />
-              </IconButton>
-            </Box>
-
-            <Box sx={{ minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+              <FontAwesomeIcon icon={faFolder} style={{ fontSize: 18, color: '#FBBF24', flexShrink: 0 }} />
               <Typography
                 variant="body2"
                 noWrap
-                sx={{ fontWeight: 600, color: 'ink', fontSize: 13.5, mb: 0.25 }}
+                className="folder-title"
+                sx={{
+                  fontWeight: 600,
+                  color: 'text.primary',
+                  fontSize: 13,
+                  transition: 'color 100ms ease',
+                }}
               >
                 {folder.name}
               </Typography>
-              <Typography
-                variant="caption"
-                sx={{ color: 'inkMuted', fontSize: 11.5 }}
-              >
-                Directory
-              </Typography>
             </Box>
+
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onContextMenu) onContextMenu(e, folder);
+              }}
+              sx={{ color: 'text.disabled', p: 0.5, flexShrink: 0 }}
+            >
+              <FontAwesomeIcon icon={faEllipsisVertical} size="xs" />
+            </IconButton>
           </Paper>
         ))}
       </Box>

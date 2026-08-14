@@ -9,7 +9,7 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { isPreviewableMime } from '../api/client';
 import { formatBytes } from './QuotaMeter';
-import { entryIcon, fileTypeLabel } from './entryIcons';
+import { entryIcon } from './entryIcons';
 import EntryActions from './EntryActions';
 
 function formatDate(value) {
@@ -20,7 +20,7 @@ function formatDate(value) {
 }
 
 /**
- * File Grid / Tile View (matching Cloudy reference UI).
+ * Cloud-Drive Responsive File Grid
  */
 export default function EntryGrid({
   entries,
@@ -36,7 +36,6 @@ export default function EntryGrid({
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
         gap: 2,
-        p: 0.5,
       }}
     >
       {entries.map((entry) => (
@@ -56,14 +55,10 @@ export default function EntryGrid({
 function GridCard({ entry, actions, selected, onToggleSelect, onContextMenu }) {
   const isFolder = entry.kind === 'folder';
   const previewable = !isFolder && isPreviewableMime(entry.mimeType);
-  const { icon, color, bg } = entryIcon(entry);
+  const { icon, color } = entryIcon(entry);
   const meta = isFolder
-    ? fileTypeLabel(entry)
+    ? 'Folder'
     : `${formatBytes(entry.sizeBytes)} • ${formatDate(entry.updatedAt)}`;
-
-  const ext = !isFolder && entry.name && entry.name.includes('.')
-    ? entry.name.split('.').pop().toUpperCase()
-    : isFolder ? 'DIR' : 'FILE';
 
   const stop = (fn) => (event) => {
     event.stopPropagation();
@@ -97,74 +92,59 @@ function GridCard({ entry, actions, selected, onToggleSelect, onContextMenu }) {
       onContextMenu={handleContextMenu}
       sx={{
         position: 'relative',
-        borderRadius: '16px',
+        borderRadius: 2.5,
         p: 2,
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
-        bgcolor: selected ? 'rgba(30, 134, 255, 0.10)' : 'surface1',
-        borderColor: selected ? 'accentBlue' : 'hairlineSoft',
-        boxShadow: selected ? '0 0 0 1px #1E86FF, 0 8px 24px rgba(30, 134, 255, 0.15)' : 'none',
-        transition: 'all 140ms ease-out',
+        bgcolor: selected ? 'rgba(37, 172, 232, 0.12)' : 'surface1',
+        borderColor: selected ? 'primary.main' : 'divider',
+        transition: 'all 120ms ease',
         '&:hover': {
-          bgcolor: selected ? 'rgba(30, 134, 255, 0.15)' : 'surface2',
-          borderColor: selected ? 'accentBlue' : 'rgba(255,255,255,0.14)',
+          bgcolor: selected ? 'rgba(37, 172, 232, 0.18)' : 'surface2',
+          borderColor: selected ? 'primary.main' : 'rgba(37, 172, 232, 0.3)',
           transform: 'translateY(-2px)',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
         },
         '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
       }}
     >
-      {/* Top row: Checkbox and Extension pill */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+      {/* Top Header: Checkbox */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Checkbox
           size="small"
           checked={selected}
           onChange={stop(() => onToggleSelect && onToggleSelect(entry.id))}
           onClick={stop()}
           inputProps={{ 'aria-label': `Select ${entry.name}` }}
-          sx={{ p: 0.25 }}
+          sx={{ p: 0 }}
         />
-        <Typography
-          variant="caption"
-          sx={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: color,
-            bgcolor: bg || 'rgba(255,255,255,0.06)',
-            px: 0.75,
-            py: 0.25,
-            borderRadius: '5px',
-            fontFamily: 'monospace',
-          }}
-        >
-          {ext.length > 5 ? ext.slice(0, 5) : ext}
-        </Typography>
       </Box>
 
-      {/* Icon Stage */}
+      {/* Center Icon Thumbnail Stage */}
       <Box
         sx={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          height: 84,
-          bgcolor: bg || 'rgba(255, 255, 255, 0.02)',
-          border: '1px solid hairlineSoft',
-          borderRadius: '12px',
+          height: 80,
+          borderRadius: 2,
+          bgcolor: 'rgba(255, 255, 255, 0.03)',
+          border: '1px solid',
+          borderColor: 'divider',
           my: 1,
         }}
       >
         <FontAwesomeIcon
           icon={icon}
           color={color}
-          style={{ fontSize: 34 }}
+          style={{ fontSize: 32 }}
           aria-hidden="true"
         />
       </Box>
 
-      {/* File Label */}
-      <Box sx={{ flexGrow: 1, mt: 0.5 }}>
+      {/* Entry Name & Meta */}
+      <Box sx={{ flexGrow: 1, mt: 1 }}>
         {isFolder ? (
           <Button
             size="small"
@@ -173,7 +153,7 @@ function GridCard({ entry, actions, selected, onToggleSelect, onContextMenu }) {
               textTransform: 'none',
               fontWeight: 600,
               fontSize: 13,
-              color: 'ink',
+              color: 'text.primary',
               p: 0,
               minWidth: 0,
               width: '100%',
@@ -184,6 +164,7 @@ function GridCard({ entry, actions, selected, onToggleSelect, onContextMenu }) {
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
               lineHeight: 1.3,
+              '&:hover': { color: 'primary.main' },
             }}
           >
             {entry.name}
@@ -192,8 +173,8 @@ function GridCard({ entry, actions, selected, onToggleSelect, onContextMenu }) {
           <Typography
             variant="body2"
             sx={{
-              fontWeight: 600,
-              color: 'ink',
+              fontWeight: 500,
+              color: 'text.primary',
               fontSize: 13,
               lineHeight: 1.3,
               display: '-webkit-box',
@@ -209,25 +190,26 @@ function GridCard({ entry, actions, selected, onToggleSelect, onContextMenu }) {
           variant="caption"
           component="p"
           noWrap
-          sx={{ color: 'inkMuted', fontSize: 11.5, mt: 0.4 }}
+          sx={{ color: 'text.disabled', fontSize: 11.5, mt: 0.5 }}
         >
           {meta}
         </Typography>
       </Box>
 
-      {/* Row Actions */}
+      {/* Quick Hover Actions */}
       <Box
         className="row-actions"
         sx={{
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          gap: 0.25,
-          pt: 0.75,
+          gap: 0.5,
+          pt: 1,
           mt: 1,
-          borderTop: '1px solid hairlineSoft',
+          borderTop: '1px solid',
+          borderColor: 'divider',
           opacity: 0,
-          transition: 'opacity 100ms ease-out',
+          transition: 'opacity 100ms ease',
         }}
       >
         <EntryActions
