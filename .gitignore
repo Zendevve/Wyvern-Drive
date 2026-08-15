@@ -1,11 +1,17 @@
 # Dependencies
 node_modules/
+frontend/node_modules/
 .pnp
 .pnp.js
 
 # Build and production outputs
 build/
-dist/
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 out/
 .next/
 
