@@ -1,15 +1,6 @@
 <div align="center">
 
-```
- __          __                                _____       _           
- \ \        / /                               |  __ \     (_)          
-  \ \  /\  / /   _ __   _____ _ __ _ __       | |  | |_ __ ___   _____ 
-   \ \/  \/ / | | |\ \ / / _ \ '__| '_ \      | |  | | '__| \ \ / / _ \
-    \  /\  /| |_| | \ V /  __/ |  | | | |     | |__| | |  | |\ V /  __/
-     \/  \/  \__, |  \_/ \___|_|  |_| |_|     |_____/|_|  |_| \_/ \___|
-              __/ |                                                    
-             |___/                                                     
-```
+<img src="assets/banner.png" alt="Wyvern Drive — My Cloud Storage" width="750" style="border-radius: 12px; margin-bottom: 12px;" />
 
 ### Discord-Backed Personal Cloud Drive
 

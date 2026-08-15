@@ -81,8 +81,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
         {/* Step Indicator */}
         <div className="flex items-center justify-between pb-6 border-b border-obsidian-border/80">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-wyvern-600 to-accent-cyan flex items-center justify-center shadow-glow-blurple">
-              <Radio className="w-4 h-4 text-white" />
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-wyvern-600 to-accent-cyan flex items-center justify-center shadow-glow-blurple p-1">
+              <img src="/icon.png" alt="Wyvern Emblem" className="w-5 h-5 object-contain" />
             </div>
             <div>
               <h2 className="text-sm font-bold text-white tracking-wide">WYVERN DRIVE ONBOARDING</h2>

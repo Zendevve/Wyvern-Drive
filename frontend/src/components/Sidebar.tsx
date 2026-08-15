@@ -66,8 +66,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Brand Header */}
       <div className="p-4 border-b border-obsidian-border flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-wyvern-600 via-wyvern-500 to-accent-cyan flex items-center justify-center shadow-glow-blurple">
-            <Radio className="w-5 h-5 text-white animate-pulse-slow" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-wyvern-600 via-wyvern-500 to-accent-cyan flex items-center justify-center shadow-glow-blurple p-1">
+            <img src="/icon.png" alt="Wyvern Emblem" className="w-6 h-6 object-contain" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
