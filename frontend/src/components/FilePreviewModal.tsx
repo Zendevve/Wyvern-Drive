@@ -37,13 +37,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [activeTab, setActiveTab] = useState<'preview' | 'chunks'>('preview');
 
   useEffect(() => {
-    let active = true;
-    api.getStreamURL(file.id).then((url) => {
-      if (active) setStreamUrl(url);
-    });
-    return () => {
-      active = false;
-    };
+    const url = api.getStreamURL(file.id);
+    setStreamUrl(url);
   }, [file.id]);
 
   const isVideo = file.mime_type.startsWith('video/') || /\.(mp4|mkv|webm|mov)$/i.test(file.name);

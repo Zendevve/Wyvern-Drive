@@ -9,6 +9,7 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,23 +27,65 @@ type ProgressCallback func(transfer storage.Transfer)
 type Engine struct {
 	store         *storage.Store
 	discordClient *discord.Client
+	pool          *discord.WebhookPool
+	cache         *TieredChunkCache
 	callbacksMu   sync.RWMutex
 	callbacks     map[string]ProgressCallback
 	cancelsMu     sync.Mutex
 	cancels       map[string]context.CancelFunc
 }
 
-// NewEngine creates an operational storage engine.
+// NewEngine creates an operational storage engine with caching and webhook pooling.
 func NewEngine(store *storage.Store, discordClient *discord.Client) *Engine {
 	if discordClient == nil {
 		discordClient = discord.NewClient(nil)
 	}
-	return &Engine{
+
+	settings, _ := store.GetAppSettings()
+	fallbackURL := ""
+	var memMax, diskMax int64
+	var cacheDir string
+
+	if settings != nil {
+		fallbackURL = settings.WebhookURL
+		memMax = 256 * 1024 * 1024
+		diskMax = settings.MaxCacheSizeBytes
+		cacheDir = settings.CacheDirectory
+	}
+
+	cache := NewTieredChunkCache(cacheDir, memMax, diskMax)
+	pool := discord.NewWebhookPool(fallbackURL, nil)
+
+	eng := &Engine{
 		store:         store,
 		discordClient: discordClient,
+		pool:          pool,
+		cache:         cache,
 		callbacks:     make(map[string]ProgressCallback),
 		cancels:       make(map[string]context.CancelFunc),
 	}
+
+	eng.syncWebhookPool()
+	return eng
+}
+
+func (e *Engine) syncWebhookPool() {
+	settings, err := e.store.GetAppSettings()
+	if err == nil && settings != nil {
+		e.pool.SetFallbackURL(settings.WebhookURL)
+	}
+
+	shards, err := e.store.GetActiveWebhookShards()
+	if err == nil {
+		for _, s := range shards {
+			e.pool.AddShard(s.ID, s.Name, s.URL, s.ChannelID)
+		}
+	}
+}
+
+// ReloadPool refreshes the active webhook pool from storage.
+func (e *Engine) ReloadPool() {
+	e.syncWebhookPool()
 }
 
 // RegisterCallback registers a progress callback for a transfer ID.
@@ -100,7 +143,8 @@ type UploadOptions struct {
 	Encrypt        *bool
 }
 
-// UploadFile splits a local file into Discord-sized chunks, encrypts each, and uploads to the webhook.
+// UploadFile splits a local file into Discord-sized chunks, encrypts each, and uploads across the webhook pool.
+// Supports Content-Addressable Storage (CAS) deduplication to skip already uploaded chunks.
 func (e *Engine) UploadFile(ctx context.Context, localFilePath string, opts UploadOptions) (*storage.File, error) {
 	srcFile, err := os.Open(localFilePath)
 	if err != nil {
@@ -118,7 +162,9 @@ func (e *Engine) UploadFile(ctx context.Context, localFilePath string, opts Uplo
 		return nil, fmt.Errorf("failed to load settings: %w", err)
 	}
 
-	if settings.WebhookURL == "" {
+	e.syncWebhookPool()
+
+	if settings.WebhookURL == "" && e.pool.ShardCount() == 0 {
 		return nil, errors.New("Discord webhook is not configured. Please complete setup in Settings.")
 	}
 
@@ -234,6 +280,49 @@ func (e *Engine) UploadFile(ctx context.Context, localFilePath string, opts Uplo
 		}
 
 		rawChunk := buffer[:n]
+		chunkHash := crypto.CalculateSHA256(rawChunk)
+
+		// ------------------------------------------------
+		// 1. Content-Addressable Storage (CAS) Deduplication
+		// ------------------------------------------------
+		if settings.DeduplicationEnabled {
+			if existing, err := e.store.FindChunkByHash(chunkHash); err == nil && existing != nil {
+				// Re-use existing chunk metadata
+				chunkRecord := storage.Chunk{
+					ID:            uuid.New().String(),
+					FileID:        fileID,
+					ChunkIndex:    index,
+					MessageID:     existing.MessageID,
+					AttachmentID:  existing.AttachmentID,
+					AttachmentURL: existing.AttachmentURL,
+					ProxyURL:      existing.ProxyURL,
+					Size:          int64(n),
+					ChunkHash:     chunkHash,
+					Nonce:         existing.Nonce,
+					CreatedAt:     time.Now(),
+				}
+
+				if err := e.store.CreateChunk(&chunkRecord); err != nil {
+					return nil, fmt.Errorf("failed to record deduplicated chunk in database: %w", err)
+				}
+
+				_ = e.store.RecordDeduplication(int64(n))
+				if e.cache != nil {
+					e.cache.Put(chunkRecord.ID, rawChunk)
+				}
+
+				chunks = append(chunks, chunkRecord)
+				transfer.TransferredBytes += int64(n)
+				transfer.ChunksDone = index + 1
+				transfer.ProgressPercent = (float64(transfer.TransferredBytes) / float64(transfer.TotalBytes)) * 100.0
+				e.notifyProgress(transfer)
+				continue
+			}
+		}
+
+		// ------------------------------------------------
+		// 2. Encryption
+		// ------------------------------------------------
 		chunkToUpload := rawChunk
 		var nonceHex string
 
@@ -250,11 +339,37 @@ func (e *Engine) UploadFile(ctx context.Context, localFilePath string, opts Uplo
 			nonceHex = hex.EncodeToString(nonce)
 		}
 
-		chunkHash := crypto.CalculateSHA256(rawChunk)
+		// ------------------------------------------------
+		// 3. Multi-Webhook Pool Dispatch & Rate-Limit Backoff
+		// ------------------------------------------------
 		chunkFilename := fmt.Sprintf("chunk_%05d.wyv", index)
 		desc := fmt.Sprintf("Wyvern Chunk %d/%d (File: %s)", index+1, chunkCount, fileID)
 
-		att, msgID, upErr := e.discordClient.UploadAttachment(ctx, settings.WebhookURL, chunkFilename, chunkToUpload, desc)
+		var att *discord.Attachment
+		var msgID string
+		var upErr error
+
+		for attempt := 0; attempt < 3; attempt++ {
+			targetWebhookURL, _, shardID := e.pool.NextAvailableShard()
+			if targetWebhookURL == "" {
+				targetWebhookURL = settings.WebhookURL
+			}
+
+			att, msgID, upErr = e.discordClient.UploadAttachment(ctx, targetWebhookURL, chunkFilename, chunkToUpload, desc)
+			if upErr != nil {
+				if strings.Contains(upErr.Error(), "429") || strings.Contains(upErr.Error(), "rate limit") {
+					e.pool.MarkRateLimited(shardID, 5*time.Second)
+					continue
+				}
+				e.pool.MarkError(shardID)
+				time.Sleep(time.Duration(1<<attempt) * 500 * time.Millisecond)
+				continue
+			}
+
+			e.pool.MarkSuccess(shardID)
+			break
+		}
+
 		if upErr != nil {
 			transfer.Status = storage.TransferStatusFailed
 			transfer.ErrorMessage = upErr.Error()
@@ -279,6 +394,10 @@ func (e *Engine) UploadFile(ctx context.Context, localFilePath string, opts Uplo
 
 		if err := e.store.CreateChunk(&chunkRecord); err != nil {
 			return nil, fmt.Errorf("failed to record chunk in database: %w", err)
+		}
+
+		if e.cache != nil {
+			e.cache.Put(chunkRecord.ID, rawChunk)
 		}
 
 		chunks = append(chunks, chunkRecord)
@@ -308,7 +427,7 @@ func (e *Engine) UploadFile(ctx context.Context, localFilePath string, opts Uplo
 	return fileRecord, nil
 }
 
-// DownloadFile downloads, decrypts, and reassembles a file from Discord attachments.
+// DownloadFile downloads, decrypts, and reassembles a file from Discord attachments with automatic URL expiration refresh.
 func (e *Engine) DownloadFile(ctx context.Context, fileID string, destinationPath string) error {
 	file, err := e.store.GetFileWithChunks(fileID)
 	if err != nil {
@@ -377,28 +496,57 @@ func (e *Engine) DownloadFile(ctx context.Context, fileID string, destinationPat
 		default:
 		}
 
-		dlBytes, dlErr := e.discordClient.DownloadAttachment(ctx, chunk.AttachmentURL, -1, -1)
-		if dlErr != nil {
-			transfer.Status = storage.TransferStatusFailed
-			transfer.ErrorMessage = dlErr.Error()
-			e.notifyProgress(transfer)
-			return fmt.Errorf("failed downloading chunk %d: %w", chunk.ChunkIndex, dlErr)
+		var plainBytes []byte
+		var cached bool
+
+		// Check local cache
+		if e.cache != nil {
+			if data, ok := e.cache.Get(chunk.ID); ok {
+				plainBytes = data
+				cached = true
+			}
 		}
 
-		plainBytes := dlBytes
-		if file.IsEncrypted {
-			nonce, hexErr := hex.DecodeString(chunk.Nonce)
-			if hexErr != nil {
-				return fmt.Errorf("corrupt nonce on chunk %d: %w", chunk.ChunkIndex, hexErr)
+		if !cached {
+			dlBytes, dlErr := e.discordClient.DownloadAttachment(ctx, chunk.AttachmentURL, -1, -1)
+			if dlErr != nil {
+				// Attempt URL auto-refresh on 403 / 404 / signature expiration
+				if strings.Contains(dlErr.Error(), "403") || strings.Contains(dlErr.Error(), "404") || strings.Contains(dlErr.Error(), "expired") {
+					freshURL, refErr := e.discordClient.RefreshChunkURL(ctx, settings.WebhookURL, settings.BotToken, settings.ChannelID, chunk.MessageID)
+					if refErr == nil && freshURL != "" {
+						chunk.AttachmentURL = freshURL
+						_ = e.store.UpdateChunkURL(chunk.ID, freshURL)
+						dlBytes, dlErr = e.discordClient.DownloadAttachment(ctx, freshURL, -1, -1)
+					}
+				}
+
+				if dlErr != nil {
+					transfer.Status = storage.TransferStatusFailed
+					transfer.ErrorMessage = dlErr.Error()
+					e.notifyProgress(transfer)
+					return fmt.Errorf("failed downloading chunk %d: %w", chunk.ChunkIndex, dlErr)
+				}
 			}
-			decrypted, decErr := crypto.DecryptChunk(dlBytes, key, nonce)
-			if decErr != nil {
-				transfer.Status = storage.TransferStatusFailed
-				transfer.ErrorMessage = decErr.Error()
-				e.notifyProgress(transfer)
-				return fmt.Errorf("failed decrypting chunk %d: %w", chunk.ChunkIndex, decErr)
+
+			plainBytes = dlBytes
+			if file.IsEncrypted {
+				nonce, hexErr := hex.DecodeString(chunk.Nonce)
+				if hexErr != nil {
+					return fmt.Errorf("corrupt nonce on chunk %d: %w", chunk.ChunkIndex, hexErr)
+				}
+				decrypted, decErr := crypto.DecryptChunk(dlBytes, key, nonce)
+				if decErr != nil {
+					transfer.Status = storage.TransferStatusFailed
+					transfer.ErrorMessage = decErr.Error()
+					e.notifyProgress(transfer)
+					return fmt.Errorf("failed decrypting chunk %d: %w", chunk.ChunkIndex, decErr)
+				}
+				plainBytes = decrypted
 			}
-			plainBytes = decrypted
+
+			if e.cache != nil {
+				e.cache.Put(chunk.ID, plainBytes)
+			}
 		}
 
 		// Verify chunk SHA256 integrity
@@ -444,8 +592,7 @@ func (e *Engine) DownloadFile(ctx context.Context, fileID string, destinationPat
 	return nil
 }
 
-// ReadRange reads a specific byte slice range [start, end] directly from Discord chunks into memory.
-// Used for media streaming, video seeking, and partial content requests.
+// ReadRange reads a specific byte slice range [start, end] with lookahead prefetching and 2024 URL expiration auto-refresh.
 func (e *Engine) ReadRange(ctx context.Context, fileID string, startOffset, endOffset int64) ([]byte, error) {
 	file, err := e.store.GetFileWithChunks(fileID)
 	if err != nil {
@@ -476,26 +623,57 @@ func (e *Engine) ReadRange(ctx context.Context, fileID string, startOffset, endO
 	startChunkIdx := int(startOffset / chunkSize)
 	endChunkIdx := int(endOffset / chunkSize)
 
+	// Trigger asynchronous lookahead prefetch for subsequent chunks
+	if settings.PrefetchEnabled && e.cache != nil && endChunkIdx+1 < len(file.Chunks) {
+		go e.prefetchLookaheadChunks(context.Background(), file, key, endChunkIdx+1, endChunkIdx+2, settings)
+	}
+
 	result := make([]byte, 0, endOffset-startOffset+1)
 
 	for idx := startChunkIdx; idx <= endChunkIdx && idx < len(file.Chunks); idx++ {
 		chunk := file.Chunks[idx]
-		dlBytes, err := e.discordClient.DownloadAttachment(ctx, chunk.AttachmentURL, -1, -1)
-		if err != nil {
-			return nil, fmt.Errorf("failed fetching chunk %d for range: %w", idx, err)
+		var plainBytes []byte
+		var cached bool
+
+		if e.cache != nil {
+			if data, ok := e.cache.Get(chunk.ID); ok {
+				plainBytes = data
+				cached = true
+			}
 		}
 
-		plainBytes := dlBytes
-		if file.IsEncrypted {
-			nonce, hexErr := hex.DecodeString(chunk.Nonce)
-			if hexErr != nil {
-				return nil, hexErr
+		if !cached {
+			dlBytes, err := e.discordClient.DownloadAttachment(ctx, chunk.AttachmentURL, -1, -1)
+			if err != nil {
+				if strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "expired") {
+					freshURL, refErr := e.discordClient.RefreshChunkURL(ctx, settings.WebhookURL, settings.BotToken, settings.ChannelID, chunk.MessageID)
+					if refErr == nil && freshURL != "" {
+						chunk.AttachmentURL = freshURL
+						_ = e.store.UpdateChunkURL(chunk.ID, freshURL)
+						dlBytes, err = e.discordClient.DownloadAttachment(ctx, freshURL, -1, -1)
+					}
+				}
+				if err != nil {
+					return nil, fmt.Errorf("failed fetching chunk %d for range: %w", idx, err)
+				}
 			}
-			decrypted, decErr := crypto.DecryptChunk(dlBytes, key, nonce)
-			if decErr != nil {
-				return nil, decErr
+
+			plainBytes = dlBytes
+			if file.IsEncrypted {
+				nonce, hexErr := hex.DecodeString(chunk.Nonce)
+				if hexErr != nil {
+					return nil, hexErr
+				}
+				decrypted, decErr := crypto.DecryptChunk(dlBytes, key, nonce)
+				if decErr != nil {
+					return nil, decErr
+				}
+				plainBytes = decrypted
 			}
-			plainBytes = decrypted
+
+			if e.cache != nil {
+				e.cache.Put(chunk.ID, plainBytes)
+			}
 		}
 
 		chunkStartByte := int64(idx) * chunkSize
@@ -517,4 +695,37 @@ func (e *Engine) ReadRange(ctx context.Context, fileID string, startOffset, endO
 	}
 
 	return result, nil
+}
+
+func (e *Engine) prefetchLookaheadChunks(ctx context.Context, file *storage.File, key []byte, startIdx, endIdx int, settings *storage.AppSettings) {
+	for idx := startIdx; idx <= endIdx && idx < len(file.Chunks); idx++ {
+		chunk := file.Chunks[idx]
+		if _, ok := e.cache.Get(chunk.ID); ok {
+			continue
+		}
+
+		dlBytes, err := e.discordClient.DownloadAttachment(ctx, chunk.AttachmentURL, -1, -1)
+		if err != nil {
+			if strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "404") {
+				freshURL, refErr := e.discordClient.RefreshChunkURL(ctx, settings.WebhookURL, settings.BotToken, settings.ChannelID, chunk.MessageID)
+				if refErr == nil && freshURL != "" {
+					chunk.AttachmentURL = freshURL
+					_ = e.store.UpdateChunkURL(chunk.ID, freshURL)
+					dlBytes, err = e.discordClient.DownloadAttachment(ctx, freshURL, -1, -1)
+				}
+			}
+		}
+
+		if err == nil {
+			plainBytes := dlBytes
+			if file.IsEncrypted {
+				if nonce, hexErr := hex.DecodeString(chunk.Nonce); hexErr == nil {
+					if decrypted, decErr := crypto.DecryptChunk(dlBytes, key, nonce); decErr == nil {
+						plainBytes = decrypted
+					}
+				}
+			}
+			e.cache.Put(chunk.ID, plainBytes)
+		}
+	}
 }

@@ -65,6 +65,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete, 
       theme: 'dark',
       download_directory: '',
       setup_completed: true,
+      webdav_enabled: true,
+      webdav_port: 49153,
+      s3_enabled: false,
+      s3_port: 49154,
+      max_cache_size_bytes: 2 * 1024 * 1024 * 1024,
+      prefetch_enabled: true,
+      deduplication_enabled: true,
     };
 
     await api.saveSettings(newSettings);

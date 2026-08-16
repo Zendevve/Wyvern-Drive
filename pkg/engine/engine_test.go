@@ -105,12 +105,14 @@ func setupTestEnvironment(t *testing.T) (*Engine, *storage.Store, *httptest.Serv
 
 	// Configure app settings
 	settings := &storage.AppSettings{
-		WebhookURL:        server.URL,
-		MasterKey:         "test-super-secret-master-key-12345",
-		EncryptionEnabled: true,
-		ChunkSizeBytes:    64 * 1024, // 64 KB chunks for fast testing of multi-chunk files
-		MaxConcurrency:    2,
-		SetupCompleted:    true,
+		WebhookURL:           server.URL,
+		MasterKey:            "test-super-secret-master-key-12345",
+		EncryptionEnabled:    true,
+		ChunkSizeBytes:       64 * 1024, // 64 KB chunks for fast testing of multi-chunk files
+		MaxConcurrency:       2,
+		SetupCompleted:       true,
+		DeduplicationEnabled: true,
+		PrefetchEnabled:      true,
 	}
 	_ = store.SaveAppSettings(settings)
 
@@ -270,5 +272,83 @@ func TestChecksumVerificationFailure(t *testing.T) {
 	hash := crypto.CalculateSHA256(data)
 	if len(hash) != 64 {
 		t.Fatalf("expected 64 character SHA256 string")
+	}
+}
+
+func TestCASDeduplication(t *testing.T) {
+	eng, store, _, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	testData := []byte("identical payload to verify content addressable storage deduplication")
+	tmpSrc1, _ := os.CreateTemp("", "wyvern_cas1_*.txt")
+	defer os.Remove(tmpSrc1.Name())
+	_, _ = tmpSrc1.Write(testData)
+	tmpSrc1.Close()
+
+	tmpSrc2, _ := os.CreateTemp("", "wyvern_cas2_*.txt")
+	defer os.Remove(tmpSrc2.Name())
+	_, _ = tmpSrc2.Write(testData)
+	tmpSrc2.Close()
+
+	ctx := context.Background()
+	file1, err := eng.UploadFile(ctx, tmpSrc1.Name(), UploadOptions{})
+	if err != nil {
+		t.Fatalf("first upload failed: %v", err)
+	}
+
+	file2, err := eng.UploadFile(ctx, tmpSrc2.Name(), UploadOptions{})
+	if err != nil {
+		t.Fatalf("second upload failed: %v", err)
+	}
+
+	if file1.SHA256 != file2.SHA256 {
+		t.Fatalf("hashes should match for identical files")
+	}
+
+	stats, err := store.GetStats()
+	if err != nil || stats.DeduplicatedChunks < 1 || stats.DeduplicatedBytes < int64(len(testData)) {
+		t.Fatalf("expected recorded deduplication stats, got: %+v (err: %v)", stats, err)
+	}
+}
+
+func TestMultiWebhookSharding(t *testing.T) {
+	eng, store, server, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	// Add 3 active shards
+	_, _ = store.CreateWebhookShard("Shard 1", server.URL, "101", "901", 1)
+	_, _ = store.CreateWebhookShard("Shard 2", server.URL, "102", "902", 1)
+	_, _ = store.CreateWebhookShard("Shard 3", server.URL, "103", "903", 1)
+	eng.ReloadPool()
+
+	testData := make([]byte, 100*1024)
+	tmpSrc, _ := os.CreateTemp("", "wyvern_shard_*.bin")
+	defer os.Remove(tmpSrc.Name())
+	_, _ = tmpSrc.Write(testData)
+	tmpSrc.Close()
+
+	ctx := context.Background()
+	file, err := eng.UploadFile(ctx, tmpSrc.Name(), UploadOptions{
+		ChunkSizeBytes: 20 * 1024, // 5 chunks
+	})
+	if err != nil {
+		t.Fatalf("multi-webhook upload failed: %v", err)
+	}
+
+	if file.ChunkCount != 5 {
+		t.Fatalf("expected 5 chunks, got %d", file.ChunkCount)
+	}
+}
+
+func TestTieredCacheAndPrefetch(t *testing.T) {
+	cache := NewTieredChunkCache("", 1024*1024, 10*1024*1024)
+	chunkKey := "test-chunk-123"
+	data := []byte("cached chunk content")
+
+	cache.Put(chunkKey, data)
+
+	got, ok := cache.Get(chunkKey)
+	if !ok || string(got) != string(data) {
+		t.Fatalf("cache get mismatch: %s != %s (ok: %t)", string(got), string(data), ok)
 	}
 }

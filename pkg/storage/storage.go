@@ -123,14 +123,52 @@ func (s *Store) migrate() error {
 		updated_at DATETIME NOT NULL
 	);
 
+	CREATE TABLE IF NOT EXISTS webhook_shards (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		url TEXT NOT NULL,
+		channel_id TEXT,
+		guild_id TEXT,
+		is_active INTEGER NOT NULL DEFAULT 1,
+		priority INTEGER NOT NULL DEFAULT 1,
+		rate_limit_reset DATETIME,
+		error_count INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS sync_folders (
+		id TEXT PRIMARY KEY,
+		local_path TEXT NOT NULL UNIQUE,
+		remote_folder_id TEXT,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		last_sync_time DATETIME,
+		sync_status TEXT NOT NULL DEFAULT 'idle',
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		FOREIGN KEY (remote_folder_id) REFERENCES folders(id) ON DELETE SET NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS dedup_stats (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		saved_bytes INTEGER NOT NULL DEFAULT 0,
+		dedup_chunks INTEGER NOT NULL DEFAULT 0,
+		updated_at DATETIME NOT NULL
+	);
+
+	INSERT OR IGNORE INTO dedup_stats (id, saved_bytes, dedup_chunks, updated_at)
+	VALUES (1, 0, 0, CURRENT_TIMESTAMP);
+
 	CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id);
 	CREATE INDEX IF NOT EXISTS idx_files_status ON files(status);
 	CREATE INDEX IF NOT EXISTS idx_files_favorite ON files(favorite);
 	CREATE INDEX IF NOT EXISTS idx_files_name ON files(name);
 	CREATE INDEX IF NOT EXISTS idx_chunks_file_id ON chunks(file_id);
 	CREATE INDEX IF NOT EXISTS idx_chunks_index ON chunks(file_id, chunk_index);
+	CREATE INDEX IF NOT EXISTS idx_chunks_hash ON chunks(chunk_hash);
 	CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id);
 	CREATE INDEX IF NOT EXISTS idx_transfers_status ON transfers(status);
+	CREATE INDEX IF NOT EXISTS idx_shards_active ON webhook_shards(is_active);
 	`
 	_, err := s.db.Exec(schema)
 	return err
@@ -864,19 +902,28 @@ func (s *Store) SetSetting(key string, value string) error {
 // GetAppSettings retrieves the full typed settings.
 func (s *Store) GetAppSettings() (*AppSettings, error) {
 	settings := &AppSettings{
-		WebhookURL:        s.GetSetting("webhook_url", ""),
-		WebhookName:       s.GetSetting("webhook_name", "Wyvern Drive Vault"),
-		ChannelID:         s.GetSetting("channel_id", ""),
-		GuildID:           s.GetSetting("guild_id", ""),
-		MasterKey:         s.GetSetting("master_key", ""),
-		EncryptionEnabled: s.GetSetting("encryption_enabled", "true") == "true",
-		ChunkSizeBytes:    18 * 1024 * 1024, // 18MB default safe chunk size for Discord 20MB limit
-		MaxConcurrency:    4,
-		AutoLaunchServer:  true,
-		ServerPort:        49152,
-		Theme:             s.GetSetting("theme", "dark"),
-		DownloadDirectory: s.GetSetting("download_directory", ""),
-		SetupCompleted:    s.GetSetting("setup_completed", "false") == "true",
+		WebhookURL:           s.GetSetting("webhook_url", ""),
+		WebhookName:          s.GetSetting("webhook_name", "Wyvern Drive Vault"),
+		ChannelID:            s.GetSetting("channel_id", ""),
+		GuildID:              s.GetSetting("guild_id", ""),
+		BotToken:             s.GetSetting("bot_token", ""),
+		MasterKey:            s.GetSetting("master_key", ""),
+		EncryptionEnabled:    s.GetSetting("encryption_enabled", "true") == "true",
+		ChunkSizeBytes:       18 * 1024 * 1024, // 18MB default safe chunk size for Discord 20MB limit
+		MaxConcurrency:       4,
+		AutoLaunchServer:     true,
+		ServerPort:           49152,
+		Theme:                s.GetSetting("theme", "dark"),
+		DownloadDirectory:    s.GetSetting("download_directory", ""),
+		SetupCompleted:       s.GetSetting("setup_completed", "false") == "true",
+		WebDAVEnabled:        s.GetSetting("webdav_enabled", "true") == "true",
+		WebDAVPort:           49153,
+		S3Enabled:            s.GetSetting("s3_enabled", "false") == "true",
+		S3Port:               49154,
+		CacheDirectory:       s.GetSetting("cache_directory", ""),
+		MaxCacheSizeBytes:    2 * 1024 * 1024 * 1024, // 2GB default
+		PrefetchEnabled:      s.GetSetting("prefetch_enabled", "true") == "true",
+		DeduplicationEnabled: s.GetSetting("deduplication_enabled", "true") == "true",
 	}
 
 	if val := s.GetSetting("chunk_size_bytes", ""); val != "" {
@@ -900,6 +947,27 @@ func (s *Store) GetAppSettings() (*AppSettings, error) {
 		}
 	}
 
+	if val := s.GetSetting("webdav_port", ""); val != "" {
+		var wp int
+		if _, err := fmt.Sscanf(val, "%d", &wp); err == nil && wp > 0 {
+			settings.WebDAVPort = wp
+		}
+	}
+
+	if val := s.GetSetting("s3_port", ""); val != "" {
+		var s3p int
+		if _, err := fmt.Sscanf(val, "%d", &s3p); err == nil && s3p > 0 {
+			settings.S3Port = s3p
+		}
+	}
+
+	if val := s.GetSetting("max_cache_size_bytes", ""); val != "" {
+		var mcs int64
+		if _, err := fmt.Sscanf(val, "%d", &mcs); err == nil && mcs > 0 {
+			settings.MaxCacheSizeBytes = mcs
+		}
+	}
+
 	return settings, nil
 }
 
@@ -911,6 +979,7 @@ func (s *Store) SaveAppSettings(settings *AppSettings) error {
 	_ = s.SetSetting("webhook_name", settings.WebhookName)
 	_ = s.SetSetting("channel_id", settings.ChannelID)
 	_ = s.SetSetting("guild_id", settings.GuildID)
+	_ = s.SetSetting("bot_token", settings.BotToken)
 	_ = s.SetSetting("master_key", settings.MasterKey)
 	_ = s.SetSetting("encryption_enabled", fmt.Sprintf("%t", settings.EncryptionEnabled))
 	_ = s.SetSetting("chunk_size_bytes", fmt.Sprintf("%d", settings.ChunkSizeBytes))
@@ -920,6 +989,14 @@ func (s *Store) SaveAppSettings(settings *AppSettings) error {
 	_ = s.SetSetting("theme", settings.Theme)
 	_ = s.SetSetting("download_directory", settings.DownloadDirectory)
 	_ = s.SetSetting("setup_completed", fmt.Sprintf("%t", settings.SetupCompleted))
+	_ = s.SetSetting("webdav_enabled", fmt.Sprintf("%t", settings.WebDAVEnabled))
+	_ = s.SetSetting("webdav_port", fmt.Sprintf("%d", settings.WebDAVPort))
+	_ = s.SetSetting("s3_enabled", fmt.Sprintf("%t", settings.S3Enabled))
+	_ = s.SetSetting("s3_port", fmt.Sprintf("%d", settings.S3Port))
+	_ = s.SetSetting("cache_directory", settings.CacheDirectory)
+	_ = s.SetSetting("max_cache_size_bytes", fmt.Sprintf("%d", settings.MaxCacheSizeBytes))
+	_ = s.SetSetting("prefetch_enabled", fmt.Sprintf("%t", settings.PrefetchEnabled))
+	_ = s.SetSetting("deduplication_enabled", fmt.Sprintf("%t", settings.DeduplicationEnabled))
 	return nil
 }
 
@@ -939,6 +1016,9 @@ func (s *Store) GetStats() (*StorageStats, error) {
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM chunks").Scan(&stats.TotalChunks)
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM files WHERE is_encrypted = 1 AND status != 'trash'").Scan(&stats.EncryptedFiles)
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM transfers WHERE status = 'running'").Scan(&stats.ActiveTransfers)
+	_ = s.db.QueryRow("SELECT saved_bytes, dedup_chunks FROM dedup_stats WHERE id = 1").Scan(&stats.DeduplicatedBytes, &stats.DeduplicatedChunks)
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM webhook_shards WHERE is_active = 1").Scan(&stats.ActiveShards)
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM webhook_shards").Scan(&stats.TotalShards)
 
 	// Breakdown by media category
 	categories := map[string]string{
@@ -978,10 +1058,331 @@ func (s *Store) ExportManifest() (*ExportManifest, error) {
 		}
 	}
 
+	shards, _ := s.ListWebhookShards()
+
 	return &ExportManifest{
-		Version:    "1.0.0",
+		Version:    "1.1.0",
 		ExportedAt: time.Now(),
 		Folders:    folders,
 		Files:      files,
+		Shards:     shards,
 	}, nil
+}
+
+// ----------------------------------------------------
+// Webhook Shard Operations (Multi-Webhook Pooling)
+// ----------------------------------------------------
+
+// CreateWebhookShard adds a new webhook shard to the pool.
+func (s *Store) CreateWebhookShard(name, url, channelID, guildID string, priority int) (*WebhookShard, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	id := uuid.New().String()
+	now := time.Now()
+	if priority <= 0 {
+		priority = 1
+	}
+
+	query := `INSERT INTO webhook_shards (id, name, url, channel_id, guild_id, is_active, priority, error_count, created_at, updated_at)
+	          VALUES (?, ?, ?, ?, ?, 1, ?, 0, ?, ?)`
+	_, err := s.db.Exec(query, id, name, url, channelID, guildID, priority, now, now)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create webhook shard: %w", err)
+	}
+
+	return &WebhookShard{
+		ID:        id,
+		Name:      name,
+		URL:       url,
+		ChannelID: channelID,
+		GuildID:   guildID,
+		IsActive:  true,
+		Priority:  priority,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}, nil
+}
+
+// ListWebhookShards returns all webhook shards.
+func (s *Store) ListWebhookShards() ([]WebhookShard, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.Query("SELECT id, name, url, channel_id, guild_id, is_active, priority, rate_limit_reset, error_count, created_at, updated_at FROM webhook_shards ORDER BY priority DESC, created_at ASC")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list webhook shards: %w", err)
+	}
+	defer rows.Close()
+
+	var shards []WebhookShard
+	for rows.Next() {
+		var shard WebhookShard
+		var channelID, guildID sql.NullString
+		var reset sql.NullTime
+		var isActive int
+
+		err := rows.Scan(
+			&shard.ID, &shard.Name, &shard.URL, &channelID, &guildID,
+			&isActive, &shard.Priority, &reset, &shard.ErrorCount,
+			&shard.CreatedAt, &shard.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		shard.ChannelID = channelID.String
+		shard.GuildID = guildID.String
+		shard.IsActive = isActive == 1
+		if reset.Valid {
+			shard.RateLimitReset = reset.Time
+		}
+
+		shards = append(shards, shard)
+	}
+
+	return shards, nil
+}
+
+// GetWebhookShard gets a shard by ID.
+func (s *Store) GetWebhookShard(id string) (*WebhookShard, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var shard WebhookShard
+	var channelID, guildID sql.NullString
+	var reset sql.NullTime
+	var isActive int
+
+	err := s.db.QueryRow(
+		"SELECT id, name, url, channel_id, guild_id, is_active, priority, rate_limit_reset, error_count, created_at, updated_at FROM webhook_shards WHERE id = ?",
+		id,
+	).Scan(
+		&shard.ID, &shard.Name, &shard.URL, &channelID, &guildID,
+		&isActive, &shard.Priority, &reset, &shard.ErrorCount,
+		&shard.CreatedAt, &shard.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	shard.ChannelID = channelID.String
+	shard.GuildID = guildID.String
+	shard.IsActive = isActive == 1
+	if reset.Valid {
+		shard.RateLimitReset = reset.Time
+	}
+
+	return &shard, nil
+}
+
+// UpdateWebhookShard updates shard settings.
+func (s *Store) UpdateWebhookShard(shard WebhookShard) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	isActive := 0
+	if shard.IsActive {
+		isActive = 1
+	}
+
+	query := `UPDATE webhook_shards SET name = ?, url = ?, channel_id = ?, guild_id = ?, is_active = ?, priority = ?, updated_at = ? WHERE id = ?`
+	_, err := s.db.Exec(query, shard.Name, shard.URL, shard.ChannelID, shard.GuildID, isActive, shard.Priority, time.Now(), shard.ID)
+	return err
+}
+
+// DeleteWebhookShard deletes a shard from the pool.
+func (s *Store) DeleteWebhookShard(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec("DELETE FROM webhook_shards WHERE id = ?", id)
+	return err
+}
+
+// GetActiveWebhookShards returns all enabled shards.
+func (s *Store) GetActiveWebhookShards() ([]WebhookShard, error) {
+	all, err := s.ListWebhookShards()
+	if err != nil {
+		return nil, err
+	}
+
+	var active []WebhookShard
+	for _, shard := range all {
+		if shard.IsActive {
+			active = append(active, shard)
+		}
+	}
+	return active, nil
+}
+
+// UpdateShardRateLimit records a 429 rate limit reset or error.
+func (s *Store) UpdateShardRateLimit(id string, resetTime time.Time, errorIncrement bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var query string
+	if errorIncrement {
+		query = "UPDATE webhook_shards SET rate_limit_reset = ?, error_count = error_count + 1, updated_at = ? WHERE id = ?"
+	} else {
+		query = "UPDATE webhook_shards SET rate_limit_reset = ?, updated_at = ? WHERE id = ?"
+	}
+	_, err := s.db.Exec(query, resetTime, time.Now(), id)
+	return err
+}
+
+// ----------------------------------------------------
+// Deduplication & Content-Addressable Storage (CAS)
+// ----------------------------------------------------
+
+// FindChunkByHash searches for any previously uploaded chunk matching chunkHash.
+func (s *Store) FindChunkByHash(chunkHash string) (*Chunk, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if chunkHash == "" {
+		return nil, sql.ErrNoRows
+	}
+
+	var chunk Chunk
+	var proxyURL, nonce sql.NullString
+	query := `SELECT id, file_id, chunk_index, message_id, attachment_id, attachment_url, proxy_url, size, chunk_hash, nonce, created_at
+	          FROM chunks WHERE chunk_hash = ? AND attachment_url != '' LIMIT 1`
+	err := s.db.QueryRow(query, chunkHash).Scan(
+		&chunk.ID, &chunk.FileID, &chunk.ChunkIndex, &chunk.MessageID,
+		&chunk.AttachmentID, &chunk.AttachmentURL, &proxyURL, &chunk.Size,
+		&chunk.ChunkHash, &nonce, &chunk.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	chunk.ProxyURL = proxyURL.String
+	chunk.Nonce = nonce.String
+	return &chunk, nil
+}
+
+// RecordDeduplication increments the saved deduplication statistics.
+func (s *Store) RecordDeduplication(savedBytes int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec("UPDATE dedup_stats SET saved_bytes = saved_bytes + ?, dedup_chunks = dedup_chunks + 1, updated_at = ? WHERE id = 1", savedBytes, time.Now())
+	return err
+}
+
+// ----------------------------------------------------
+// URL Expiration & Signed Refresh
+// ----------------------------------------------------
+
+// UpdateChunkURL updates the live download URL for a specific chunk.
+func (s *Store) UpdateChunkURL(chunkID string, newURL string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec("UPDATE chunks SET attachment_url = ? WHERE id = ?", newURL, chunkID)
+	return err
+}
+
+// UpdateChunkURLsByMessageID updates all chunk URLs tied to a message ID with a refreshed URL.
+func (s *Store) UpdateChunkURLsByMessageID(messageID string, newURL string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec("UPDATE chunks SET attachment_url = ? WHERE message_id = ?", newURL, messageID)
+	return err
+}
+
+// ----------------------------------------------------
+// Sync Folder Operations
+// ----------------------------------------------------
+
+// CreateSyncFolder adds a local directory for automatic background synchronization.
+func (s *Store) CreateSyncFolder(localPath string, remoteFolderID *string) (*SyncFolder, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cleanPath := filepath.Clean(localPath)
+	id := uuid.New().String()
+	now := time.Now()
+
+	query := `INSERT INTO sync_folders (id, local_path, remote_folder_id, enabled, last_sync_time, sync_status, created_at, updated_at)
+	          VALUES (?, ?, ?, 1, ?, 'idle', ?, ?)`
+	_, err := s.db.Exec(query, id, cleanPath, remoteFolderID, now, now, now)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create sync folder: %w", err)
+	}
+
+	return &SyncFolder{
+		ID:             id,
+		LocalPath:      cleanPath,
+		RemoteFolderID: remoteFolderID,
+		Enabled:        true,
+		LastSyncTime:   now,
+		SyncStatus:     "idle",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}, nil
+}
+
+// ListSyncFolders returns all registered sync folders.
+func (s *Store) ListSyncFolders() ([]SyncFolder, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.Query("SELECT id, local_path, remote_folder_id, enabled, last_sync_time, sync_status, created_at, updated_at FROM sync_folders ORDER BY created_at ASC")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sync folders: %w", err)
+	}
+	defer rows.Close()
+
+	var folders []SyncFolder
+	for rows.Next() {
+		var f SyncFolder
+		var remoteID sql.NullString
+		var enabled int
+		var lastSync sql.NullTime
+
+		err := rows.Scan(&f.ID, &f.LocalPath, &remoteID, &enabled, &lastSync, &f.SyncStatus, &f.CreatedAt, &f.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+
+		if remoteID.Valid {
+			idStr := remoteID.String
+			f.RemoteFolderID = &idStr
+		}
+		f.Enabled = enabled == 1
+		if lastSync.Valid {
+			f.LastSyncTime = lastSync.Time
+		}
+
+		folders = append(folders, f)
+	}
+
+	return folders, nil
+}
+
+// UpdateSyncFolder updates sync folder settings.
+func (s *Store) UpdateSyncFolder(folder SyncFolder) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	enabled := 0
+	if folder.Enabled {
+		enabled = 1
+	}
+
+	query := `UPDATE sync_folders SET remote_folder_id = ?, enabled = ?, sync_status = ?, last_sync_time = ?, updated_at = ? WHERE id = ?`
+	_, err := s.db.Exec(query, folder.RemoteFolderID, enabled, folder.SyncStatus, folder.LastSyncTime, time.Now(), folder.ID)
+	return err
+}
+
+// DeleteSyncFolder removes a sync folder.
+func (s *Store) DeleteSyncFolder(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec("DELETE FROM sync_folders WHERE id = ?", id)
+	return err
 }

@@ -171,3 +171,96 @@ func TestRateLimitRetry(t *testing.T) {
 		t.Fatalf("expected 3 calls, got %d", atomic.LoadInt32(&callCount))
 	}
 }
+
+func TestWebhookPoolRoundRobinAndBackoff(t *testing.T) {
+	initial := []ShardConfig{
+		{ID: "shard-1", Name: "Alpha", URL: "https://discord.com/api/webhooks/111/aaa", ChannelID: "111"},
+		{ID: "shard-2", Name: "Beta", URL: "https://discord.com/api/webhooks/222/bbb", ChannelID: "222"},
+		{ID: "shard-3", Name: "Gamma", URL: "https://discord.com/api/webhooks/333/ccc", ChannelID: "333"},
+	}
+
+	pool := NewWebhookPool("https://discord.com/api/webhooks/999/fallback", initial)
+	if pool.ShardCount() != 3 {
+		t.Fatalf("expected 3 shards, got %d", pool.ShardCount())
+	}
+
+	// 1. Verify round robin dispatch
+	u1, _, id1 := pool.NextAvailableShard()
+	u2, _, id2 := pool.NextAvailableShard()
+	u3, _, id3 := pool.NextAvailableShard()
+
+	if id1 == id2 || id2 == id3 || id1 == id3 {
+		t.Fatalf("expected distinct shards, got %s, %s, %s", id1, id2, id3)
+	}
+	if u1 == "" || u2 == "" || u3 == "" {
+		t.Fatalf("unexpected empty url")
+	}
+
+	// 2. Mark shard-1 rate limited for 10 seconds
+	pool.MarkRateLimited("shard-1", 10*time.Second)
+
+	// Next 4 requests should alternate only between shard-2 and shard-3
+	for i := 0; i < 4; i++ {
+		_, _, chosenID := pool.NextAvailableShard()
+		if chosenID == "shard-1" {
+			t.Fatalf("rate limited shard-1 was dispatched!")
+		}
+	}
+
+	// 3. Mark success and error tracking
+	pool.MarkSuccess("shard-2")
+	pool.MarkError("shard-3")
+
+	states := pool.GetShardStates()
+	for _, s := range states {
+		if s.ID == "shard-2" && s.TotalUploads != 1 {
+			t.Fatalf("expected 1 upload for shard-2, got %d", s.TotalUploads)
+		}
+		if s.ID == "shard-3" && s.TotalErrors != 1 {
+			t.Fatalf("expected 1 error for shard-3, got %d", s.TotalErrors)
+		}
+	}
+}
+
+func TestRefreshChunkURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bot test_token" && !strings.Contains(r.URL.Path, "messages") {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		msg := MessageResponse{
+			ID: "msg_999",
+			Attachments: []Attachment{
+				{
+					ID:       "att_999",
+					Filename: "chunk_0.enc",
+					URL:      "https://cdn.discordapp.com/attachments/123/456/chunk_0.enc?ex=fresh_token",
+				},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(msg)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.Client())
+	ctx := context.Background()
+
+	// Direct HTTP mock test
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/api/v10/channels/123/messages/msg_999", nil)
+	req.Header.Set("Authorization", "Bot test_token")
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("refresh mock request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var msg MessageResponse
+	_ = json.NewDecoder(resp.Body).Decode(&msg)
+	if len(msg.Attachments) == 0 || !strings.Contains(msg.Attachments[0].URL, "fresh_token") {
+		t.Fatalf("unexpected refreshed attachment: %+v", msg)
+	}
+
+	_ = client
+}

@@ -70,11 +70,37 @@ export interface Transfer {
   updated_at: string;
 }
 
+export interface WebhookShard {
+  id: string;
+  name: string;
+  url: string;
+  channel_id?: string;
+  guild_id?: string;
+  is_active: boolean;
+  priority: number;
+  rate_limit_reset?: string;
+  error_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SyncFolder {
+  id: string;
+  local_path: string;
+  remote_folder_id?: string | null;
+  enabled: boolean;
+  last_sync_time?: string;
+  sync_status: 'idle' | 'syncing' | 'error';
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AppSettings {
   webhook_url: string;
   webhook_name?: string;
   channel_id?: string;
   guild_id?: string;
+  bot_token?: string;
   master_key: string;
   encryption_enabled: boolean;
   chunk_size_bytes: number;
@@ -84,6 +110,14 @@ export interface AppSettings {
   theme: string;
   download_directory: string;
   setup_completed: boolean;
+  webdav_enabled: boolean;
+  webdav_port: number;
+  s3_enabled: boolean;
+  s3_port: number;
+  cache_directory?: string;
+  max_cache_size_bytes: number;
+  prefetch_enabled: boolean;
+  deduplication_enabled: boolean;
 }
 
 export interface StorageStats {
@@ -96,6 +130,10 @@ export interface StorageStats {
   category_bytes: Record<string, number>;
   encrypted_files: number;
   active_transfers: number;
+  deduplicated_bytes: number;
+  deduplicated_chunks: number;
+  active_shards: number;
+  total_shards: number;
 }
 
 export interface WebhookInfo {
@@ -113,6 +151,26 @@ export interface FileListResult {
   total: number;
 }
 
+export interface ShareLinkResult {
+  file_id: string;
+  file_name: string;
+  share_url: string;
+  share_key: string;
+}
+
+export interface GatewayStatus {
+  webdav: {
+    running: boolean;
+    port: number;
+    url: string;
+  };
+  s3: {
+    running: boolean;
+    port: number;
+    url: string;
+  };
+}
+
 export type ViewCategory =
   | 'all'
   | 'favorites'
@@ -121,7 +179,10 @@ export type ViewCategory =
   | 'media_video'
   | 'media_audio'
   | 'documents'
-  | 'trash';
+  | 'trash'
+  | 'analytics'
+  | 'shards'
+  | 'sync';
 
 export type ViewMode = 'grid' | 'list';
 export type SortField = 'name' | 'size' | 'created_at' | 'updated_at';

@@ -118,3 +118,33 @@ func CalculateStreamSHA256(r io.Reader) (string, error) {
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
+
+// GenerateShareKey creates a URL-safe random key for zero-knowledge share links.
+func GenerateShareKey() (string, []byte, error) {
+	keyBytes := make([]byte, KeySize)
+	if _, err := io.ReadFull(rand.Reader, keyBytes); err != nil {
+		return "", nil, err
+	}
+	return hex.EncodeToString(keyBytes), keyBytes, nil
+}
+
+// EncryptSharePayload encrypts arbitrary metadata using the ephemeral share key.
+func EncryptSharePayload(plaintext []byte, key []byte) ([]byte, error) {
+	ciphertext, nonce, err := EncryptChunk(plaintext, key)
+	if err != nil {
+		return nil, err
+	}
+	// Prepend 12-byte nonce to ciphertext
+	combined := append(nonce, ciphertext...)
+	return combined, nil
+}
+
+// DecryptSharePayload decrypts payload using the ephemeral share key.
+func DecryptSharePayload(combined []byte, key []byte) ([]byte, error) {
+	if len(combined) < NonceSize {
+		return nil, errors.New("payload too short")
+	}
+	nonce := combined[:NonceSize]
+	ciphertext := combined[NonceSize:]
+	return DecryptChunk(ciphertext, key, nonce)
+}

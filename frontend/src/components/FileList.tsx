@@ -11,40 +11,45 @@ import {
   Download,
   Eye,
   Trash2,
-  Folder as FolderIcon,
-  Layers,
+  Share2,
   Info,
-  Edit2,
+  RotateCcw,
 } from 'lucide-react';
 import { FileItem, Folder } from '../types';
 import { formatBytes, formatDate } from '../services/api';
 
 interface FileListProps {
-  folders: Folder[];
+  folders?: Folder[];
   files: FileItem[];
   selectedFileIds: string[];
-  onToggleSelect: (id: string, e: React.MouseEvent) => void;
-  onOpenFolder: (folderId: string) => void;
-  onPreviewFile: (file: FileItem) => void;
+  onSelectFile: (id: string) => void;
+  onOpenFolder?: (folderId: string) => void;
+  onOpenFile: (file: FileItem) => void;
   onInspectFile: (file: FileItem) => void;
   onDownloadFile: (file: FileItem) => void;
-  onToggleFavorite: (file: FileItem, e: React.MouseEvent) => void;
-  onDeleteFile: (file: FileItem) => void;
+  onToggleFavorite: (file: FileItem) => void;
+  onDeleteFile: (file: FileItem, permanent?: boolean) => void;
+  onRestoreFile?: (file: FileItem) => void;
   onRenameFile: (file: FileItem) => void;
+  onShareFile: (file: FileItem) => void;
+  isTrash?: boolean;
 }
 
 export const FileList: React.FC<FileListProps> = ({
-  folders,
+  folders = [],
   files,
   selectedFileIds,
-  onToggleSelect,
+  onSelectFile,
   onOpenFolder,
-  onPreviewFile,
+  onOpenFile,
   onInspectFile,
   onDownloadFile,
   onToggleFavorite,
   onDeleteFile,
+  onRestoreFile,
   onRenameFile,
+  onShareFile,
+  isTrash = false,
 }) => {
   const getFileIcon = (file: FileItem) => {
     const mime = file.mime_type.toLowerCase();
@@ -81,155 +86,128 @@ export const FileList: React.FC<FileListProps> = ({
               <th className="py-3 px-4 w-28">Size</th>
               <th className="py-3 px-4 w-28">Chunks</th>
               <th className="py-3 px-4 w-28">Security</th>
-              <th className="py-3 px-4 w-32">Date Added</th>
-              <th className="py-3 px-4 w-32 text-right">Actions</th>
+              <th className="py-3 px-4 w-36">Modified</th>
+              <th className="py-3 px-4 w-40 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-obsidian-border/60 text-xs">
-            {/* Folders Rows */}
-            {folders.map((folder) => (
-              <tr
-                key={folder.id}
-                onDoubleClick={() => onOpenFolder(folder.id)}
-                className="hover:bg-obsidian-elevated/50 cursor-pointer transition-colors group"
-              >
-                <td className="py-2.5 px-4">
-                  <FolderIcon
-                    className="w-4 h-4"
-                    style={{ color: folder.color || '#5865F2' }}
-                  />
-                </td>
-                <td className="py-2.5 px-4 font-medium text-white group-hover:text-wyvern-400 transition-colors">
-                  {folder.name}
-                </td>
-                <td className="py-2.5 px-4 text-slate-500 font-mono">--</td>
-                <td className="py-2.5 px-4 text-slate-500 font-mono">
-                  {folder.file_count || 0} files
-                </td>
-                <td className="py-2.5 px-4 text-slate-500">Folder</td>
-                <td className="py-2.5 px-4 text-slate-500 font-mono">
-                  {formatDate(folder.created_at)}
-                </td>
-                <td className="py-2.5 px-4 text-right">
-                  <button
-                    onClick={() => onOpenFolder(folder.id)}
-                    className="text-xs text-wyvern-400 hover:text-wyvern-300 font-medium"
-                  >
-                    Open
-                  </button>
-                </td>
-              </tr>
-            ))}
-
-            {/* Files Rows */}
-            {files.map((file) => {
-              const { icon: Icon, color } = getFileIcon(file);
-              const isSelected = selectedFileIds.includes(file.id);
-
-              return (
-                <tr
-                  key={file.id}
-                  onClick={(e) => onToggleSelect(file.id, e)}
-                  onDoubleClick={() => onPreviewFile(file)}
-                  className={`hover:bg-obsidian-elevated/60 cursor-pointer transition-colors group select-none ${
-                    isSelected ? 'bg-wyvern-500/10' : ''
-                  }`}
-                >
-                  <td className="py-2.5 px-4" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={(e) => onToggleFavorite(file, e)}
-                      className={`p-1 rounded transition-colors ${
-                        file.favorite ? 'text-amber-400' : 'text-slate-600 hover:text-amber-400'
-                      }`}
-                    >
-                      <Star className="w-3.5 h-3.5" fill={file.favorite ? 'currentColor' : 'none'} />
-                    </button>
-                  </td>
-
-                  <td className="py-2.5 px-4">
-                    <div className="flex items-center gap-3">
-                      <Icon className={`w-4 h-4 ${color} flex-shrink-0`} />
-                      <span className="font-medium text-white truncate max-w-sm group-hover:text-wyvern-300 transition-colors">
-                        {file.name}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className="py-2.5 px-4 font-mono text-slate-300">
-                    {formatBytes(file.size)}
-                  </td>
-
-                  <td className="py-2.5 px-4">
-                    <span className="flex items-center gap-1 text-[11px] font-mono text-slate-400">
-                      <Layers className="w-3 h-3 text-wyvern-400" />
-                      <span>{file.chunk_count} {file.chunk_count === 1 ? 'chunk' : 'chunks'}</span>
-                    </span>
-                  </td>
-
-                  <td className="py-2.5 px-4">
-                    {file.is_encrypted ? (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-mono text-emerald-400">
-                        <Lock className="w-2.5 h-2.5" />
-                        <span>AES-256</span>
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-slate-500">Plain</span>
-                    )}
-                  </td>
-
-                  <td className="py-2.5 px-4 font-mono text-slate-400">
-                    {formatDate(file.created_at)}
-                  </td>
-
-                  <td className="py-2.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => onPreviewFile(file)}
-                        title="Stream & Preview"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-hover transition-colors"
-                      >
-                        <Eye className="w-3.5 h-3.5 text-accent-cyan" />
-                      </button>
-                      <button
-                        onClick={() => onDownloadFile(file)}
-                        title="Download"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-hover transition-colors"
-                      >
-                        <Download className="w-3.5 h-3.5 text-wyvern-400" />
-                      </button>
-                      <button
-                        onClick={() => onInspectFile(file)}
-                        title="Chunk Manifest"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-hover transition-colors"
-                      >
-                        <Info className="w-3.5 h-3.5 text-accent-teal" />
-                      </button>
-                      <button
-                        onClick={() => onRenameFile(file)}
-                        title="Rename"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-hover transition-colors"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => onDeleteFile(file)}
-                        title="Delete"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-obsidian-hover transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-
-            {files.length === 0 && folders.length === 0 && (
+          <tbody className="divide-y divide-obsidian-border/50 text-xs">
+            {files.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-12 text-center text-slate-500 italic">
-                  No files or folders in this directory.
+                <td colSpan={7} className="py-12 text-center text-slate-500">
+                  {isTrash ? 'Trash is empty.' : 'No files stored in this location.'}
                 </td>
               </tr>
+            ) : (
+              files.map((file) => {
+                const { icon: Icon, color } = getFileIcon(file);
+                const isSelected = selectedFileIds.includes(file.id);
+
+                return (
+                  <tr
+                    key={file.id}
+                    onClick={() => onSelectFile(file.id)}
+                    onDoubleClick={() => onOpenFile(file)}
+                    className={`hover:bg-obsidian-hover/60 transition-colors cursor-pointer select-none ${
+                      isSelected ? 'bg-wyvern-600/10' : ''
+                    }`}
+                  >
+                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
+                      {!isTrash && (
+                        <button
+                          onClick={() => onToggleFavorite(file)}
+                          className="text-slate-600 hover:text-amber-400 transition-colors"
+                        >
+                          <Star className="w-4 h-4" fill={file.favorite ? '#FBBF24' : 'none'} color={file.favorite ? '#FBBF24' : 'currentColor'} />
+                        </button>
+                      )}
+                    </td>
+
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <Icon className={`w-4 h-4 ${color} flex-shrink-0`} />
+                        <span className="font-medium text-slate-200 truncate max-w-sm">{file.name}</span>
+                      </div>
+                    </td>
+
+                    <td className="py-3 px-4 font-mono text-slate-400">{formatBytes(file.size)}</td>
+                    <td className="py-3 px-4 font-mono text-slate-400">{file.chunk_count}</td>
+
+                    <td className="py-3 px-4">
+                      {file.is_encrypted ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <Lock className="w-2.5 h-2.5" />
+                          AES-256
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-500 font-mono">Plain</span>
+                      )}
+                    </td>
+
+                    <td className="py-3 px-4 font-mono text-slate-400 text-[11px]">{formatDate(file.created_at)}</td>
+
+                    <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        {isTrash ? (
+                          <>
+                            <button
+                              onClick={() => onRestoreFile && onRestoreFile(file)}
+                              className="p-1.5 rounded-lg text-emerald-400 hover:bg-obsidian-elevated"
+                              title="Restore"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => onDeleteFile(file, true)}
+                              className="p-1.5 rounded-lg text-rose-400 hover:bg-obsidian-elevated"
+                              title="Delete Permanently"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => onOpenFile(file)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-elevated"
+                              title="Preview"
+                            >
+                              <Eye className="w-4 h-4 text-accent-cyan" />
+                            </button>
+                            <button
+                              onClick={() => onShareFile(file)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-elevated"
+                              title="Share"
+                            >
+                              <Share2 className="w-4 h-4 text-accent-cyan" />
+                            </button>
+                            <button
+                              onClick={() => onDownloadFile(file)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-elevated"
+                              title="Download"
+                            >
+                              <Download className="w-4 h-4 text-wyvern-400" />
+                            </button>
+                            <button
+                              onClick={() => onInspectFile(file)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-elevated"
+                              title="Inspect"
+                            >
+                              <Info className="w-4 h-4 text-accent-teal" />
+                            </button>
+                            <button
+                              onClick={() => onDeleteFile(file, false)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-obsidian-elevated"
+                              title="Trash"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

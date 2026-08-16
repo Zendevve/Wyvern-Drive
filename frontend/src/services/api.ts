@@ -3,9 +3,13 @@ import {
   FileItem,
   FileListResult,
   Folder,
+  GatewayStatus,
+  ShareLinkResult,
   StorageStats,
+  SyncFolder,
   Transfer,
   WebhookInfo,
+  WebhookShard,
 } from '../types';
 
 declare global {
@@ -21,7 +25,7 @@ declare global {
           CreateFolder(parentId: string | null | undefined, name: string, color: string, icon: string): Promise<Folder>;
           RenameFolder(id: string, newName: string): Promise<void>;
           DeleteFolder(id: string, recursive: boolean): Promise<void>;
-          ListFiles(folderId: string | null | undefined, filter: string, sortBy: string, sortOrder: string, limit: number, offset: number): Promise<FileListResult>;
+          ListFiles(folderId?: string | null, filter?: string, sortBy?: string, sortOrder?: string, limit?: number, offset?: number): Promise<FileListResult>;
           SearchFiles(query: string): Promise<FileItem[]>;
           GetFile(id: string): Promise<FileItem>;
           GetFileDetails(id: string): Promise<FileItem>;
@@ -42,8 +46,27 @@ declare global {
           SelectFile(): Promise<string>;
           SelectDirectory(): Promise<string>;
           GetPlatform(): Promise<string>;
+          // Shards & Sync
+          ListWebhookShards(): Promise<WebhookShard[]>;
+          CreateWebhookShard(name: string, url: string, channelId: string, guildId: string, priority: number): Promise<WebhookShard>;
+          UpdateWebhookShard(shard: WebhookShard): Promise<void>;
+          DeleteWebhookShard(id: string): Promise<void>;
+          ListSyncFolders(): Promise<SyncFolder[]>;
+          CreateSyncFolder(localPath: string, remoteFolderId?: string | null): Promise<SyncFolder>;
+          UpdateSyncFolder(folder: SyncFolder): Promise<void>;
+          DeleteSyncFolder(id: string): Promise<void>;
+          SyncFoldersNow(): Promise<void>;
+          GenerateShareLink(fileId: string): Promise<ShareLinkResult>;
+          GetGatewaysStatus(): Promise<GatewayStatus>;
         };
       };
+    };
+    runtime?: {
+      EventsOn(eventName: string, callback: (...args: any[]) => void): () => void;
+      EventsOff(eventName: string, ...additionalEvents: string[]): void;
+      EventsOnce(eventName: string, callback: (...args: any[]) => void): void;
+      LogInfo(message: string): void;
+      LogError(message: string): void;
     };
   }
 }
@@ -56,6 +79,7 @@ let mockSettings: AppSettings = {
   webhook_name: 'Wyvern Vault Discord Channel',
   channel_id: '9876543210',
   guild_id: '1122334455',
+  bot_token: '',
   master_key: 'wyvern-secure-passphrase-2025',
   encryption_enabled: true,
   chunk_size_bytes: 18 * 1024 * 1024,
@@ -65,19 +89,66 @@ let mockSettings: AppSettings = {
   theme: 'dark',
   download_directory: 'C:\\Users\\Downloads\\Wyvern',
   setup_completed: true,
+  webdav_enabled: true,
+  webdav_port: 49153,
+  s3_enabled: false,
+  s3_port: 49154,
+  max_cache_size_bytes: 2 * 1024 * 1024 * 1024,
+  prefetch_enabled: true,
+  deduplication_enabled: true,
 };
 
+let mockShards: WebhookShard[] = [
+  {
+    id: 'shard-alpha',
+    name: 'Primary Vault Channel',
+    url: 'https://discord.com/api/webhooks/123/token-alpha',
+    channel_id: '123456789',
+    guild_id: '99887766',
+    is_active: true,
+    priority: 1,
+    error_count: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'shard-beta',
+    name: 'Secondary Shard Channel',
+    url: 'https://discord.com/api/webhooks/456/token-beta',
+    channel_id: '987654321',
+    guild_id: '99887766',
+    is_active: true,
+    priority: 2,
+    error_count: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
+let mockSyncFolders: SyncFolder[] = [
+  {
+    id: 'sync-1',
+    local_path: 'C:\\Users\\User\\Documents\\VaultSync',
+    remote_folder_id: null,
+    enabled: true,
+    last_sync_time: new Date().toISOString(),
+    sync_status: 'idle',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
 let mockFolders: Folder[] = [
-  { id: 'f-1', parent_id: null, name: 'Documents', path: '/Documents', color: '#3b82f6', icon: 'folder', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), file_count: 3, total_size: 45000000 },
-  { id: 'f-2', parent_id: null, name: 'Media Projects', path: '/Media Projects', color: '#8b5cf6', icon: 'film', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), file_count: 5, total_size: 180000000 },
-  { id: 'f-3', parent_id: null, name: 'Backups', path: '/Backups', color: '#10b981', icon: 'archive', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), file_count: 2, total_size: 420000000 },
+  { id: '1', parent_id: null, name: 'Documents', path: '/Documents', color: '#3B82F6', icon: 'folder', created_at: '2025-01-10T10:00:00Z', updated_at: '2025-01-10T10:00:00Z', file_count: 4, total_size: 45000000 },
+  { id: '2', parent_id: null, name: 'Videos', path: '/Videos', color: '#EF4444', icon: 'film', created_at: '2025-01-11T12:00:00Z', updated_at: '2025-01-11T12:00:00Z', file_count: 2, total_size: 1500000000 },
+  { id: '3', parent_id: null, name: 'Pictures', path: '/Pictures', color: '#10B981', icon: 'image', created_at: '2025-01-12T14:00:00Z', updated_at: '2025-01-12T14:00:00Z', file_count: 12, total_size: 85000000 },
 ];
 
 let mockFiles: FileItem[] = [
   {
-    id: 'file-1',
-    folder_id: 'f-2',
-    name: 'cyberpunk_showreel_4k.mp4',
+    id: 'f1',
+    folder_id: '2',
+    name: 'Tears_of_Steel_4K.mp4',
     size: 94371840,
     formatted_size: '90.00 MB',
     mime_type: 'video/mp4',
@@ -87,18 +158,14 @@ let mockFiles: FileItem[] = [
     chunk_size: 18874368,
     favorite: true,
     status: 'completed',
-    tags: ['video', 'showreel', '4k'],
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-    updated_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-    chunks: [
-      { id: 'c-1', file_id: 'file-1', chunk_index: 0, message_id: '123450', attachment_id: 'att-1', attachment_url: 'https://cdn.discordapp.com/attachments/1.bin', size: 18874368, chunk_hash: 'h1', nonce: 'a1b2c3d4e5f60708', created_at: new Date().toISOString() },
-      { id: 'c-2', file_id: 'file-1', chunk_index: 1, message_id: '123451', attachment_id: 'att-2', attachment_url: 'https://cdn.discordapp.com/attachments/2.bin', size: 18874368, chunk_hash: 'h2', nonce: 'b1c2d3e4f5060708', created_at: new Date().toISOString() },
-    ]
+    tags: ['4k', 'blender', 'scifi'],
+    created_at: '2025-01-15T09:30:00Z',
+    updated_at: '2025-01-15T09:30:00Z',
   },
   {
-    id: 'file-2',
-    folder_id: 'f-1',
-    name: 'Financial_Report_Q4.pdf',
+    id: 'f2',
+    folder_id: '1',
+    name: 'Financial_Report_Q4_2024.pdf',
     size: 4194304,
     formatted_size: '4.00 MB',
     mime_type: 'application/pdf',
@@ -108,14 +175,14 @@ let mockFiles: FileItem[] = [
     chunk_size: 18874368,
     favorite: false,
     status: 'completed',
-    tags: ['finance', 'pdf'],
-    created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-    updated_at: new Date(Date.now() - 3600000 * 24).toISOString(),
+    tags: ['work', 'finance', '2024'],
+    created_at: '2025-01-14T15:20:00Z',
+    updated_at: '2025-01-14T15:20:00Z',
   },
   {
-    id: 'file-3',
-    folder_id: null,
-    name: 'dragon_wallpaper_dark.png',
+    id: 'f3',
+    folder_id: '3',
+    name: 'Mountain_Sunrise_Wallpaper.png',
     size: 8388608,
     formatted_size: '8.00 MB',
     mime_type: 'image/png',
@@ -125,48 +192,13 @@ let mockFiles: FileItem[] = [
     chunk_size: 18874368,
     favorite: true,
     status: 'completed',
-    tags: ['wallpaper', 'art'],
-    created_at: new Date(Date.now() - 3600000 * 48).toISOString(),
-    updated_at: new Date(Date.now() - 3600000 * 48).toISOString(),
-  },
-  {
-    id: 'file-4',
-    folder_id: 'f-3',
-    name: 'database_dump_2025_03.tar.gz',
-    size: 262144000,
-    formatted_size: '250.00 MB',
-    mime_type: 'application/gzip',
-    sha256: 'ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d',
-    is_encrypted: true,
-    chunk_count: 14,
-    chunk_size: 18874368,
-    favorite: false,
-    status: 'completed',
-    tags: ['backup', 'database'],
-    created_at: new Date(Date.now() - 3600000 * 72).toISOString(),
-    updated_at: new Date(Date.now() - 3600000 * 72).toISOString(),
+    tags: ['wallpaper', 'nature', '4k'],
+    created_at: '2025-01-13T18:45:00Z',
+    updated_at: '2025-01-13T18:45:00Z',
   },
 ];
 
-let mockTransfers: Transfer[] = [
-  {
-    id: 'tr-1',
-    file_id: 'file-1',
-    filename: 'cyberpunk_showreel_4k.mp4',
-    type: 'upload',
-    status: 'completed',
-    total_bytes: 94371840,
-    transferred_bytes: 94371840,
-    progress_percent: 100,
-    speed_bps: 12500000,
-    speed_formatted: '12.5 MB/s',
-    eta_seconds: 0,
-    chunks_total: 5,
-    chunks_done: 5,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }
-];
+let mockTransfers: Transfer[] = [];
 
 export const api = {
   async validateWebhook(url: string): Promise<WebhookInfo> {
@@ -174,9 +206,6 @@ export const api = {
       return window.go!.main!.App!.ValidateWebhook(url);
     }
     await new Promise((r) => setTimeout(r, 600));
-    if (!url.includes('discord.com/api/webhooks') && !url.includes('discordapp.com/api/webhooks')) {
-      throw new Error('Invalid Discord webhook URL format');
-    }
     return {
       id: '123456789012345678',
       name: 'Wyvern Storage Vault',
@@ -217,17 +246,21 @@ export const api = {
         videos: 1,
         audio: 0,
         documents: 1,
-        archives: 1,
+        archives: 0,
       },
       category_bytes: {
         images: 8388608,
         videos: 94371840,
         audio: 0,
         documents: 4194304,
-        archives: 262144000,
+        archives: 0,
       },
       encrypted_files: mockFiles.filter((f) => f.is_encrypted).length,
       active_transfers: mockTransfers.filter((t) => t.status === 'running').length,
+      deduplicated_bytes: 41943040,
+      deduplicated_chunks: 3,
+      active_shards: mockShards.filter((s) => s.is_active).length,
+      total_shards: mockShards.length,
     };
   },
 
@@ -265,7 +298,7 @@ export const api = {
     if (isWails) {
       return window.go!.main!.App!.RenameFolder(id, newName);
     }
-    const f = mockFolders.find((item) => item.id === id);
+    const f = mockFolders.find((folder) => folder.id === id);
     if (f) f.name = newName;
   },
 
@@ -276,41 +309,35 @@ export const api = {
     mockFolders = mockFolders.filter((f) => f.id !== id);
   },
 
-  async listFiles(folderId: string | null | undefined, filter: string = 'all', sortBy: string = 'created_at', sortOrder: string = 'desc', limit: number = 100, offset: number = 0): Promise<FileListResult> {
+  async listFiles(folderId?: string | null, filter: string = 'all', sortBy: string = 'name', sortOrder: string = 'asc', limit: number = 100, offset: number = 0): Promise<FileListResult> {
     if (isWails) {
       return window.go!.main!.App!.ListFiles(folderId, filter, sortBy, sortOrder, limit, offset);
     }
 
-    let filtered = [...mockFiles];
-    if (filter === 'favorites') {
-      filtered = filtered.filter((f) => f.favorite && f.status !== 'trash');
-    } else if (filter === 'trash') {
-      filtered = filtered.filter((f) => f.status === 'trash');
-    } else if (filter === 'media_image') {
-      filtered = filtered.filter((f) => f.mime_type.startsWith('image/'));
-    } else if (filter === 'media_video') {
-      filtered = filtered.filter((f) => f.mime_type.startsWith('video/'));
-    } else if (filter === 'media_audio') {
-      filtered = filtered.filter((f) => f.mime_type.startsWith('audio/'));
-    } else if (filter === 'documents') {
-      filtered = filtered.filter((f) => f.mime_type.includes('pdf') || f.mime_type.includes('text') || f.mime_type.includes('doc'));
-    } else if (filter === 'all' && folderId !== undefined) {
-      filtered = filtered.filter((f) => f.folder_id === (folderId || null) && f.status !== 'trash');
+    let files = [...mockFiles];
+
+    if (filter === 'trash') {
+      files = files.filter((f) => f.status === 'trash');
     } else {
-      filtered = filtered.filter((f) => f.status !== 'trash');
+      files = files.filter((f) => f.status !== 'trash');
+      if (filter === 'favorites') {
+        files = files.filter((f) => f.favorite);
+      } else if (filter === 'media_image') {
+        files = files.filter((f) => f.mime_type.startsWith('image/'));
+      } else if (filter === 'media_video') {
+        files = files.filter((f) => f.mime_type.startsWith('video/'));
+      } else if (filter === 'media_audio') {
+        files = files.filter((f) => f.mime_type.startsWith('audio/'));
+      } else if (filter === 'documents') {
+        files = files.filter((f) => f.mime_type.includes('pdf') || f.mime_type.includes('document') || f.mime_type.startsWith('text/'));
+      } else if (folderId !== undefined) {
+        files = files.filter((f) => (folderId === null ? !f.folder_id : f.folder_id === folderId));
+      }
     }
 
-    filtered.sort((a, b) => {
-      let cmp = 0;
-      if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
-      else if (sortBy === 'size') cmp = a.size - b.size;
-      else cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      return sortOrder === 'desc' ? -cmp : cmp;
-    });
-
     return {
-      files: filtered.slice(offset, offset + limit),
-      total: filtered.length,
+      files: files.slice(offset, offset + limit),
+      total: files.length,
     };
   },
 
@@ -335,35 +362,33 @@ export const api = {
     if (isWails) {
       return window.go!.main!.App!.GetFileDetails(id);
     }
-    const file = mockFiles.find((f) => f.id === id);
-    if (!file) throw new Error('File not found');
-    return file;
+    return this.getFile(id);
   },
 
   async renameFile(id: string, newName: string): Promise<void> {
     if (isWails) {
       return window.go!.main!.App!.RenameFile(id, newName);
     }
-    const file = mockFiles.find((f) => f.id === id);
-    if (file) file.name = newName;
+    const f = mockFiles.find((file) => file.id === id);
+    if (f) f.name = newName;
   },
 
   async moveFile(id: string, targetFolderId?: string | null): Promise<void> {
     if (isWails) {
       return window.go!.main!.App!.MoveFile(id, targetFolderId);
     }
-    const file = mockFiles.find((f) => f.id === id);
-    if (file) file.folder_id = targetFolderId || null;
+    const f = mockFiles.find((file) => file.id === id);
+    if (f) f.folder_id = targetFolderId || null;
   },
 
   async toggleFavorite(id: string): Promise<boolean> {
     if (isWails) {
       return window.go!.main!.App!.ToggleFavorite(id);
     }
-    const file = mockFiles.find((f) => f.id === id);
-    if (file) {
-      file.favorite = !file.favorite;
-      return file.favorite;
+    const f = mockFiles.find((file) => file.id === id);
+    if (f) {
+      f.favorite = !f.favorite;
+      return f.favorite;
     }
     return false;
   },
@@ -375,8 +400,8 @@ export const api = {
     if (permanent) {
       mockFiles = mockFiles.filter((f) => f.id !== id);
     } else {
-      const file = mockFiles.find((f) => f.id === id);
-      if (file) file.status = 'trash';
+      const f = mockFiles.find((file) => file.id === id);
+      if (f) f.status = 'trash';
     }
   },
 
@@ -384,57 +409,28 @@ export const api = {
     if (isWails) {
       return window.go!.main!.App!.RestoreFile(id);
     }
-    const file = mockFiles.find((f) => f.id === id);
-    if (file) file.status = 'completed';
-  },
-
-  async uploadFiles(folderId: string | null | undefined, filePaths: string[]): Promise<FileItem[]> {
-    if (isWails) {
-      return window.go!.main!.App!.UploadFiles(folderId, filePaths);
-    }
-    const newFiles: FileItem[] = filePaths.map((fp, i) => {
-      const name = fp.split(/[\\/]/).pop() || `file_${i}`;
-      return {
-        id: `mock-uploaded-${Date.now()}-${i}`,
-        folder_id: folderId || null,
-        name,
-        size: 15728640,
-        formatted_size: '15.00 MB',
-        mime_type: 'application/octet-stream',
-        sha256: 'mock-sha256-hash',
-        is_encrypted: true,
-        chunk_count: 1,
-        chunk_size: 18874368,
-        favorite: false,
-        status: 'completed',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-    });
-    mockFiles.push(...newFiles);
-    return newFiles;
+    const f = mockFiles.find((file) => file.id === id);
+    if (f) f.status = 'completed';
   },
 
   async selectAndUploadFiles(folderId?: string | null): Promise<FileItem[]> {
     if (isWails) {
       return window.go!.main!.App!.SelectAndUploadFiles(folderId);
     }
-    return this.uploadFiles(folderId, ['sample_uploaded_document.docx']);
+    return [];
   },
 
   async downloadFile(fileId: string, destinationPath: string): Promise<void> {
     if (isWails) {
       return window.go!.main!.App!.DownloadFile(fileId, destinationPath);
     }
-    await new Promise((r) => setTimeout(r, 800));
   },
 
   async downloadFileWithDialog(fileId: string): Promise<string> {
     if (isWails) {
       return window.go!.main!.App!.DownloadFileWithDialog(fileId);
     }
-    await new Promise((r) => setTimeout(r, 800));
-    return 'C:\\Downloads\\downloaded_file.bin';
+    return 'C:\\Downloads\\sample.mp4';
   },
 
   async getTransfers(): Promise<Transfer[]> {
@@ -448,12 +444,7 @@ export const api = {
     if (isWails) {
       return window.go!.main!.App!.CancelTransfer(transferId);
     }
-    const tr = mockTransfers.find((t) => t.id === transferId);
-    if (tr) {
-      tr.status = 'cancelled';
-      return true;
-    }
-    return false;
+    return true;
   },
 
   async clearCompletedTransfers(): Promise<void> {
@@ -463,18 +454,153 @@ export const api = {
     mockTransfers = mockTransfers.filter((t) => t.status === 'running' || t.status === 'queued');
   },
 
-  async getStreamURL(fileId: string): Promise<string> {
+  getStreamURL(fileId: string): string {
     if (isWails) {
-      return window.go!.main!.App!.GetStreamURL(fileId);
+      return `http://127.0.0.1:${mockSettings.server_port || 49152}/stream/${fileId}`;
     }
-    return `http://127.0.0.1:49152/api/stream/${fileId}`;
+    return `http://127.0.0.1:49152/stream/${fileId}`;
   },
 
   async exportMetadata(): Promise<string> {
     if (isWails) {
       return window.go!.main!.App!.ExportMetadata();
     }
-    return JSON.stringify({ folders: mockFolders, files: mockFiles }, null, 2);
+    return JSON.stringify({ version: '1.1.0', folders: mockFolders, files: mockFiles }, null, 2);
+  },
+
+  // --------------------------------------------------
+  // Multi-Webhook Shard Pool Methods
+  // --------------------------------------------------
+  async listWebhookShards(): Promise<WebhookShard[]> {
+    if (isWails) {
+      return window.go!.main!.App!.ListWebhookShards();
+    }
+    return [...mockShards];
+  },
+
+  async createWebhookShard(name: string, url: string, channelId: string = '', guildId: string = '', priority: number = 1): Promise<WebhookShard> {
+    if (isWails) {
+      return window.go!.main!.App!.CreateWebhookShard(name, url, channelId, guildId, priority);
+    }
+    const shard: WebhookShard = {
+      id: `shard-${Date.now()}`,
+      name,
+      url,
+      channel_id: channelId,
+      guild_id: guildId,
+      is_active: true,
+      priority,
+      error_count: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    mockShards.push(shard);
+    return shard;
+  },
+
+  async updateWebhookShard(shard: WebhookShard): Promise<void> {
+    if (isWails) {
+      return window.go!.main!.App!.UpdateWebhookShard(shard);
+    }
+    const idx = mockShards.findIndex((s) => s.id === shard.id);
+    if (idx !== -1) mockShards[idx] = shard;
+  },
+
+  async deleteWebhookShard(id: string): Promise<void> {
+    if (isWails) {
+      return window.go!.main!.App!.DeleteWebhookShard(id);
+    }
+    mockShards = mockShards.filter((s) => s.id !== id);
+  },
+
+  // --------------------------------------------------
+  // Background Sync Folder Methods
+  // --------------------------------------------------
+  async listSyncFolders(): Promise<SyncFolder[]> {
+    if (isWails) {
+      return window.go!.main!.App!.ListSyncFolders();
+    }
+    return [...mockSyncFolders];
+  },
+
+  async createSyncFolder(localPath: string, remoteFolderId?: string | null): Promise<SyncFolder> {
+    if (isWails) {
+      return window.go!.main!.App!.CreateSyncFolder(localPath, remoteFolderId);
+    }
+    const sf: SyncFolder = {
+      id: `sync-${Date.now()}`,
+      local_path: localPath,
+      remote_folder_id: remoteFolderId || null,
+      enabled: true,
+      sync_status: 'idle',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    mockSyncFolders.push(sf);
+    return sf;
+  },
+
+  async updateSyncFolder(folder: SyncFolder): Promise<void> {
+    if (isWails) {
+      return window.go!.main!.App!.UpdateSyncFolder(folder);
+    }
+    const idx = mockSyncFolders.findIndex((f) => f.id === folder.id);
+    if (idx !== -1) mockSyncFolders[idx] = folder;
+  },
+
+  async deleteSyncFolder(id: string): Promise<void> {
+    if (isWails) {
+      return window.go!.main!.App!.DeleteSyncFolder(id);
+    }
+    mockSyncFolders = mockSyncFolders.filter((f) => f.id !== id);
+  },
+
+  async syncFoldersNow(): Promise<void> {
+    if (isWails) {
+      return window.go!.main!.App!.SyncFoldersNow();
+    }
+  },
+
+  // --------------------------------------------------
+  // Zero-Knowledge Share & Gateway Status
+  // --------------------------------------------------
+  async generateShareLink(fileId: string): Promise<ShareLinkResult> {
+    if (isWails) {
+      return window.go!.main!.App!.GenerateShareLink(fileId);
+    }
+    const file = mockFiles.find((f) => f.id === fileId);
+    const key = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+    return {
+      file_id: fileId,
+      file_name: file ? file.name : 'sample.bin',
+      share_url: `http://127.0.0.1:49152/stream/${fileId}#key=${key}`,
+      share_key: key,
+    };
+  },
+
+  async getGatewaysStatus(): Promise<GatewayStatus> {
+    if (isWails) {
+      return window.go!.main!.App!.GetGatewaysStatus();
+    }
+    return {
+      webdav: {
+        running: true,
+        port: 49153,
+        url: 'http://127.0.0.1:49153/webdav',
+      },
+      s3: {
+        running: false,
+        port: 49154,
+        url: 'http://127.0.0.1:49154',
+      },
+    };
+  },
+
+  async selectDirectory(): Promise<string> {
+    if (isWails) {
+      return window.go!.main!.App!.SelectDirectory();
+    }
+    return 'C:\\Users\\User\\Documents';
   },
 };
 
@@ -488,21 +614,16 @@ export function formatBytes(bytes: number, decimals: number = 2): string {
 }
 
 export function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffHours = diffMs / (1000 * 60 * 60);
-
-  if (diffHours < 1) {
-    const mins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
-    return `${mins}m ago`;
+  try {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('default', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  } catch {
+    return dateString;
   }
-  if (diffHours < 24) {
-    return `${Math.floor(diffHours)}h ago`;
-  }
-  if (diffHours < 24 * 7) {
-    const days = Math.floor(diffHours / 24);
-    return `${days}d ago`;
-  }
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }

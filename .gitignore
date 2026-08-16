@@ -42,3 +42,6 @@ pnpm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# External references
+refs/

@@ -12,39 +12,45 @@ import {
   Eye,
   Trash2,
   Folder as FolderIcon,
-  MoreVertical,
-  Layers,
+  Share2,
   Info,
+  RotateCcw,
 } from 'lucide-react';
 import { FileItem, Folder } from '../types';
 import { formatBytes, formatDate } from '../services/api';
 
 interface FileGridProps {
-  folders: Folder[];
+  folders?: Folder[];
   files: FileItem[];
   selectedFileIds: string[];
-  onToggleSelect: (id: string, e: React.MouseEvent) => void;
-  onOpenFolder: (folderId: string) => void;
-  onPreviewFile: (file: FileItem) => void;
+  onSelectFile: (id: string) => void;
+  onOpenFolder?: (folderId: string) => void;
+  onOpenFile: (file: FileItem) => void;
   onInspectFile: (file: FileItem) => void;
   onDownloadFile: (file: FileItem) => void;
-  onToggleFavorite: (file: FileItem, e: React.MouseEvent) => void;
-  onDeleteFile: (file: FileItem) => void;
+  onToggleFavorite: (file: FileItem) => void;
+  onDeleteFile: (file: FileItem, permanent?: boolean) => void;
+  onRestoreFile?: (file: FileItem) => void;
   onRenameFile: (file: FileItem) => void;
+  onShareFile: (file: FileItem) => void;
+  isTrash?: boolean;
 }
 
 export const FileGrid: React.FC<FileGridProps> = ({
-  folders,
+  folders = [],
   files,
   selectedFileIds,
-  onToggleSelect,
+  onSelectFile,
   onOpenFolder,
-  onPreviewFile,
+  onOpenFile,
   onInspectFile,
   onDownloadFile,
   onToggleFavorite,
   onDeleteFile,
+  onRestoreFile,
   onRenameFile,
+  onShareFile,
+  isTrash = false,
 }) => {
   const getFileIcon = (file: FileItem) => {
     const mime = file.mime_type.toLowerCase();
@@ -59,7 +65,7 @@ export const FileGrid: React.FC<FileGridProps> = ({
     if (mime.startsWith('audio/') || /\.(mp3|wav|flac|ogg)$/.test(name)) {
       return { icon: Music, color: 'text-pink-400', bg: 'bg-pink-500/10 border-pink-500/30' };
     }
-    if (mime.includes('zip') || mime.includes('tar') || mime.includes('compressed') || /\.(zip|rar|7z|tar|gz)$/.test(name)) {
+    if (mime.includes('zip') || mime.includes('tar') || /\.(zip|rar|7z|tar|gz)$/.test(name)) {
       return { icon: Archive, color: 'text-accent-amber', bg: 'bg-amber-500/10 border-amber-500/30' };
     }
     if (mime.includes('pdf') || mime.includes('document') || mime.includes('text') || /\.(pdf|docx|txt|md)$/.test(name)) {
@@ -71,14 +77,14 @@ export const FileGrid: React.FC<FileGridProps> = ({
   return (
     <div className="p-6 space-y-6">
       {/* Folders Section */}
-      {folders.length > 0 && (
+      {folders.length > 0 && !isTrash && (
         <div className="space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Folders</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5">
             {folders.map((folder) => (
               <div
                 key={folder.id}
-                onDoubleClick={() => onOpenFolder(folder.id)}
+                onDoubleClick={() => onOpenFolder && onOpenFolder(folder.id)}
                 className="glass-card group p-3.5 rounded-xl cursor-pointer transition-all duration-200 flex items-center justify-between gap-2"
               >
                 <div className="flex items-center gap-3 truncate">
@@ -119,9 +125,13 @@ export const FileGrid: React.FC<FileGridProps> = ({
             <div className="w-12 h-12 rounded-2xl bg-obsidian-elevated flex items-center justify-center text-slate-600 mb-3">
               <File className="w-6 h-6" />
             </div>
-            <h4 className="text-sm font-semibold text-slate-300">No files found</h4>
+            <h4 className="text-sm font-semibold text-slate-300">
+              {isTrash ? 'Trash bin is empty' : 'No files found'}
+            </h4>
             <p className="text-xs text-slate-500 mt-1 max-w-xs">
-              Drag & drop files anywhere onto the window, or click Upload to store files in your Discord vault.
+              {isTrash
+                ? 'Deleted files will appear here.'
+                : 'Drag & drop files onto the window, or click Upload to store files in your Discord vault.'}
             </p>
           </div>
         ) : (
@@ -133,13 +143,13 @@ export const FileGrid: React.FC<FileGridProps> = ({
               return (
                 <div
                   key={file.id}
-                  onClick={(e) => onToggleSelect(file.id, e)}
-                  onDoubleClick={() => onPreviewFile(file)}
+                  onClick={() => onSelectFile(file.id)}
+                  onDoubleClick={() => onOpenFile(file)}
                   className={`glass-card group relative p-3.5 rounded-2xl cursor-pointer transition-all duration-200 flex flex-col justify-between select-none ${
                     isSelected ? 'ring-2 ring-wyvern-500 bg-obsidian-hover/90' : ''
                   }`}
                 >
-                  {/* Card Header (Encryption badge & Favorite star) */}
+                  {/* Card Header */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       {file.is_encrypted && (
@@ -148,24 +158,23 @@ export const FileGrid: React.FC<FileGridProps> = ({
                           <span>AES</span>
                         </span>
                       )}
-                      {file.chunk_count > 1 && (
-                        <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-wyvern-500/15 border border-wyvern-500/30 text-[10px] font-mono text-wyvern-400">
-                          <Layers className="w-2.5 h-2.5" />
-                          <span>{file.chunk_count}c</span>
-                        </span>
-                      )}
                     </div>
 
-                    <button
-                      onClick={(e) => onToggleFavorite(file, e)}
-                      className={`p-1 rounded-md transition-colors ${
-                        file.favorite
-                          ? 'text-amber-400'
-                          : 'text-slate-600 opacity-0 group-hover:opacity-100 hover:text-amber-400'
-                      }`}
-                    >
-                      <Star className="w-3.5 h-3.5" fill={file.favorite ? 'currentColor' : 'none'} />
-                    </button>
+                    {!isTrash && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleFavorite(file);
+                        }}
+                        className={`p-1 rounded-md transition-colors ${
+                          file.favorite
+                            ? 'text-amber-400'
+                            : 'text-slate-600 opacity-0 group-hover:opacity-100 hover:text-amber-400'
+                        }`}
+                      >
+                        <Star className="w-3.5 h-3.5" fill={file.favorite ? 'currentColor' : 'none'} />
+                      </button>
+                    )}
                   </div>
 
                   {/* Thumbnail / Large File Icon */}
@@ -190,48 +199,85 @@ export const FileGrid: React.FC<FileGridProps> = ({
                     </div>
                   </div>
 
-                  {/* Hover Quick Action Buttons */}
+                  {/* Quick Action Overlay */}
                   <div className="absolute inset-x-2 bottom-2 bg-obsidian-elevated/95 backdrop-blur-md border border-obsidian-border rounded-xl p-1 flex items-center justify-around opacity-0 group-hover:opacity-100 transition-all duration-150 transform translate-y-1 group-hover:translate-y-0 shadow-lg">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPreviewFile(file);
-                      }}
-                      title="Preview / Stream"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-hover transition-colors"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-accent-cyan" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDownloadFile(file);
-                      }}
-                      title="Download"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-hover transition-colors"
-                    >
-                      <Download className="w-3.5 h-3.5 text-wyvern-400" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onInspectFile(file);
-                      }}
-                      title="Chunk Manifest & Metadata"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-hover transition-colors"
-                    >
-                      <Info className="w-3.5 h-3.5 text-accent-teal" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteFile(file);
-                      }}
-                      title="Delete"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-obsidian-hover transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {isTrash ? (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRestoreFile && onRestoreFile(file);
+                          }}
+                          title="Restore"
+                          className="p-1.5 rounded-lg text-emerald-400 hover:bg-obsidian-hover transition-colors"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteFile(file, true);
+                          }}
+                          title="Delete Permanently"
+                          className="p-1.5 rounded-lg text-rose-400 hover:bg-obsidian-hover transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenFile(file);
+                          }}
+                          title="Preview / Stream"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-hover transition-colors"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-accent-cyan" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onShareFile(file);
+                          }}
+                          title="Zero-Knowledge Share"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-hover transition-colors"
+                        >
+                          <Share2 className="w-3.5 h-3.5 text-accent-cyan" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDownloadFile(file);
+                          }}
+                          title="Download"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-hover transition-colors"
+                        >
+                          <Download className="w-3.5 h-3.5 text-wyvern-400" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onInspectFile(file);
+                          }}
+                          title="Inspect Chunks"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-obsidian-hover transition-colors"
+                        >
+                          <Info className="w-3.5 h-3.5 text-accent-teal" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteFile(file, false);
+                          }}
+                          title="Move to Trash"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-obsidian-hover transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               );

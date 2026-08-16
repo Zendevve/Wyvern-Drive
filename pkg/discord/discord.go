@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -346,4 +347,281 @@ func ParseBytes(str string) (int64, error) {
 		return val * 1024 * 1024 * 1024, nil
 	}
 	return strconv.ParseInt(str, 10, 64)
+}
+// ----------------------------------------------------
+// Webhook Pool & Multi-Channel Sharding
+// ----------------------------------------------------
+
+// ShardConfig contains startup parameters for a webhook shard.
+type ShardConfig struct {
+	ID        string
+	Name      string
+	URL       string
+	ChannelID string
+}
+
+// ShardState tracks runtime rate limiting and load for a webhook endpoint.
+type ShardState struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	URL            string    `json:"url"`
+	ChannelID      string    `json:"channel_id"`
+	RateLimitReset time.Time `json:"rate_limit_reset"`
+	ActiveRequests int       `json:"active_requests"`
+	TotalUploads   int64     `json:"total_uploads"`
+	TotalErrors    int64     `json:"total_errors"`
+}
+
+// WebhookPool distributes chunk uploads across multiple Discord channels/webhooks
+// to bypass single-channel 429 rate limit delays and multiply throughput.
+type WebhookPool struct {
+	mu          sync.RWMutex
+	shards      []*ShardState
+	cursor      int
+	fallbackURL string
+}
+
+// NewWebhookPool creates a thread-safe webhook pool.
+func NewWebhookPool(fallbackURL string, initialShards []ShardConfig) *WebhookPool {
+	pool := &WebhookPool{
+		fallbackURL: strings.TrimSpace(fallbackURL),
+		shards:      make([]*ShardState, 0),
+	}
+
+	for _, s := range initialShards {
+		if strings.TrimSpace(s.URL) != "" {
+			pool.shards = append(pool.shards, &ShardState{
+				ID:        s.ID,
+				Name:      s.Name,
+				URL:       strings.TrimSpace(s.URL),
+				ChannelID: s.ChannelID,
+			})
+		}
+	}
+
+	return pool
+}
+
+// AddShard adds or updates a shard in the pool.
+func (p *WebhookPool) AddShard(id, name, rawURL, channelID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return
+	}
+
+	for _, s := range p.shards {
+		if s.ID == id || s.URL == rawURL {
+			s.Name = name
+			s.URL = rawURL
+			s.ChannelID = channelID
+			return
+		}
+	}
+
+	p.shards = append(p.shards, &ShardState{
+		ID:        id,
+		Name:      name,
+		URL:       rawURL,
+		ChannelID: channelID,
+	})
+}
+
+// RemoveShard removes a shard by ID.
+func (p *WebhookPool) RemoveShard(id string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	filtered := make([]*ShardState, 0, len(p.shards))
+	for _, s := range p.shards {
+		if s.ID != id {
+			filtered = append(filtered, s)
+		}
+	}
+	p.shards = filtered
+}
+
+// SetFallbackURL updates the base fallback webhook URL.
+func (p *WebhookPool) SetFallbackURL(fallbackURL string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.fallbackURL = strings.TrimSpace(fallbackURL)
+}
+
+// NextAvailableShard selects the best healthy shard using round-robin and rate-limit checks.
+func (p *WebhookPool) NextAvailableShard() (targetURL string, channelID string, shardID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	now := time.Now()
+	totalShards := len(p.shards)
+
+	if totalShards == 0 {
+		return p.fallbackURL, "", ""
+	}
+
+	// Try round-robin search for a shard not currently rate limited
+	for i := 0; i < totalShards; i++ {
+		idx := (p.cursor + i) % totalShards
+		shard := p.shards[idx]
+
+		if shard.RateLimitReset.IsZero() || now.After(shard.RateLimitReset) {
+			p.cursor = (idx + 1) % totalShards
+			shard.ActiveRequests++
+			return shard.URL, shard.ChannelID, shard.ID
+		}
+	}
+
+	// All shards currently in backoff: pick the one that will reset soonest
+	var bestShard *ShardState
+	var earliestReset time.Time
+
+	for _, shard := range p.shards {
+		if bestShard == nil || shard.RateLimitReset.Before(earliestReset) {
+			bestShard = shard
+			earliestReset = shard.RateLimitReset
+		}
+	}
+
+	if bestShard != nil {
+		bestShard.ActiveRequests++
+		return bestShard.URL, bestShard.ChannelID, bestShard.ID
+	}
+
+	return p.fallbackURL, "", ""
+}
+
+// MarkRateLimited sets a cooldown deadline for a shard when a 429 is received.
+func (p *WebhookPool) MarkRateLimited(shardID string, retryAfter time.Duration) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for _, s := range p.shards {
+		if s.ID == shardID {
+			if s.ActiveRequests > 0 {
+				s.ActiveRequests--
+			}
+			s.RateLimitReset = time.Now().Add(retryAfter)
+			s.TotalErrors++
+			return
+		}
+	}
+}
+
+// MarkSuccess records a successful transfer on the shard.
+func (p *WebhookPool) MarkSuccess(shardID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for _, s := range p.shards {
+		if s.ID == shardID {
+			if s.ActiveRequests > 0 {
+				s.ActiveRequests--
+			}
+			s.TotalUploads++
+			return
+		}
+	}
+}
+
+// MarkError records a general error on the shard.
+func (p *WebhookPool) MarkError(shardID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for _, s := range p.shards {
+		if s.ID == shardID {
+			if s.ActiveRequests > 0 {
+				s.ActiveRequests--
+			}
+			s.TotalErrors++
+			return
+		}
+	}
+}
+
+// ShardCount returns the number of registered shards.
+func (p *WebhookPool) ShardCount() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return len(p.shards)
+}
+
+// GetShardStates returns snapshots of all shards for UI/monitoring.
+func (p *WebhookPool) GetShardStates() []ShardState {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	res := make([]ShardState, len(p.shards))
+	for i, s := range p.shards {
+		res[i] = *s
+	}
+	return res
+}
+
+// ----------------------------------------------------
+// Discord 2024 Signed CDN URL Expiration Auto-Refresh
+// ----------------------------------------------------
+
+// RefreshChunkURL fetches fresh signed CDN attachment URLs from Discord's message endpoint.
+// Supports bot tokens (GET /api/v10/channels/{channel_id}/messages/{message_id}) or
+// webhook message lookups (GET /api/v10/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}).
+func (c *Client) RefreshChunkURL(ctx context.Context, webhookURL, botToken, channelID, messageID string) (string, error) {
+	if messageID == "" {
+		return "", errors.New("cannot refresh attachment without message ID")
+	}
+
+	var reqURL string
+	var authHeader string
+
+	if botToken != "" && channelID != "" {
+		reqURL = fmt.Sprintf("https://discord.com/api/v10/channels/%s/messages/%s", channelID, url.PathEscape(messageID))
+		authHeader = "Bot " + strings.TrimSpace(botToken)
+	} else if webhookURL != "" {
+		id, token, err := ParseWebhookURL(webhookURL)
+		if err == nil {
+			reqURL = fmt.Sprintf("https://discord.com/api/v10/webhooks/%s/%s/messages/%s", id, token, url.PathEscape(messageID))
+		}
+	}
+
+	if reqURL == "" {
+		return "", errors.New("insufficient credentials to refresh attachment URL (needs bot token + channel ID or valid webhook URL)")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create refresh request: %w", err)
+	}
+	req.Header.Set("User-Agent", "WyvernDrive/1.0 (Discord Cloud Storage)")
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("network error during URL refresh: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read refresh response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Discord refresh failed (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var msg MessageResponse
+	if err := json.Unmarshal(body, &msg); err != nil {
+		return "", fmt.Errorf("failed to parse refreshed message: %w", err)
+	}
+
+	if len(msg.Attachments) == 0 {
+		return "", errors.New("refreshed message contains no attachments")
+	}
+
+	return msg.Attachments[0].URL, nil
 }

@@ -105,12 +105,40 @@ type Transfer struct {
 	UpdatedAt        time.Time      `json:"updated_at"`
 }
 
+// WebhookShard represents one endpoint in a multi-channel webhook pool.
+type WebhookShard struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	URL            string    `json:"url"`
+	ChannelID      string    `json:"channel_id,omitempty"`
+	GuildID        string    `json:"guild_id,omitempty"`
+	IsActive       bool      `json:"is_active"`
+	Priority       int       `json:"priority"`
+	RateLimitReset time.Time `json:"rate_limit_reset,omitempty"`
+	ErrorCount     int       `json:"error_count"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// SyncFolder represents a local directory automatically synchronized with Wyvern Drive.
+type SyncFolder struct {
+	ID             string    `json:"id"`
+	LocalPath      string    `json:"local_path"`
+	RemoteFolderID *string   `json:"remote_folder_id"`
+	Enabled        bool      `json:"enabled"`
+	LastSyncTime   time.Time `json:"last_sync_time"`
+	SyncStatus     string    `json:"sync_status"` // "idle", "syncing", "error"
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
 // AppSettings contains global user configurations.
 type AppSettings struct {
 	WebhookURL          string `json:"webhook_url"`
 	WebhookName         string `json:"webhook_name,omitempty"`
 	ChannelID           string `json:"channel_id,omitempty"`
 	GuildID             string `json:"guild_id,omitempty"`
+	BotToken            string `json:"bot_token,omitempty"`
 	MasterKey           string `json:"master_key"` // Derived key or custom passphrase
 	EncryptionEnabled   bool   `json:"encryption_enabled"`
 	ChunkSizeBytes      int64  `json:"chunk_size_bytes"`
@@ -120,25 +148,38 @@ type AppSettings struct {
 	Theme               string `json:"theme"`
 	DownloadDirectory   string `json:"download_directory"`
 	SetupCompleted      bool   `json:"setup_completed"`
+	WebDAVEnabled       bool   `json:"webdav_enabled"`
+	WebDAVPort          int    `json:"webdav_port"`
+	S3Enabled           bool   `json:"s3_enabled"`
+	S3Port              int    `json:"s3_port"`
+	CacheDirectory      string `json:"cache_directory,omitempty"`
+	MaxCacheSizeBytes   int64  `json:"max_cache_size_bytes"`
+	PrefetchEnabled     bool   `json:"prefetch_enabled"`
+	DeduplicationEnabled bool  `json:"deduplication_enabled"`
 }
 
 // StorageStats contains aggregated metrics for the dashboard.
 type StorageStats struct {
-	TotalFiles       int64            `json:"total_files"`
-	TotalFolders     int64            `json:"total_folders"`
-	TotalBytes       int64            `json:"total_bytes"`
-	FormattedTotal   string           `json:"formatted_total"`
-	TotalChunks      int64            `json:"total_chunks"`
-	CategoryCounts   map[string]int64 `json:"category_counts"`
-	CategoryBytes    map[string]int64 `json:"category_bytes"`
-	EncryptedFiles   int64            `json:"encrypted_files"`
-	ActiveTransfers  int              `json:"active_transfers"`
+	TotalFiles         int64            `json:"total_files"`
+	TotalFolders       int64            `json:"total_folders"`
+	TotalBytes         int64            `json:"total_bytes"`
+	FormattedTotal     string           `json:"formatted_total"`
+	TotalChunks        int64            `json:"total_chunks"`
+	CategoryCounts     map[string]int64 `json:"category_counts"`
+	CategoryBytes      map[string]int64 `json:"category_bytes"`
+	EncryptedFiles     int64            `json:"encrypted_files"`
+	ActiveTransfers    int              `json:"active_transfers"`
+	DeduplicatedBytes  int64            `json:"deduplicated_bytes"`
+	DeduplicatedChunks int64            `json:"deduplicated_chunks"`
+	ActiveShards       int              `json:"active_shards"`
+	TotalShards        int              `json:"total_shards"`
 }
 
 // ExportManifest is the backup schema.
 type ExportManifest struct {
-	Version   string    `json:"version"`
-	ExportedAt time.Time `json:"exported_at"`
-	Folders   []Folder  `json:"folders"`
-	Files     []File    `json:"files"`
+	Version    string         `json:"version"`
+	ExportedAt time.Time      `json:"exported_at"`
+	Folders    []Folder       `json:"folders"`
+	Files      []File         `json:"files"`
+	Shards     []WebhookShard `json:"shards,omitempty"`
 }

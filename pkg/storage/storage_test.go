@@ -197,3 +197,130 @@ func TestSettings(t *testing.T) {
 		t.Fatalf("saved settings mismatch: %+v", loaded)
 	}
 }
+
+func TestWebhookShardsCRUD(t *testing.T) {
+	store, cleanup := createTestStore(t)
+	defer cleanup()
+
+	// 1. Create shard
+	shard, err := store.CreateWebhookShard("Shard Alpha", "https://discord.com/api/webhooks/111/aaa", "111", "999", 5)
+	if err != nil {
+		t.Fatalf("failed to create shard: %v", err)
+	}
+	if shard.Name != "Shard Alpha" || shard.Priority != 5 || !shard.IsActive {
+		t.Fatalf("unexpected shard: %+v", shard)
+	}
+
+	// 2. List shards
+	shards, err := store.ListWebhookShards()
+	if err != nil || len(shards) != 1 {
+		t.Fatalf("expected 1 shard, got %d (err: %v)", len(shards), err)
+	}
+
+	// 3. Update shard
+	shard.IsActive = false
+	err = store.UpdateWebhookShard(*shard)
+	if err != nil {
+		t.Fatalf("failed to update shard: %v", err)
+	}
+
+	active, err := store.GetActiveWebhookShards()
+	if err != nil || len(active) != 0 {
+		t.Fatalf("expected 0 active shards, got %d", len(active))
+	}
+
+	// 4. Delete shard
+	err = store.DeleteWebhookShard(shard.ID)
+	if err != nil {
+		t.Fatalf("failed to delete shard: %v", err)
+	}
+}
+
+func TestSyncFoldersCRUD(t *testing.T) {
+	store, cleanup := createTestStore(t)
+	defer cleanup()
+
+	syncFolder, err := store.CreateSyncFolder("/home/user/vault_sync", nil)
+	if err != nil {
+		t.Fatalf("failed to create sync folder: %v", err)
+	}
+
+	list, err := store.ListSyncFolders()
+	if err != nil || len(list) != 1 {
+		t.Fatalf("expected 1 sync folder, got %d", len(list))
+	}
+
+	syncFolder.SyncStatus = "syncing"
+	err = store.UpdateSyncFolder(*syncFolder)
+	if err != nil {
+		t.Fatalf("failed to update sync folder: %v", err)
+	}
+
+	err = store.DeleteSyncFolder(syncFolder.ID)
+	if err != nil {
+		t.Fatalf("failed to delete sync folder: %v", err)
+	}
+}
+
+func TestDeduplicationAndURLRefresh(t *testing.T) {
+	store, cleanup := createTestStore(t)
+	defer cleanup()
+
+	file := &File{
+		Name:        "sample.txt",
+		Size:        1024,
+		MimeType:    "text/plain",
+		SHA256:      "sha256hash",
+		ChunkCount:  1,
+		ChunkSize:   1024,
+		IsEncrypted: true,
+		Status:      StatusCompleted,
+	}
+	err := store.CreateFile(file)
+	if err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	chunk := &Chunk{
+		ID:            "chunk-1",
+		FileID:        file.ID,
+		ChunkIndex:    0,
+		MessageID:     "msg-100",
+		AttachmentID:  "att-100",
+		AttachmentURL: "https://cdn.discordapp.com/old_url",
+		Size:          1024,
+		ChunkHash:     "blake3_hash_xyz",
+		Nonce:         "aabbcc",
+	}
+	err = store.CreateChunk(chunk)
+	if err != nil {
+		t.Fatalf("failed to add chunk: %v", err)
+	}
+	// Test CAS lookup
+	found, err := store.FindChunkByHash("blake3_hash_xyz")
+	if err != nil || found == nil || found.MessageID != "msg-100" {
+		t.Fatalf("failed to find chunk by hash: %v", err)
+	}
+
+	// Record deduplication stats
+	err = store.RecordDeduplication(1024)
+	if err != nil {
+		t.Fatalf("failed to record dedup: %v", err)
+	}
+
+	stats, err := store.GetStats()
+	if err != nil || stats.DeduplicatedBytes != 1024 || stats.DeduplicatedChunks != 1 {
+		t.Fatalf("unexpected dedup stats: %+v", stats)
+	}
+
+	// Test URL refresh
+	err = store.UpdateChunkURL(chunk.ID, "https://cdn.discordapp.com/fresh_url")
+	if err != nil {
+		t.Fatalf("failed to update chunk url: %v", err)
+	}
+
+	refreshed, _ := store.FindChunkByHash("blake3_hash_xyz")
+	if refreshed.AttachmentURL != "https://cdn.discordapp.com/fresh_url" {
+		t.Fatalf("expected refreshed url, got: %s", refreshed.AttachmentURL)
+	}
+}

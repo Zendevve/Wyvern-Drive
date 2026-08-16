@@ -5,13 +5,17 @@ import { FileGrid } from './components/FileGrid';
 import { FileList } from './components/FileList';
 import { OnboardingWizard } from './components/OnboardingWizard';
 import { TransferCenter } from './components/TransferCenter';
-import { FilePreviewModal } from './components/FilePreviewModal';
+import { UniversalViewerModal } from './components/UniversalViewerModal';
 import { FileInspectorModal } from './components/FileInspectorModal';
 import { SettingsModal } from './components/SettingsModal';
 import { NewFolderModal } from './components/NewFolderModal';
 import { RenameModal } from './components/RenameModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { DropZone } from './components/DropZone';
+import { StorageAnalyticsView } from './components/StorageAnalyticsView';
+import { ShareModal } from './components/ShareModal';
+import { WebhookPoolModal } from './components/WebhookPoolModal';
+import { SyncFoldersModal } from './components/SyncFoldersModal';
 import {
   AppSettings,
   FileItem,
@@ -48,8 +52,11 @@ export const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [showTransfers, setShowTransfers] = useState<boolean>(false);
   const [showNewFolder, setShowNewFolder] = useState<boolean>(false);
+  const [showShards, setShowShards] = useState<boolean>(false);
+  const [showSync, setShowSync] = useState<boolean>(false);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [inspectFile, setInspectFile] = useState<FileItem | null>(null);
+  const [shareFile, setShareFile] = useState<FileItem | null>(null);
   const [renamingItem, setRenamingItem] = useState<{ id: string; name: string; isFolder: boolean } | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
@@ -121,148 +128,94 @@ export const App: React.FC = () => {
   }, [refreshStructure]);
 
   useEffect(() => {
-    refreshFiles();
-  }, [refreshFiles]);
+    if (currentCategory !== 'analytics') {
+      refreshFiles();
+    }
+  }, [refreshFiles, currentCategory]);
 
-  // Polling for Transfers
+  // Poll transfers
   useEffect(() => {
-    const interval = setInterval(async () => {
+    const fetchTransfers = async () => {
       try {
-        const trs = await api.getTransfers();
-        setTransfers(trs);
-        // Refresh file list if active transfer finished
-        const running = trs.some((t) => t.status === 'running');
-        if (running) {
-          refreshFiles();
-          refreshStructure();
-        }
-      } catch (err) {
-        // quiet polling error
-      }
-    }, 1500);
+        const tList = await api.getTransfers();
+        setTransfers(tList);
+      } catch {}
+    };
+
+    fetchTransfers();
+    const interval = setInterval(fetchTransfers, 1000);
     return () => clearInterval(interval);
-  }, [refreshFiles, refreshStructure]);
-
-  // Drag and Drop Handling
-  useEffect(() => {
-    let dragCounter = 0;
-
-    const handleDragEnter = (e: DragEvent) => {
-      e.preventDefault();
-      dragCounter++;
-      if (e.dataTransfer?.types.includes('Files')) {
-        setIsDragging(true);
-      }
-    };
-
-    const handleDragLeave = (e: DragEvent) => {
-      e.preventDefault();
-      dragCounter--;
-      if (dragCounter <= 0) {
-        setIsDragging(false);
-      }
-    };
-
-    const handleDragOver = (e: DragEvent) => {
-      e.preventDefault();
-    };
-
-    const handleDrop = async (e: DragEvent) => {
-      e.preventDefault();
-      dragCounter = 0;
-      setIsDragging(false);
-
-      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-        // Trigger select and upload dialog or direct upload
-        await api.selectAndUploadFiles(currentFolderId);
-        refreshFiles();
-        refreshStructure();
-      }
-    };
-
-    window.addEventListener('dragenter', handleDragEnter);
-    window.addEventListener('dragleave', handleDragLeave);
-    window.addEventListener('dragover', handleDragOver);
-    window.addEventListener('drop', handleDrop);
-
-    return () => {
-      window.removeEventListener('dragenter', handleDragEnter);
-      window.removeEventListener('dragleave', handleDragLeave);
-      window.removeEventListener('dragover', handleDragOver);
-      window.removeEventListener('drop', handleDrop);
-    };
-  }, [currentFolderId, refreshFiles, refreshStructure]);
-
-  // Keyboard Shortcuts (Ctrl+K for search)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement;
-        searchInput?.focus();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Actions
-  const handleUploadClick = async () => {
+  // Handlers
+  const handleUploadFiles = async () => {
     try {
       await api.selectAndUploadFiles(currentFolderId);
       refreshFiles();
       refreshStructure();
+      setShowTransfers(true);
     } catch (err) {
       console.error('Upload failed:', err);
     }
   };
 
-  const handleCreateFolder = async (name: string, color: string) => {
+  const handleDownloadFile = async (file: FileItem) => {
     try {
-      await api.createFolder(currentFolderId, name, color, 'folder');
-      setShowNewFolder(false);
-      refreshStructure();
+      await api.downloadFileWithDialog(file.id);
+      setShowTransfers(true);
     } catch (err) {
-      console.error('Folder creation failed:', err);
+      console.error('Download failed:', err);
     }
   };
 
-  const handleToggleFavorite = async (file: FileItem, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleToggleFavorite = async (file: FileItem) => {
     try {
-      const isFav = await api.toggleFavorite(file.id);
-      setFiles((prev) =>
-        prev.map((f) => (f.id === file.id ? { ...f, favorite: isFav } : f))
-      );
-      refreshStructure();
+      await api.toggleFavorite(file.id);
+      refreshFiles();
     } catch (err) {
-      console.error('Failed to toggle favorite:', err);
+      console.error('Toggle favorite failed:', err);
     }
   };
 
-  const handleDeleteFile = (file: FileItem) => {
-    const isTrash = currentCategory === 'trash';
+  const handleDeleteFile = (file: FileItem, permanent: boolean = false) => {
     setConfirmDialog({
-      title: isTrash ? 'Permanently Delete File' : 'Move File to Trash',
-      message: isTrash
-        ? `Are you sure you want to permanently purge "${file.name}" and delete its Discord chunks?`
-        : `Move "${file.name}" to trash? You can restore it anytime.`,
-      confirmLabel: isTrash ? 'Delete Permanently' : 'Move to Trash',
-      isDanger: isTrash,
+      title: permanent ? 'Permanently Delete File' : 'Move to Trash',
+      message: permanent
+        ? `Are you sure you want to permanently delete "${file.name}"? This action cannot be undone.`
+        : `Move "${file.name}" to Trash? You can restore it later.`,
+      confirmLabel: permanent ? 'Delete Permanently' : 'Move to Trash',
+      isDanger: true,
       onConfirm: async () => {
-        await api.deleteFile(file.id, isTrash);
-        setConfirmDialog(null);
-        refreshFiles();
-        refreshStructure();
+        try {
+          await api.deleteFile(file.id, permanent);
+          refreshFiles();
+          refreshStructure();
+        } catch (err) {
+          console.error('Delete file failed:', err);
+        } finally {
+          setConfirmDialog(null);
+        }
       },
     });
   };
 
-  const handleDownloadFile = async (file: FileItem) => {
+  const handleRestoreFile = async (file: FileItem) => {
     try {
-      await api.downloadFileWithDialog(file.id);
+      await api.restoreFile(file.id);
+      refreshFiles();
+      refreshStructure();
     } catch (err) {
-      console.error('Download failed:', err);
+      console.error('Restore file failed:', err);
+    }
+  };
+
+  const handleCreateFolder = async (name: string, color: string, icon: string) => {
+    try {
+      await api.createFolder(currentFolderId, name, color, icon);
+      refreshStructure();
+      setShowNewFolder(false);
+    } catch (err) {
+      console.error('Create folder failed:', err);
     }
   };
 
@@ -282,66 +235,56 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleToggleSelect = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedFileIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-  };
-
-  const currentFolder = folders.find((f) => f.id === currentFolderId) || null;
   const activeTransfersCount = transfers.filter((t) => t.status === 'running').length;
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-obsidian-base text-slate-400">
+      <div className="flex h-screen w-screen items-center justify-center bg-obsidian-base text-white">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-wyvern-500/20 border border-wyvern-500 flex items-center justify-center animate-pulse">
-            <span className="font-bold text-wyvern-400">W</span>
+          <div className="w-12 h-12 rounded-2xl bg-wyvern-600/20 flex items-center justify-center animate-pulse">
+            <img src="/icon.png" alt="Wyvern Drive" className="w-8 h-8" />
           </div>
-          <span className="text-xs font-mono">Initializing Wyvern Engine...</span>
+          <p className="text-sm font-medium text-slate-400">Initializing Wyvern Vault...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen w-screen bg-obsidian-base overflow-hidden relative">
-      {/* Drag & Drop Overlay */}
+    <div className="flex h-screen w-screen bg-obsidian-base overflow-hidden relative font-sans">
+      {/* Drag and Drop Zone */}
       <DropZone isDragging={isDragging} />
 
-      {/* Main Sidebar */}
+      {/* Main Sidebar Navigation */}
       <Sidebar
         currentCategory={currentCategory}
         onSelectCategory={(cat) => {
           setCurrentCategory(cat);
-          setCurrentFolderId(null);
           setSearchQuery('');
         }}
         currentFolderId={currentFolderId}
-        onSelectFolder={(id) => {
-          setCurrentFolderId(id);
-          setCurrentCategory('all');
+        onSelectFolder={(fId) => {
+          setCurrentFolderId(fId);
           setSearchQuery('');
         }}
         folders={folders}
         stats={stats}
         onOpenSettings={() => setShowSettings(true)}
         onNewFolder={() => setShowNewFolder(true)}
-        webhookConfigured={!!settings?.webhook_url && !!settings?.setup_completed}
+        webhookConfigured={!!settings?.webhook_url}
         webhookName={settings?.webhook_name}
+        onOpenShards={() => setShowShards(true)}
+        onOpenSync={() => setShowSync(true)}
       />
 
-      {/* Center Viewport */}
+      {/* Main Workspace Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-obsidian-base relative overflow-hidden">
-        {/* Top Header */}
         <Header
           currentCategory={currentCategory}
-          currentFolder={currentFolder}
+          currentFolder={folders.find((f) => f.id === currentFolderId) || null}
           onNavigateHome={() => {
             setCurrentFolderId(null);
             setCurrentCategory('all');
-            setSearchQuery('');
           }}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -351,49 +294,64 @@ export const App: React.FC = () => {
           sortOrder={sortOrder}
           onSortChange={(field) => {
             if (sortBy === field) {
-              setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+              setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
             } else {
               setSortBy(field);
-              setSortOrder('desc');
+              setSortOrder('asc');
             }
           }}
-          onUploadClick={handleUploadClick}
+          onUploadClick={handleUploadFiles}
           onNewFolderClick={() => setShowNewFolder(true)}
           activeTransfersCount={activeTransfersCount}
           onOpenTransfers={() => setShowTransfers(true)}
-          webhookConfigured={!!settings?.webhook_url && !!settings?.setup_completed}
-          onOpenSetup={() => setShowOnboarding(true)}
+          webhookConfigured={!!settings?.webhook_url}
+          onOpenSetup={() => setShowSettings(true)}
         />
 
-        {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto">
-          {viewMode === 'grid' ? (
+          {currentCategory === 'analytics' ? (
+            <StorageAnalyticsView
+              stats={stats}
+              onOpenShards={() => setShowShards(true)}
+              onOpenSync={() => setShowSync(true)}
+            />
+          ) : viewMode === 'grid' ? (
             <FileGrid
-              folders={currentCategory === 'all' && !searchQuery ? folders.filter((f) => f.parent_id === (currentFolderId || null)) : []}
               files={files}
               selectedFileIds={selectedFileIds}
-              onToggleSelect={handleToggleSelect}
-              onOpenFolder={(id) => setCurrentFolderId(id)}
-              onPreviewFile={(f) => setPreviewFile(f)}
-              onInspectFile={(f) => setInspectFile(f)}
+              onSelectFile={(id) => {
+                setSelectedFileIds((prev) =>
+                  prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+                );
+              }}
+              onOpenFile={(f) => setPreviewFile(f)}
               onDownloadFile={handleDownloadFile}
               onToggleFavorite={handleToggleFavorite}
               onDeleteFile={handleDeleteFile}
+              onRestoreFile={handleRestoreFile}
               onRenameFile={(f) => setRenamingItem({ id: f.id, name: f.name, isFolder: false })}
+              onInspectFile={(f) => setInspectFile(f)}
+              onShareFile={(f) => setShareFile(f)}
+              isTrash={currentCategory === 'trash'}
             />
           ) : (
             <FileList
-              folders={currentCategory === 'all' && !searchQuery ? folders.filter((f) => f.parent_id === (currentFolderId || null)) : []}
               files={files}
               selectedFileIds={selectedFileIds}
-              onToggleSelect={handleToggleSelect}
-              onOpenFolder={(id) => setCurrentFolderId(id)}
-              onPreviewFile={(f) => setPreviewFile(f)}
-              onInspectFile={(f) => setInspectFile(f)}
+              onSelectFile={(id) => {
+                setSelectedFileIds((prev) =>
+                  prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+                );
+              }}
+              onOpenFile={(f) => setPreviewFile(f)}
               onDownloadFile={handleDownloadFile}
               onToggleFavorite={handleToggleFavorite}
               onDeleteFile={handleDeleteFile}
+              onRestoreFile={handleRestoreFile}
               onRenameFile={(f) => setRenamingItem({ id: f.id, name: f.name, isFolder: false })}
+              onInspectFile={(f) => setInspectFile(f)}
+              onShareFile={(f) => setShareFile(f)}
+              isTrash={currentCategory === 'trash'}
             />
           )}
         </main>
@@ -434,15 +392,19 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* Media Preview Modal */}
+      {/* Universal Media & Document Studio */}
       {previewFile && (
-        <FilePreviewModal
+        <UniversalViewerModal
           file={previewFile}
           onClose={() => setPreviewFile(null)}
           onDownload={handleDownloadFile}
           onInspect={(f) => {
             setPreviewFile(null);
             setInspectFile(f);
+          }}
+          onShare={(f) => {
+            setPreviewFile(null);
+            setShareFile(f);
           }}
         />
       )}
@@ -455,11 +417,37 @@ export const App: React.FC = () => {
         />
       )}
 
+      {/* Zero-Knowledge Share Modal */}
+      {shareFile && (
+        <ShareModal
+          file={shareFile}
+          onClose={() => setShareFile(null)}
+        />
+      )}
+
+      {/* Multi-Webhook Shards Modal */}
+      {showShards && (
+        <WebhookPoolModal
+          onClose={() => {
+            setShowShards(false);
+            refreshStructure();
+          }}
+        />
+      )}
+
+      {/* Sync Folders Modal */}
+      {showSync && (
+        <SyncFoldersModal
+          folders={folders}
+          onClose={() => setShowSync(false)}
+        />
+      )}
+
       {/* New Folder Modal */}
       {showNewFolder && (
         <NewFolderModal
           onClose={() => setShowNewFolder(false)}
-          onCreate={handleCreateFolder}
+          onCreate={(name, color) => handleCreateFolder(name, color, 'folder')}
         />
       )}
 
