@@ -71,7 +71,9 @@ declare global {
   }
 }
 
-const isWails = typeof window !== 'undefined' && !!window.go?.main?.App;
+export function hasWails(): boolean {
+  return typeof window !== 'undefined' && typeof window.go?.main?.App?.GetSettings === 'function';
+}
 
 // Local Mock state for browser preview mode
 let mockSettings: AppSettings = {
@@ -202,7 +204,7 @@ let mockTransfers: Transfer[] = [];
 
 export const api = {
   async validateWebhook(url: string): Promise<WebhookInfo> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.ValidateWebhook(url);
     }
     await new Promise((r) => setTimeout(r, 600));
@@ -217,21 +219,21 @@ export const api = {
   },
 
   async getSettings(): Promise<AppSettings> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.GetSettings();
     }
     return { ...mockSettings };
   },
 
   async saveSettings(settings: AppSettings): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.SaveSettings(settings);
     }
     mockSettings = { ...settings };
   },
 
   async getStats(): Promise<StorageStats> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.GetStats();
     }
     const totalBytes = mockFiles.reduce((acc, f) => acc + f.size, 0);
@@ -265,7 +267,7 @@ export const api = {
   },
 
   async listFolders(parentId?: string | null): Promise<Folder[]> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.ListFolders(parentId);
     }
     if (!parentId) {
@@ -275,7 +277,7 @@ export const api = {
   },
 
   async createFolder(parentId: string | null | undefined, name: string, color: string = '#5865F2', icon: string = 'folder'): Promise<Folder> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.CreateFolder(parentId, name, color, icon);
     }
     const folder: Folder = {
@@ -295,7 +297,7 @@ export const api = {
   },
 
   async renameFolder(id: string, newName: string): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.RenameFolder(id, newName);
     }
     const f = mockFolders.find((folder) => folder.id === id);
@@ -303,14 +305,14 @@ export const api = {
   },
 
   async deleteFolder(id: string, recursive: boolean = true): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.DeleteFolder(id, recursive);
     }
     mockFolders = mockFolders.filter((f) => f.id !== id);
   },
 
   async listFiles(folderId?: string | null, filter: string = 'all', sortBy: string = 'name', sortOrder: string = 'asc', limit: number = 100, offset: number = 0): Promise<FileListResult> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.ListFiles(folderId, filter, sortBy, sortOrder, limit, offset);
     }
 
@@ -342,7 +344,7 @@ export const api = {
   },
 
   async searchFiles(query: string): Promise<FileItem[]> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.SearchFiles(query);
     }
     const q = query.toLowerCase();
@@ -350,7 +352,7 @@ export const api = {
   },
 
   async getFile(id: string): Promise<FileItem> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.GetFile(id);
     }
     const file = mockFiles.find((f) => f.id === id);
@@ -359,14 +361,14 @@ export const api = {
   },
 
   async getFileDetails(id: string): Promise<FileItem> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.GetFileDetails(id);
     }
     return this.getFile(id);
   },
 
   async renameFile(id: string, newName: string): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.RenameFile(id, newName);
     }
     const f = mockFiles.find((file) => file.id === id);
@@ -374,7 +376,7 @@ export const api = {
   },
 
   async moveFile(id: string, targetFolderId?: string | null): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.MoveFile(id, targetFolderId);
     }
     const f = mockFiles.find((file) => file.id === id);
@@ -382,7 +384,7 @@ export const api = {
   },
 
   async toggleFavorite(id: string): Promise<boolean> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.ToggleFavorite(id);
     }
     const f = mockFiles.find((file) => file.id === id);
@@ -394,7 +396,7 @@ export const api = {
   },
 
   async deleteFile(id: string, permanent: boolean = false): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.DeleteFile(id, permanent);
     }
     if (permanent) {
@@ -406,7 +408,7 @@ export const api = {
   },
 
   async restoreFile(id: string): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.RestoreFile(id);
     }
     const f = mockFiles.find((file) => file.id === id);
@@ -414,55 +416,55 @@ export const api = {
   },
 
   async selectAndUploadFiles(folderId?: string | null): Promise<FileItem[]> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.SelectAndUploadFiles(folderId);
     }
     return [];
   },
 
   async downloadFile(fileId: string, destinationPath: string): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.DownloadFile(fileId, destinationPath);
     }
   },
 
   async downloadFileWithDialog(fileId: string): Promise<string> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.DownloadFileWithDialog(fileId);
     }
     return 'C:\\Downloads\\sample.mp4';
   },
 
   async getTransfers(): Promise<Transfer[]> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.GetTransfers();
     }
     return [...mockTransfers];
   },
 
   async cancelTransfer(transferId: string): Promise<boolean> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.CancelTransfer(transferId);
     }
     return true;
   },
 
   async clearCompletedTransfers(): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.ClearCompletedTransfers();
     }
     mockTransfers = mockTransfers.filter((t) => t.status === 'running' || t.status === 'queued');
   },
 
   getStreamURL(fileId: string): string {
-    if (isWails) {
+    if (hasWails()) {
       return `http://127.0.0.1:${mockSettings.server_port || 49152}/stream/${fileId}`;
     }
     return `http://127.0.0.1:49152/stream/${fileId}`;
   },
 
   async exportMetadata(): Promise<string> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.ExportMetadata();
     }
     return JSON.stringify({ version: '1.1.0', folders: mockFolders, files: mockFiles }, null, 2);
@@ -472,14 +474,14 @@ export const api = {
   // Multi-Webhook Shard Pool Methods
   // --------------------------------------------------
   async listWebhookShards(): Promise<WebhookShard[]> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.ListWebhookShards();
     }
     return [...mockShards];
   },
 
   async createWebhookShard(name: string, url: string, channelId: string = '', guildId: string = '', priority: number = 1): Promise<WebhookShard> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.CreateWebhookShard(name, url, channelId, guildId, priority);
     }
     const shard: WebhookShard = {
@@ -499,7 +501,7 @@ export const api = {
   },
 
   async updateWebhookShard(shard: WebhookShard): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.UpdateWebhookShard(shard);
     }
     const idx = mockShards.findIndex((s) => s.id === shard.id);
@@ -507,7 +509,7 @@ export const api = {
   },
 
   async deleteWebhookShard(id: string): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.DeleteWebhookShard(id);
     }
     mockShards = mockShards.filter((s) => s.id !== id);
@@ -517,14 +519,14 @@ export const api = {
   // Background Sync Folder Methods
   // --------------------------------------------------
   async listSyncFolders(): Promise<SyncFolder[]> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.ListSyncFolders();
     }
     return [...mockSyncFolders];
   },
 
   async createSyncFolder(localPath: string, remoteFolderId?: string | null): Promise<SyncFolder> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.CreateSyncFolder(localPath, remoteFolderId);
     }
     const sf: SyncFolder = {
@@ -541,7 +543,7 @@ export const api = {
   },
 
   async updateSyncFolder(folder: SyncFolder): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.UpdateSyncFolder(folder);
     }
     const idx = mockSyncFolders.findIndex((f) => f.id === folder.id);
@@ -549,14 +551,14 @@ export const api = {
   },
 
   async deleteSyncFolder(id: string): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.DeleteSyncFolder(id);
     }
     mockSyncFolders = mockSyncFolders.filter((f) => f.id !== id);
   },
 
   async syncFoldersNow(): Promise<void> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.SyncFoldersNow();
     }
   },
@@ -565,7 +567,7 @@ export const api = {
   // Zero-Knowledge Share & Gateway Status
   // --------------------------------------------------
   async generateShareLink(fileId: string): Promise<ShareLinkResult> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.GenerateShareLink(fileId);
     }
     const file = mockFiles.find((f) => f.id === fileId);
@@ -579,7 +581,7 @@ export const api = {
   },
 
   async getGatewaysStatus(): Promise<GatewayStatus> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.GetGatewaysStatus();
     }
     return {
@@ -597,7 +599,7 @@ export const api = {
   },
 
   async selectDirectory(): Promise<string> {
-    if (isWails) {
+    if (hasWails()) {
       return window.go!.main!.App!.SelectDirectory();
     }
     return 'C:\\Users\\User\\Documents';
