@@ -16,5 +16,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "bindings", "vite.config.ts"]
+  "include": ["src", "bindings", "vite.config.ts", "test-setup.ts"]
 }
