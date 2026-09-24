@@ -23,7 +23,10 @@ import (
 // serializes callers and the loser of a conflict fails honestly.
 type Store struct {
 	mu sync.Mutex
-	db *sql.DB
+	// txMu serializes WithTx transactions on the single connection
+	// (ADR-0005); Store reads take no lock beyond the handle copy.
+	txMu sync.Mutex
+	db   *sql.DB
 	// expected is the highest migration version known to the binary,
 	// recorded by Migrate on success. Readiness rejects any database
 	// whose applied version differs.

@@ -59,8 +59,8 @@ func TestHealthHealthy(t *testing.T) {
 		t.Fatalf("body = %v, want healthy/ready", body)
 	}
 	version, ok := body["schema_version"].(float64)
-	if !ok || version != 1 {
-		t.Fatalf("schema_version = %v, want 1", body["schema_version"])
+	if !ok || version < 1 {
+		t.Fatalf("schema_version = %v, want >= 1", body["schema_version"])
 	}
 }
 

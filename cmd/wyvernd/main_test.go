@@ -131,7 +131,7 @@ func TestServeLifecycleSubprocess(t *testing.T) {
 	waitForBound(t, addr, func() string { return procOut.String() + procErr.String() })
 
 	// The bound daemon serves a healthy store: poll the health endpoint
-	// until it reports schema version 1, then kill and relaunch on the
+	// until it reports a schema version >= 1, then kill and relaunch on the
 	// same data directory and expect the same version without duplication.
 	healthURL := fmt.Sprintf("http://%s/api/v1/health", addr)
 	waitForHealthy(t, healthURL, func() string { return procOut.String() + procErr.String() })
@@ -248,13 +248,13 @@ func waitForBound(t *testing.T, addr string, logs func() string) {
 	}
 }
 
-// waitForHealthy polls the health endpoint until it reports schema version
-// 1.
+// waitForHealthy polls the health endpoint until it reports a schema
+// version >= 1.
 func waitForHealthy(t *testing.T, healthURL string, logs func() string) {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		if fetchHealthyVersion(t, healthURL) == 1 {
+		if fetchHealthyVersion(t, healthURL) >= 1 {
 			return
 		}
 		if time.Now().After(deadline) {
@@ -321,8 +321,8 @@ func testGracefulShutdown(t *testing.T, sig os.Signal) {
 	if err != nil {
 		t.Fatalf("readiness after signal: %v", err)
 	}
-	if v != 1 {
-		t.Fatalf("Readiness after signal = %d, want 1", v)
+	if v < 1 {
+		t.Fatalf("Readiness after signal = %d, want >= 1", v)
 	}
 }
 

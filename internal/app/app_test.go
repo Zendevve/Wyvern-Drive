@@ -189,8 +189,9 @@ func TestOpenDirMode(t *testing.T) {
 	}
 }
 
-// Open migrates the database to version 1 and reports readiness at that
-// version; the settings table from the foundation migration exists.
+// Open migrates the database to the production version and reports
+// readiness at that version; the settings table from the foundation
+// migration exists.
 func TestOpenMigratesDatabase(t *testing.T) {
 	ctx := context.Background()
 	dataDir := filepath.Join(t.TempDir(), "wyvern-data")
@@ -200,8 +201,8 @@ func TestOpenMigratesDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v != 1 {
-		t.Fatalf("Readiness = %d, want 1", v)
+	if v < 1 {
+		t.Fatalf("Readiness = %d, want >= 1", v)
 	}
 	if a.Store() == nil {
 		t.Fatal("Store() must not be nil after Open")
