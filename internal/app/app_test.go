@@ -188,3 +188,41 @@ func TestOpenDirMode(t *testing.T) {
 		}
 	}
 }
+
+// Open migrates the database to version 1 and reports readiness at that
+// version; the settings table from the foundation migration exists.
+func TestOpenMigratesDatabase(t *testing.T) {
+	ctx := context.Background()
+	dataDir := filepath.Join(t.TempDir(), "wyvern-data")
+	a := open(t, ctx, dataDir, &testCloser{})
+	defer func() { _ = a.Close() }()
+	v, err := a.Readiness(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != 1 {
+		t.Fatalf("Readiness = %d, want 1", v)
+	}
+	if a.Store() == nil {
+		t.Fatal("Store() must not be nil after Open")
+	}
+}
+
+// Close releases the store before the log file: after Close, readiness
+// fails and the log closer ran exactly once. Closing twice stays a no-op.
+func TestCloseOrderStoreBeforeLog(t *testing.T) {
+	closer := &testCloser{}
+	a := open(t, context.Background(), t.TempDir(), closer)
+	if err := a.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Readiness(context.Background()); err == nil {
+		t.Fatal("Readiness after Close must fail: the store closed first")
+	}
+	if got := closer.count(); got != 1 {
+		t.Fatalf("log closer ran %d times, want exactly 1 after store close", got)
+	}
+	if err := a.Close(); err != nil {
+		t.Fatalf("second Close must be a no-op, got: %v", err)
+	}
+}

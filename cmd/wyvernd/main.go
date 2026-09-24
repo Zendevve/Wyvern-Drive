@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"wyvern-drive/internal/app"
 	"wyvern-drive/internal/config"
 	"wyvern-drive/internal/logging"
+	"wyvern-drive/server/api"
 )
 
 const usage = `wyvernd — headless Wyvern Drive daemon.
@@ -90,7 +92,7 @@ func runServe(args []string, stdout, stderr io.Writer, lookupEnv func(string) (s
 		return 1
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	// The core owns the log file from here: it closes logCloser exactly
@@ -104,10 +106,11 @@ func runServe(args []string, stdout, stderr io.Writer, lookupEnv func(string) (s
 	}
 	defer func() { _ = core.Close() }()
 
-	mux := http.NewServeMux()
+	// The daemon serves health only, so the api handler is the server
+	// Handler directly: no outer mux, no nested-mux method semantics.
 	server := &http.Server{
 		Addr:              cfg.ListenAddress,
-		Handler:           mux,
+		Handler:           api.NewHandler(core.Store()),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
@@ -115,6 +118,7 @@ func runServe(args []string, stdout, stderr io.Writer, lookupEnv func(string) (s
 
 	listener, err := net.Listen("tcp", cfg.ListenAddress)
 	if err != nil {
+		_ = core.Close()
 		_, _ = fmt.Fprintf(stderr, "wyvernd: cannot listen on %s: check that the address is free\n", cfg.ListenAddress)
 		return 1
 	}
